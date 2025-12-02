@@ -1,5 +1,0 @@
-# libcad/demo/CMakeLists.txt
-
-cmake_minimum_required(VERSION 3.16)
-
-
