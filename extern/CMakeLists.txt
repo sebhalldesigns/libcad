@@ -84,7 +84,6 @@ add_custom_command(
 
 # Generate skia code
 if (WIN32)
-
     add_custom_command( 
         OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
         COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=false\ is_debug=true\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_gl=true\ extra_cflags=[\"/MTd\"]\ extra_ldflags=[\"/MTd\"]
@@ -127,8 +126,3 @@ set_target_properties(skia PROPERTIES
 
 add_dependencies(skia build_skia)
 
-set(DAWN_FETCH_DEPENDENCIES ON CACHE BOOL "Enable dawn fetch dependencies" FORCE)
-set(DAWN_ENABLE_TESTS OFF CACHE BOOL "Disable dawn tests" FORCE)
-set(DAWN_BUILD_EXAMPLES OFF CACHE BOOL "Disable dawn examples" FORCE)
-
-add_subdirectory(dawn)
