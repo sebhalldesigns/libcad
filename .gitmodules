@@ -13,3 +13,7 @@
 [submodule "extern/cglm"]
 	path = extern/cglm
 	url = https://github.com/recp/cglm
+[submodule "extern/dawn"]
+	path = extern/dawn
+	url = https://github.com/google/dawn
+	ignore = all

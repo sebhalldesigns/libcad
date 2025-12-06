@@ -126,3 +126,9 @@ set_target_properties(skia PROPERTIES
 )
 
 add_dependencies(skia build_skia)
+
+set(DAWN_FETCH_DEPENDENCIES ON CACHE BOOL "Enable dawn fetch dependencies" FORCE)
+set(DAWN_ENABLE_TESTS OFF CACHE BOOL "Disable dawn tests" FORCE)
+set(DAWN_BUILD_EXAMPLES OFF CACHE BOOL "Disable dawn examples" FORCE)
+
+add_subdirectory(dawn)
