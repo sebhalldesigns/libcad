@@ -33,6 +33,14 @@ target_compile_definitions(imgui_backends PUBLIC
     -DIMGUI_IMPL_OPENGL_LOADER_GL3W
 )
 
+add_library(glad STATIC
+    glad/glad.c
+)
+
+target_include_directories(glad PUBLIC
+    glad
+)   
+
 add_subdirectory(ninja)
 
 set_target_properties(ninja PROPERTIES
