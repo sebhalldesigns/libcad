@@ -1,9 +1,6 @@
 #ifndef LIBCAD_H
 #define LIBCAD_H
 
-#include <stdint.h>
-#include <stdbool.h>
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +13,11 @@ extern "C" {
 #define EXPORT __attribute__((visibility("default")))
 #endif
 #endif
+
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define MOUSE_LEFT_BUTTON    1
 #define MOUSE_RIGHT_BUTTON   2

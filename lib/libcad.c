@@ -8,7 +8,14 @@
 #include <SDL3/SDL_opengl.h>
 #include <cglm/cglm.h>
 
+#if WIN32
 #include <Windows.h>
+#endif
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
 
 #include "lcdraw.h"
 
@@ -16,7 +23,14 @@ static SDL_Window* window = NULL;
 static SDL_GLContext gl_context = NULL;
 static int width = 800;
 static int height = 600;
-static HWND hwnd_child = NULL;
+
+#if WIN32
+static HWND child = NULL;
+#endif
+
+#if __EMSCRIPTEN__
+EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx;
+#endif
 
 static vec2 cursorPos = {0.0f, 0.0f};
 
@@ -37,6 +51,7 @@ cad_ctx_t  cad_create_context()
         return -1;
     }
 
+    #if WIN32
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -46,6 +61,9 @@ cad_ctx_t  cad_create_context()
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);  // Add explicit double buffering
+    #endif
+
+  
 
 
     return (cad_ctx_t)1;
@@ -54,6 +72,9 @@ cad_ctx_t  cad_create_context()
 bool cad_create_child_window(void* parent_handle, int x, int y, int width, int height)
 {
 
+    if (window) return false;
+
+    #if WIN32
     HWND parent = (HWND)parent_handle;
     HINSTANCE hInstance = GetModuleHandle(NULL);
 
@@ -65,12 +86,12 @@ bool cad_create_child_window(void* parent_handle, int x, int y, int width, int h
         wc.lpfnWndProc = DefWindowProc;
         wc.hInstance = hInstance;
         wc.lpszClassName = "SDLChildClass";
-        RegisterClass(&wc);
+        RegisterClass(&wc); 
         registered = true;
     }
 
     // Create child HWND
-    HWND child = CreateWindowEx(
+    child = CreateWindowEx(
         0,                          // ExStyle
         "SDLChildClass",            // Class name
         NULL,                       // Title (none)
@@ -98,6 +119,39 @@ bool cad_create_child_window(void* parent_handle, int x, int y, int width, int h
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
 
     window = SDL_CreateWindowWithProperties(props);
+    #endif
+    
+    #ifdef __EMSCRIPTEN__
+
+
+    EM_ASM({
+        var c = document.createElement('canvas');
+        c.id = 'glcanvas';
+        c.width = 800;
+        c.height = 600;
+        document.body.appendChild(c);
+    });
+    
+    EmscriptenWebGLContextAttributes attrs;
+    //emscripten_webgl_init_context_attributes(&attrs);
+    //attrs.majorVersion = 2;
+
+    //ctx = emscripten_webgl_create_context("#glcanvas", &attrs);
+    //emscripten_webgl_make_context_current(ctx);
+
+    //glClearColor(0.0, 0.4, 0.8, 1.0);
+    //glClear(GL_COLOR_BUFFER_BIT);
+
+
+    window = SDL_CreateWindow("CAD View", width, height, 
+                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    printf("Created window!\n");
+
+    //emscripten_set_main_loop(cad_update_child_window, 0, 1);
+
+    #endif
+
+
 
     //window = SDL_CreateWindow("Child Window", width, height, SDL_WINDOW_OPENGL);
 
@@ -112,28 +166,25 @@ bool cad_create_child_window(void* parent_handle, int x, int y, int width, int h
 
     if (!gladLoadGL())
     {
-        printf("Failed to initialize GLAD");
+        printf("Failed to initialize GLAD\n");
         return false;
     }
     
-    make_context();
+    //make_context();
 
-    printf("Created child window with handle: %p\n", child);
 
-    ShowWindow(child, SW_SHOW);
-
-    BOOL isVisible = IsWindowVisible(child);
-    printf("Child window visible: %d\n", isVisible);
-
-    hwnd_child = child;
 
     return true;
 }
 
 uintptr_t cad_get_child_window_handle()
 {
-    printf("Returning child window handle: %p\n", hwnd_child);
-    return hwnd_child;
+    #if WIN32
+    printf("Returning child window handle: %p\n", child);
+    return child;
+    #else
+    return 0;
+    #endif
 }
 
 void cad_update_child_window()
@@ -177,7 +228,7 @@ void cad_update_child_window()
 
     glViewport(0, 0, width, height);
 
-    render(width, height);
+    //render(width, height);
 
     SDL_GL_SwapWindow(window);
 }
@@ -205,7 +256,7 @@ void cad_set_cursor_pos(int x, int y)
         glm_vec2_sub(cursorPos, mouse3StartPos, delta);
 
         glm_vec2_add(offset, delta, offset);
-        set_offset(offset);
+        //set_offset(offset);
         
         glm_vec2_copy(cursorPos, mouse3StartPos);
     }
