@@ -46,77 +46,122 @@ if (NOT EMSCRIPTEN)
         -DIMGUI_IMPL_OPENGL_LOADER_GL3W
     )
 
-    add_subdirectory(ninja)
+endif()
 
-    set_target_properties(ninja PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/ninja
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/ninja
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/ninja
-    )
+if (NOT EMSCRIPTEN)
+add_subdirectory(ninja)
 
-    # Ensure Python is available and locate the gn python script directory
-    find_package(Python3 REQUIRED)
+set_target_properties(ninja PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/ninja
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/ninja
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/ninja
+)
+endif()
 
-    set(SKIA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/skia")
-    set(SKIA_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/skia/bin")
-    set(SKIA_BUILD_DIR "${CMAKE_BINARY_DIR}/skia")
-    set(SKIA_DEPS_CHECK_FILE "${CMAKE_BINARY_DIR}/skia_deps_fetched")
-    set(SKIA_SPIRV_TOOLS_DIR "${SKIA_SRC_DIR}/third_party/externals/spirv-tools")
-    set(SKIA_NINJA_TARGET "skia")
+# Ensure Python is available and locate the gn python script directory
+find_package(Python3 REQUIRED)
 
-    if(WIN32)
-        set(SKIA_STATIC_LIB "${SKIA_BUILD_DIR}/skia.lib" CACHE FILEPATH "Path to Skia library")
-    else()
-        set(SKIA_STATIC_LIB "${SKIA_BUILD_DIR}/libskia.a" CACHE FILEPATH "Path to Skia library")
-    endif()
+set(SKIA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/skia")
+set(SKIA_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/skia/bin")
+set(SKIA_BUILD_DIR "${CMAKE_BINARY_DIR}/skia")
+set(SKIA_DEPS_CHECK_FILE "${CMAKE_BINARY_DIR}/skia_deps_fetched")
+set(SKIA_SPIRV_TOOLS_DIR "${SKIA_SRC_DIR}/third_party/externals/spirv-tools")
+set(SKIA_NINJA_TARGET "skia")
 
-    # Detect if Skia dependencies are already present. If not, run git-sync-deps to clone them all.
-    if (NOT EXISTS "${SKIA_SPIRV_TOOLS_DIR}")
-        add_custom_command(
-            OUTPUT ${SKIA_DEPS_CHECK_FILE}
-            COMMAND ${Python3_EXECUTABLE} tools/git-sync-deps
-            COMMAND ${CMAKE_COMMAND} -E touch ${SKIA_DEPS_CHECK_FILE}
-            COMMENT "Fetching Skia third-party dependencies"
-            WORKING_DIRECTORY ${SKIA_SRC_DIR}
-            VERBATIM
-        )
-    else()
-        # Create a dummy file so CMake doesn't complain
-        file(WRITE ${SKIA_DEPS_CHECK_FILE} "")
-    endif()
+if(WIN32 AND NOT EMSCRIPTEN)
+    set(SKIA_STATIC_LIB "${SKIA_BUILD_DIR}/skia.lib" CACHE FILEPATH "Path to Skia library")
+else()
+    set(SKIA_STATIC_LIB "${SKIA_BUILD_DIR}/libskia.a" CACHE FILEPATH "Path to Skia library")
+endif()
 
-    # Fetch GN and Ninja tools
+# Detect if Skia dependencies are already present. If not, run git-sync-deps to clone them all.
+if (NOT EXISTS "${SKIA_SPIRV_TOOLS_DIR}")
     add_custom_command(
-        OUTPUT ${CMAKE_BINARY_DIR}/gn_fetch
-        COMMAND ${Python3_EXECUTABLE} ${SKIA_BIN_DIR}/fetch-gn
-        DEPENDS ${SKIA_DEPS_CHECK_FILE} 
-        COMMENT "Fetching GN for Skia"
+        OUTPUT ${SKIA_DEPS_CHECK_FILE}
+        COMMAND ${Python3_EXECUTABLE} tools/git-sync-deps
+        COMMAND ${CMAKE_COMMAND} -E touch ${SKIA_DEPS_CHECK_FILE}
+        COMMENT "Fetching Skia third-party dependencies"
+        WORKING_DIRECTORY ${SKIA_SRC_DIR}
+        VERBATIM
+    )
+else()
+    # Create a dummy file so CMake doesn't complain
+    file(WRITE ${SKIA_DEPS_CHECK_FILE} "")
+endif()
+
+# Fetch GN and Ninja tools
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/gn_fetch
+    COMMAND ${Python3_EXECUTABLE} ${SKIA_BIN_DIR}/fetch-gn
+    DEPENDS ${SKIA_DEPS_CHECK_FILE} 
+    COMMENT "Fetching GN for Skia"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
+    VERBATIM
+)
+
+# Generate skia code
+if (EMSCRIPTEN)
+
+    # Get the active Emscripten paths
+    get_filename_component(EMCC_PATH "${CMAKE_C_COMPILER}" ABSOLUTE)
+    get_filename_component(EMCXX_PATH "${CMAKE_CXX_COMPILER}" ABSOLUTE)
+    get_filename_component(EMAR_PATH "${CMAKE_AR}" ABSOLUTE)
+    
+    # Convert to forward slashes for GN (it prefers Unix paths even on Windows)
+    string(REPLACE "\\" "/" EMCC_PATH_UNIX "${EMCC_PATH}")
+    string(REPLACE "\\" "/" EMCXX_PATH_UNIX "${EMCXX_PATH}")
+    string(REPLACE "\\" "/" EMAR_PATH_UNIX "${EMAR_PATH_UNIX}")
+
+    add_custom_command( 
+        OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
+        COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_freetype2=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_webgl=true\ skia_use_gl=true\ target_cpu=\"wasm\"\ cc=\"${EMCC_PATH}\"\ cxx=\"${EMCXX_PATH}\"\ ar=\"${EMAR_PATH}\"
+        DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
+        COMMENT "Generating Skia build files"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
         VERBATIM
     )
+elseif (WIN32)
+    add_custom_command( 
+        OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
+        COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=false\ is_debug=true\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_gl=true\ extra_cflags=[\"/MTd\"]\ extra_ldflags=[\"/MTd\"]
+        DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
+        COMMENT "Generating Skia build files"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
+        VERBATIM
+    )
+else()
+    add_custom_command( 
+        OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
+        COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_freetype2=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_egl=true\ skia_use_gl=true
+        DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
+        COMMENT "Generating Skia build files"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
+        VERBATIM
+    )
+endif()
 
-    # Generate skia code
-    if (WIN32)
-        add_custom_command( 
-            OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
-            COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=false\ is_debug=true\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_gl=true\ extra_cflags=[\"/MTd\"]\ extra_ldflags=[\"/MTd\"]
-            DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
-            COMMENT "Generating Skia build files"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
-            VERBATIM
-        )
-    else()
-        add_custom_command( 
-            OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
-            COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_freetype2=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_egl=true\ skia_use_gl=true
-            DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
-            COMMENT "Generating Skia build files"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
-            VERBATIM
-        )
-    endif()
+# Build skia
+if (EMSCRIPTEN)
+    # Define path to the SDK environment script
+    set(EMSDK_ENV_PATH "${SKIA_SRC_DIR}/third_party/externals/emsdk/emsdk_env.bat")
+    
+    # CRITICAL FIX 2: Convert to native Windows path (backslashes) for cmd.exe stability
+    file(TO_NATIVE_PATH "${EMSDK_ENV_PATH}" EMSDK_ENV_NATIVE)
+    
+    # Also convert the build dir to native path just in case
+    file(TO_NATIVE_PATH "${SKIA_BUILD_DIR}" SKIA_BUILD_DIR_NATIVE)
 
-    # Build skia
+    add_custom_command(
+        OUTPUT ${SKIA_STATIC_LIB}
+        # Simple Chain: Call environment script -> Run Ninja directly
+        # Removing emcmake wrapper reduces complexity and path errors
+        COMMAND cmd.exe /C "CALL ${EMSDK_ENV_NATIVE} && ninja -C ${SKIA_BUILD_DIR_NATIVE} skia"
+        DEPENDS ${CMAKE_BINARY_DIR}/skia_gen
+        WORKING_DIRECTORY ${SKIA_BUILD_DIR}
+        COMMENT "Building Skia (WASM + Env Init)"
+        VERBATIM
+    )
+else()
     add_custom_command(
         OUTPUT ${SKIA_STATIC_LIB}
         COMMAND ninja -C ${SKIA_BUILD_DIR} skia
@@ -125,20 +170,19 @@ if (NOT EMSCRIPTEN)
         COMMENT "Building Skia"
         VERBATIM
     )
-
-    add_custom_target(build_skia
-        DEPENDS ${SKIA_STATIC_LIB}
-    )
-
-    add_library(skia STATIC IMPORTED GLOBAL)
-
-    set_target_properties(skia PROPERTIES
-        IMPORTED_LOCATION "${SKIA_STATIC_LIB}"
-        INTERFACE_INCLUDE_DIRECTORIES "${SKIA_SRC_DIR}/include"
-    )
-
-    add_dependencies(skia build_skia)
-
 endif()
+
+add_custom_target(build_skia
+    DEPENDS ${SKIA_STATIC_LIB}
+)
+
+add_library(skia STATIC IMPORTED GLOBAL)
+
+set_target_properties(skia PROPERTIES
+    IMPORTED_LOCATION "${SKIA_STATIC_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${SKIA_SRC_DIR}/include"
+)
+
+add_dependencies(skia build_skia)
 
 

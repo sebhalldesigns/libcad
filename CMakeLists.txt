@@ -109,6 +109,7 @@ else()
 
     target_link_libraries(cad_wasm PUBLIC
         cglm
+        skia
     )
 
     target_include_directories(cad_wasm PUBLIC

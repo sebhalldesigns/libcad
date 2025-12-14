@@ -13,7 +13,7 @@
 #endif
 
 #ifdef __EMSCRIPTEN__
-#include <emscripten.h>
+#include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #endif
 
@@ -28,9 +28,6 @@ static int height = 600;
 static HWND child = NULL;
 #endif
 
-#if __EMSCRIPTEN__
-EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx;
-#endif
 
 static vec2 cursorPos = {0.0f, 0.0f};
 
@@ -63,6 +60,13 @@ cad_ctx_t  cad_create_context()
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);  // Add explicit double buffering
     #endif
 
+    #if __EMSCRIPTEN__
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    
+    #endif
   
 
 
@@ -70,9 +74,7 @@ cad_ctx_t  cad_create_context()
 }
 
 bool cad_create_child_window(void* parent_handle, int x, int y, int width, int height)
-{
-
-    if (window) return false;
+{   
 
     #if WIN32
     HWND parent = (HWND)parent_handle;
@@ -123,31 +125,56 @@ bool cad_create_child_window(void* parent_handle, int x, int y, int width, int h
     
     #ifdef __EMSCRIPTEN__
 
+    if (window)
+    {
+        cad_update_child_window();
+        return false;
+    }
 
+
+    /* create glcanvas. N.B canvas2 is defined in the HTML file. */
     EM_ASM({
-        var c = document.createElement('canvas');
-        c.id = 'glcanvas';
-        c.width = 800;
-        c.height = 600;
-        document.body.appendChild(c);
-    });
+        /* * Variables 'width' and 'height' are available to EM_ASM 
+            * from the C scope because it's a macro. 
+            */
+        var canvasElement = document.createElement('canvas');
+
+        canvasElement.id = 'glcanvas';
+        canvasElement.width = $0;
+        canvasElement.height = $1;
+        canvasElement.style.position = 'absolute';
+        canvasElement.style.left = '0px';
+        canvasElement.style.top = '0px';
+        canvasElement.style.zIndex = '1000';
+        canvasElement.style.pointerEvents = 'auto';
+        canvasElement.style.backgroundColor = 'transparent'; 
+
+        document.body.appendChild(canvasElement);
+
+    }, width, height);
+
+    printf("Created canvas element\n");
+
     
-    EmscriptenWebGLContextAttributes attrs;
-    //emscripten_webgl_init_context_attributes(&attrs);
-    //attrs.majorVersion = 2;
+    printf("About to set up WebGL context\n");
 
-    //ctx = emscripten_webgl_create_context("#glcanvas", &attrs);
-    //emscripten_webgl_make_context_current(ctx);
+    SDL_SetHint(SDL_HINT_EMSCRIPTEN_CANVAS_SELECTOR, "#glcanvas");
 
-    //glClearColor(0.0, 0.4, 0.8, 1.0);
-    //glClear(GL_COLOR_BUFFER_BIT);
+    SDL_PropertiesID props = SDL_CreateProperties();
 
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, 640);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, 480);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
 
-    window = SDL_CreateWindow("CAD View", width, height, 
-                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    /* N.B # requested by docs */
+    SDL_SetStringProperty(props,  SDL_PROP_WINDOW_CREATE_EMSCRIPTEN_CANVAS_ID_STRING, "glcanvas"); 
+
+    printf("Creating SDL window with Emscripten canvas\n");
+    
+    window = SDL_CreateWindowWithProperties(props);
     printf("Created window!\n");
 
-    //emscripten_set_main_loop(cad_update_child_window, 0, 1);
 
     #endif
 
@@ -164,7 +191,7 @@ bool cad_create_child_window(void* parent_handle, int x, int y, int width, int h
     SDL_GL_MakeCurrent(window, gl_context);
     SDL_GL_SetSwapInterval(1); /* Enable vsync */
 
-    if (!gladLoadGL())
+    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
     {
         printf("Failed to initialize GLAD\n");
         return false;
@@ -242,6 +269,41 @@ void cad_set_window_size(int w, int h)
 {
     width = w;
     height = h;
+
+    #ifdef __EMSCRIPTEN__
+
+    EM_ASM({
+        var canvas = document.getElementById('glcanvas');
+        if (canvas) {
+            canvas.style.position = 'absolute';
+            canvas.width = $0;
+            canvas.height = $1;
+            canvas.style.width = $0 + 'px';
+            canvas.style.height = $1 + 'px';
+            canvas.style.zIndex = '1000'; // Ensure it's on top
+            canvas.style.pointerEvents = 'auto';
+        }
+    }, width, height);
+
+    #endif
+}
+
+void cad_set_window_pos(int x, int y)
+{
+    #ifdef __EMSCRIPTEN__
+
+    EM_ASM({
+        var canvas = document.getElementById('glcanvas');
+        if (canvas) {
+            canvas.style.position = 'absolute';
+            canvas.style.left = $0 + 'px';
+            canvas.style.top = $1 + 'px';
+                canvas.style.zIndex = '1000'; // Ensure it's on top
+            canvas.style.pointerEvents = 'auto';
+        }
+    }, x, y);
+
+    #endif
 }
 
 void cad_set_cursor_pos(int x, int y)

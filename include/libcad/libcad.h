@@ -42,6 +42,7 @@ EXPORT void         cad_destroy_child_window();
 EXPORT void         cad_update_child_window();
 
 EXPORT void         cad_set_window_size(int width, int height);
+EXPORT void         cad_set_window_pos(int x, int y);
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();
 EXPORT void         cad_set_cursor_button_state(int button, bool pressed);
