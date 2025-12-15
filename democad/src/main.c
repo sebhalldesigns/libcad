@@ -126,6 +126,13 @@ bool event_watch(void *data, SDL_Event *event)
             cad_set_cursor_pos((int)event->motion.x, (int)event->motion.y);    
         } break;
 
+        case SDL_EVENT_MOUSE_WHEEL:
+        {
+            cad_axis_delta(0, event->wheel.y);
+        } break;
+
+        
+
         case SDL_EVENT_WINDOW_MOUSE_LEAVE:
         case SDL_EVENT_MOUSE_REMOVED:
         {
@@ -162,7 +169,6 @@ void update(SDL_Event* event)
 
         menuSize = igGetWindowSize();
 
-        printf("Menu size: %.1f x %.1f\n", menuSize.x, menuSize.y);
         if (igBeginMenu("File", true))
         {
             if (igMenuItem_Bool("Exit", NULL, false, true))
@@ -214,8 +220,8 @@ void update(SDL_Event* event)
         igDockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
         igDockBuilderSetNodeSize(dockspace_id, viewport->Size);
         
-        left_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, NULL, &center_id);
-        right_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, NULL, &center_id);
+        left_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.1f, NULL, &center_id);
+        right_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.11f, NULL, &center_id);
     
         igDockBuilderDockWindow("Explorer", left_id);
         igDockBuilderDockWindow("Help", left_id);
@@ -228,10 +234,20 @@ void update(SDL_Event* event)
     igDockSpaceOverViewport(dockspace_id, viewport, ImGuiDockNodeFlags_PassthruCentralNode, NULL);
     
     igBegin("Explorer", NULL, 0);
+
+        if (igTreeNodeEx_Str("Grid", ImGuiTreeNodeFlags_Leaf))
+        {
+            if (igIsItemClicked(0))
+            {
+                /* clicked */;
+            }
+            
+            igTreePop();
+        }
  
         if (igTreeNode_Str("Origin"))
         {
-            if (igTreeNodeEx_Str("Singularity", ImGuiTreeNodeFlags_Leaf))
+            if (igTreeNodeEx_Str("Point", ImGuiTreeNodeFlags_Leaf))
             {
                 if (igIsItemClicked(0))
                 {

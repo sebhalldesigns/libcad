@@ -53,7 +53,7 @@ EXPORT void         cad_set_window_pos(int x, int y);
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();
 EXPORT void         cad_set_cursor_button_state(int button, bool pressed);
-
+EXPORT void         cad_axis_delta(int axis, float delta);
 
 
 #ifdef __cplusplus

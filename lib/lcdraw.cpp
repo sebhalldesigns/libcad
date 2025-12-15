@@ -12,6 +12,9 @@
 #include <skia/include/gpu/ganesh/gl/GrGLInterface.h>
 #include <skia/include/gpu/ganesh/gl/GrGLAssembleInterface.h>
 
+#define X(x) (x[0])
+#define Y(y) (y[1])
+
 #include <glad/glad.h>
 
 #include <stdio.h>
@@ -19,6 +22,8 @@
 #include "lcdraw.h"
 
 static sk_sp<GrDirectContext> context = NULL;
+
+static float zoom = 1.0f;
 
 static float offsetX = 0.0f;
 static float offsetY = 0.0f;
@@ -28,6 +33,12 @@ static float dragOffsetY = 0.0f;
 static int surfaceWidth = 0;
 static int surfaceHeight = 0;
 static sk_sp<SkSurface> surface = NULL;
+static SkCanvas* canvas = NULL;
+
+static vec2 origin = {0.0f, 0.0f};
+
+static void draw_circle(vec2 center, float radius);
+static void draw_grid(vec2 start, vec2 end, float spacing, SkColor color);
 
 void make_context()
 {
@@ -62,14 +73,14 @@ void render(int x, int y, int vpw, int vph, int w, int h)
         surfaceHeight = h;
    
 
-    SkCanvas* canvas = surface->getCanvas();
+    canvas = surface->getCanvas();
     canvas->setMatrix(SkMatrix::I());
     canvas->translate(x, y);
     canvas->clipRect(SkRect::MakeWH(vpw, vph));
 
 
-    float originX = (vpw / 2.0f) + offsetX + dragOffsetX;
-    float originY = (vph / 2.0f) + offsetY + dragOffsetY;
+    origin[0] = (vpw / 2.0f) + offsetX + dragOffsetX;
+    origin[1] = (vph / 2.0f) + offsetY + dragOffsetY;
 
     canvas->clear(SkColorSetARGB(255, 25, 38, 51));
 
@@ -85,20 +96,87 @@ void render(int x, int y, int vpw, int vph, int w, int h)
     
     /* draw axes */
     paint.setColor(SkColorSetARGB(255, 150, 150, 150));
-    canvas->drawLine(0, originY, w, originY, paint);
-    canvas->drawLine(originX, 0, originX, h, paint);
+    canvas->drawLine(0, origin[1], w, origin[1], paint);
+    canvas->drawLine(origin[0], 0, origin[0], h, paint);
 
-    paint.setColor(SK_ColorRED);
+    draw_circle(origin, 4.0f);
 
-    canvas->drawCircle(originX, originY, 10, paint);
+    /* DRAW MINOR GRID */
+
+    /* minor grid spacing from 5 to 50 px*/
+
+    const float major_minor_ratio = 5.0f;
     
+    const float minor_min = 10.0f;
+    const float minor_max = 50.0f;
+    const float base_spacing = 25.0f;
+
+    float minor_spacing = zoom * base_spacing;
+
+    while (minor_spacing < minor_min)
+    {
+        minor_spacing *= major_minor_ratio;
+    }
+
+    while (minor_spacing > minor_max)
+    {
+        minor_spacing /= major_minor_ratio;
+    }
+    
+    vec2 minor_start = {fmodf(origin[0], minor_spacing) - minor_spacing, fmodf(origin[1], minor_spacing) - minor_spacing};
+    vec2 grid_end = {vpw, vph};
+
+    draw_grid(minor_start, grid_end, minor_spacing, SkColorSetARGB(12, 255, 255, 255));
+
+    /* DRAW MAJOR GRID */
+    float major_spacing = minor_spacing * major_minor_ratio;
+    vec2 major_start = {fmodf(origin[0], major_spacing) - major_spacing, fmodf(origin[1], major_spacing) - major_spacing};
+    draw_grid(major_start, grid_end, major_spacing, SkColorSetARGB(25, 255, 255, 255));
+  
     context->flushAndSubmit();
+}
+
+void set_zoom(float z)
+{
+    zoom = z;
 }
 
 void set_offset(vec2 vec)
 {
-
-    printf("offset %.3f %.3f\n", offsetX, offsetY);
     offsetX = vec[0];
     offsetY = vec[1];
+}
+
+static void draw_circle(vec2 center, float radius)
+{
+    static SkPaint paint;
+    paint.setStyle(SkPaint::kFill_Style);
+    paint.setColor(SkColorSetARGB(100, 255, 255, 255));
+
+    canvas->drawCircle(SkPoint::Make(center[0], center[1]), radius, paint);
+
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setColor(SkColorSetARGB(255, 255, 255, 255));
+    paint.setStrokeWidth(1);
+
+    canvas->drawCircle(SkPoint::Make(center[0], center[1]), radius, paint);
+
+}
+
+static void draw_grid(vec2 start, vec2 end, float spacing, SkColor color)
+{
+    static SkPaint paint;
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setColor(color);
+    paint.setStrokeWidth(1);
+
+    for (float x = start[0]; x <= end[0]; x += spacing)
+    {
+        canvas->drawLine(x, start[1], x, end[1], paint);
+    }
+
+    for (float y = start[1]; y <= end[1]; y += spacing)
+    {
+        canvas->drawLine(start[0], y, end[0], y, paint);
+    }
 }

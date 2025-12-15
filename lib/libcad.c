@@ -27,6 +27,7 @@ static int vp_width = 800;
 static int vp_height = 600;
 static int x_pos = 100;
 static int y_pos = 100;
+static float zoom_scale = 1.0f; 
 
 #if WIN32
 static HWND child = NULL;
@@ -376,7 +377,6 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
     glClearColor(1.0f, 0.15f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-    printf("Set viewport %d %d %d %d %d %d\n", x, y, vpw, vph, w, h);
 }
 
 void cad_render_viewport()
@@ -396,6 +396,24 @@ void cad_init_viewport()
     make_context();
 
 
+}
+
+void cad_axis_delta(int axis, float delta)
+{
+
+    if (axis == 0) // Y axis for zoom
+    {
+        const float zoom_sensitivity = 0.15f; // tweak this
+        zoom_scale *= expf(delta * zoom_sensitivity);
+
+        const float min_zoom = 0.01f;
+        const float max_zoom = 100.0f;
+        if (zoom_scale < min_zoom) zoom_scale = min_zoom;
+        if (zoom_scale > max_zoom) zoom_scale = max_zoom;
+
+        printf("Zoom scale: %.3f\n", zoom_scale);
+        set_zoom(zoom_scale);
+    }
 }
 
 #if __EMSCRIPTEN__
