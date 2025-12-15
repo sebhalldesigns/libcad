@@ -252,6 +252,16 @@ void cad_update_child_window()
                 cad_cursor_lost();
             } break;
 
+            case SDL_EVENT_MOUSE_WHEEL:
+            {
+                cad_axis_delta(0, event.wheel.y);
+            } break;
+
+            case SDL_EVENT_WINDOW_RESIZED:
+            {
+                cad_set_window_size(event.window.data1, event.window.data2);
+            } break;
+
         }
     }
 
@@ -260,7 +270,7 @@ void cad_update_child_window()
 
     glViewport(0, 0, width, height);
 
-    render(x_pos, y_pos, vp_width, vp_height, width, height);
+    render(0, 0, width, height, width, height);
 
     SDL_GL_SwapWindow(window);
 }
@@ -411,7 +421,6 @@ void cad_axis_delta(int axis, float delta)
         if (zoom_scale < min_zoom) zoom_scale = min_zoom;
         if (zoom_scale > max_zoom) zoom_scale = max_zoom;
 
-        printf("Zoom scale: %.3f\n", zoom_scale);
         set_zoom(zoom_scale);
     }
 }
