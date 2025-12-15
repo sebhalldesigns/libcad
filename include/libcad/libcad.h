@@ -9,6 +9,9 @@ extern "C" {
 #ifndef EXPORT
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
+#elif __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#define EXPORT EMSCRIPTEN_KEEPALIVE
 #else
 #define EXPORT __attribute__((visibility("default")))
 #endif
@@ -40,6 +43,10 @@ EXPORT bool         cad_create_child_window(void* parent_handle, int x, int y, i
 EXPORT uintptr_t    cad_get_child_window_handle();
 EXPORT void         cad_destroy_child_window();
 EXPORT void         cad_update_child_window();
+
+EXPORT void         cad_set_viewport(int x, int y, int width, int height, int window_width, int window_height);
+EXPORT void         cad_render_viewport();
+EXPORT void         cad_init_viewport();
 
 EXPORT void         cad_set_window_size(int width, int height);
 EXPORT void         cad_set_window_pos(int x, int y);

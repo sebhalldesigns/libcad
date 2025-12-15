@@ -23,6 +23,10 @@ static SDL_Window* window = NULL;
 static SDL_GLContext gl_context = NULL;
 static int width = 800;
 static int height = 600;
+static int vp_width = 800;
+static int vp_height = 600;
+static int x_pos = 100;
+static int y_pos = 100;
 
 #if WIN32
 static HWND child = NULL;
@@ -197,7 +201,7 @@ bool cad_create_child_window(void* parent_handle, int x, int y, int width, int h
         return false;
     }
     
-    //make_context();
+    make_context();
 
 
 
@@ -255,7 +259,7 @@ void cad_update_child_window()
 
     glViewport(0, 0, width, height);
 
-    //render(width, height);
+    render(x_pos, y_pos, vp_width, vp_height, width, height);
 
     SDL_GL_SwapWindow(window);
 }
@@ -318,7 +322,7 @@ void cad_set_cursor_pos(int x, int y)
         glm_vec2_sub(cursorPos, mouse3StartPos, delta);
 
         glm_vec2_add(offset, delta, offset);
-        //set_offset(offset);
+        set_offset(offset);
         
         glm_vec2_copy(cursorPos, mouse3StartPos);
     }
@@ -357,3 +361,43 @@ void cad_set_cursor_button_state(int button, bool pressed)
     }
 }
 
+void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
+{
+    vp_width = vpw;
+    vp_height = vph;
+    width = w;
+    height = h;
+    x_pos = x;
+    y_pos = y;
+
+    glEnable(GL_SCISSOR_TEST);
+    glViewport(x, y, vp_width, vp_height);
+    glScissor(x, y, vp_width, vp_height);
+    glClearColor(1.0f, 0.15f, 0.2f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    printf("Set viewport %d %d %d %d %d %d\n", x, y, vpw, vph, w, h);
+}
+
+void cad_render_viewport()
+{
+    render(x_pos, y_pos, vp_width, vp_height, width, height);
+}
+
+void cad_init_viewport()
+{
+
+    if (!gladLoadGL() && !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
+    {
+        printf("Failed to initialize GLAD\n");
+        return false;
+    }
+    
+    make_context();
+
+
+}
+
+#if __EMSCRIPTEN__
+int main() { }
+#endif

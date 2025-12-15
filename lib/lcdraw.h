@@ -11,7 +11,7 @@ extern "C" {
 #include <cglm/cglm.h>
 
 void make_context();
-void render(int w, int h);
+void render(int x, int y, int vpw, int vph, int w, int h);
 void set_offset(vec2 vec);
 
 #ifdef __cplusplus

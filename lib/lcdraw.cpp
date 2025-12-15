@@ -25,34 +25,61 @@ static float offsetY = 0.0f;
 static float dragOffsetX = 0.0f;
 static float dragOffsetY = 0.0f;
 
+static int surfaceWidth = 0;
+static int surfaceHeight = 0;
+static sk_sp<SkSurface> surface = NULL;
+
 void make_context()
 {
     sk_sp<const GrGLInterface> interface = GrGLMakeNativeInterface();
 
-    printf("interface %p\n", interface);
+    printf("interface %p\n", interface.get());
 
     context = GrDirectContexts::MakeGL(interface);
-    printf("context %p\n", context);
+    printf("context %p\n", context.get());
 }
 
-void render(int w, int h)
+void render(int x, int y, int vpw, int vph, int w, int h)
 {
+
+    if (context) {
+        context->resetContext(); 
+    }
+
+    if (w != surfaceWidth || h != surfaceHeight || surface == NULL)
+    {
+        
+    }
+
     GrGLFramebufferInfo fbInfo;
-    fbInfo.fFBOID = 0;
-    fbInfo.fFormat = (GrGLenum)GL_RGBA8;
+        fbInfo.fFBOID = 0;
+        fbInfo.fFormat = (GrGLenum)GL_RGBA8;
 
-    GrBackendRenderTarget renderTarget = GrBackendRenderTargets::MakeGL(w, h, 0, 8, fbInfo);
+        GrBackendRenderTarget renderTarget = GrBackendRenderTargets::MakeGL(w, h, 0, 8, fbInfo);
 
-    sk_sp<SkSurface> surface = SkSurfaces::WrapBackendRenderTarget(context.get(), renderTarget, GrSurfaceOrigin::kBottomLeft_GrSurfaceOrigin, SkColorType::kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), nullptr);
+        surface = SkSurfaces::WrapBackendRenderTarget(context.get(), renderTarget, GrSurfaceOrigin::kBottomLeft_GrSurfaceOrigin, SkColorType::kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), nullptr);
+        surfaceWidth = w;
+        surfaceHeight = h;
+   
 
     SkCanvas* canvas = surface->getCanvas();
+    canvas->setMatrix(SkMatrix::I());
+    canvas->translate(x, y);
+    canvas->clipRect(SkRect::MakeWH(vpw, vph));
 
-    float originX = (w / 2.0f) + offsetX + dragOffsetX;
-    float originY = (h / 2.0f) + offsetY + dragOffsetY;
+
+    float originX = (vpw / 2.0f) + offsetX + dragOffsetX;
+    float originY = (vph / 2.0f) + offsetY + dragOffsetY;
 
     canvas->clear(SkColorSetARGB(255, 25, 38, 51));
 
     SkPaint paint;
+    paint.setStyle(SkPaint::kFill_Style);
+    paint.setColor(SkColorSetARGB(255, 255, 255, 255));
+    paint.setStrokeWidth(1);
+
+    canvas->drawRect(SkRect::MakeXYWH(10, 10, 10, 10), paint);
+
     paint.setStyle(SkPaint::kStroke_Style);
     paint.setStrokeWidth(1);
     
@@ -64,6 +91,7 @@ void render(int w, int h)
     paint.setColor(SK_ColorRED);
 
     canvas->drawCircle(originX, originY, 10, paint);
+    
     context->flushAndSubmit();
 }
 

@@ -23,6 +23,7 @@ target_link_libraries(democad PUBLIC
     SDL3-static
     cimgui
     imgui_backends
+    libcad
 
 )
 

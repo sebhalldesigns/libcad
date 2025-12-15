@@ -11,9 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if (WIN32)
     # Force static CRT on Windows
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MTd")
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MT")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 endif()
 
 if (NOT EMSCRIPTEN)
@@ -92,32 +92,36 @@ if (NOT EMSCRIPTEN)
 
 else()
 
-    message("I AM EMSCRIPTEN")
-
     add_subdirectory(extern)
 
-    add_library(cad_wasm STATIC
+    add_executable(cad_wasm
         lib/libcad.c
+        lib/lcdraw.cpp  
     )
 
     target_include_directories(cad_wasm PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/lib
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/extern
+        ${CMAKE_CURRENT_LIST_DIR}/extern/skia
         ${CMAKE_CURRENT_LIST_DIR}/extern/SDL/include
     )
 
+
     target_link_libraries(cad_wasm PUBLIC
         cglm
-        skia
+        "-Wl,--whole-archive" skia "-Wl,--no-whole-archive"
+        glad
     )
 
-    target_include_directories(cad_wasm PUBLIC
+    set_target_properties(cad_wasm PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}
+        SUFFIX ".wasm"
+        PREFIX "lib"
     )
 
     target_compile_options(cad_wasm PRIVATE
@@ -125,13 +129,14 @@ else()
         -sUSE_SDL=3
     )
 
-    # Emscripten link options
+
     target_link_options(cad_wasm PUBLIC
         -sUSE_SDL=3
         -sMODULARIZE=1
         -sEXPORT_ES6=1
         -sALLOW_MEMORY_GROWTH=1
         -sMAX_WEBGL_VERSION=2
-        -sSIDE_MODULE
+        -sSIDE_MODULE=1
     )
+
 endif()
