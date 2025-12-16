@@ -21,6 +21,9 @@ static bool quit = false;
 void update(SDL_Event *event);
 bool event_watch(void *data, SDL_Event *event);
 
+void save_file_returned(void *userdata, const char * const *filelist, int filter);
+void open_file_returned(void *userdata, const char * const *filelist, int filter);
+
 int main() 
 {
 
@@ -171,7 +174,29 @@ void update(SDL_Event* event)
 
         if (igBeginMenu("File", true))
         {
-            if (igMenuItem_Bool("Exit", NULL, false, true))
+
+            SDL_DialogFileFilter filters[1];
+            filters[0].name = "libcad models";
+            filters[0].pattern = "lc";
+
+            if (igMenuItem_Bool("New", "Ctrl+N", false, true))
+            {
+                SDL_ShowSaveFileDialog(save_file_returned, NULL, window, filters, 1, "untitled.lc");
+            }
+
+            if (igMenuItem_Bool("Open", "Ctrl+O", false, true))
+            {
+                SDL_ShowOpenFileDialog(open_file_returned, NULL, window, filters, 1, NULL, false);
+            }
+
+            if (igMenuItem_Bool("Save", "Ctrl+S", false, true))
+            {
+               
+            }
+
+            igSeparator();
+
+            if (igMenuItem_Bool("Exit", "Ctrl+Q", false, true))
             {
                 SDL_Event quitEvent;
                 quitEvent.type = SDL_EVENT_QUIT;
@@ -183,11 +208,71 @@ void update(SDL_Event* event)
 
         if (igBeginMenu("Model", true))
         {
-            if (igMenuItem_Bool("New Sketch", NULL, false, true))
+            if (igBeginMenu("New...", true))
             {
-                printf("New Sketch clicked\n");
+                if (igMenuItem_Bool("Sketch", NULL, false, true))
+                {
+                    printf("New Sketch clicked\n");
+                }
+
+                igSeparator();
+
+                if (igMenuItem_Bool("Model Datum", NULL, false, true))
+                {
+                    
+                }
+
+                if (igMenuItem_Bool("Model Axis", NULL, false, true))
+                {
+                    
+                }
+
+                if (igMenuItem_Bool("Model Plane", NULL, false, true))
+                {
+                    
+                }
+
+                igSeparator();
+
+                if (igMenuItem_Bool("Mesh", NULL, false, true))
+                {
+                    
+                }
+
+
+
+                igEndMenu();
             }
 
+
+            
+
+
+            igEndMenu();
+        }
+
+        if (igBeginMenu("View", true))
+        {
+            if (igBeginMenu("Projection", true))
+            {
+
+                if (igMenuItem_Bool("Orthographic", NULL, false, true))
+                {
+                    /* do nothing */
+                }
+
+                if (igMenuItem_Bool("Perspective", NULL, false, true))
+                {
+                    /* do nothing */
+                }
+
+                igEndMenu();
+            }
+
+            if (igMenuItem_Bool("Reset", NULL, false, true))
+            {
+                /* do nothing */
+            }
 
             igEndMenu();
         }
@@ -224,7 +309,8 @@ void update(SDL_Event* event)
         right_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.11f, NULL, &center_id);
     
         igDockBuilderDockWindow("Explorer", left_id);
-        igDockBuilderDockWindow("Help", left_id);
+        igDockBuilderDockWindow("Terminal", left_id);
+        igDockBuilderDockWindow("Help", right_id);
         igDockBuilderDockWindow("Properties", right_id);
 
         igDockBuilderFinish(dockspace_id);
@@ -327,61 +413,16 @@ void update(SDL_Event* event)
 
     igEnd();
 
+    igBegin("Terminal", NULL, 0);
+
+    igText("Terminal content");
+
+    igEnd();
+
     ImGuiDockNode *node = igDockBuilderGetNode(left_id);
     node->HasWindowMenuButton = false;
 
     ImGuiDockNode *right_node = igDockBuilderGetNode(right_id);
-
-    igSetNextWindowPos((ImVec2){node->Size.x, node->Pos.y}, ImGuiCond_Always, (ImVec2){0.0f, 0.0f});
-
-    igBegin("Test", NULL,
-        ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoSavedSettings |
-        ImGuiWindowFlags_NoBackground |
-        ImGuiWindowFlags_AlwaysAutoResize
-    );
-
-    static int currentItem = 0;
-
-    if (igCombo_Str("Selection Mode", &currentItem, "Auto\0Vertex\0Line\0Face\0Solid\0Part\0Assembly\0", -1))
-    {
-        /* do nothing */
-    }
-
-    if (igButton("None", (ImVec2){0,0}))
-    {
-        
-    }
-
-    igSameLine(0.0f, 10.0f);
-
-    if (igButton("Line", (ImVec2){0,0}))
-    {
-        
-    }
-
-    igSameLine(0.0f, 10.0f);
-
-    if (igButton("Rectangle", (ImVec2){0,0}))
-    {
-        
-    }
-
-    igSameLine(0.0f, 10.0f);
-
-    if (igButton("Circle", (ImVec2){0,0}))
-    {
-    }
-
-    igEnd();
-
-    glViewport(0, 0, windowWidth, windowHeight);
-    glDisable(GL_SCISSOR_TEST);
-    glClearColor(0.1f, 0.15f, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-
 
     int left = (int)(node->Pos.x + node->Size.x + viewport->Pos.x);
     int right = (int)(right_node->Pos.x + viewport->Pos.x);
@@ -390,6 +431,13 @@ void update(SDL_Event* event)
     
     int width = (int)(right - left);
     int height = (int)(bottom - top);
+
+
+    glViewport(0, 0, windowWidth, windowHeight);
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0.1f, 0.15f, 0.2f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 
     cad_set_viewport((int)left, (int)(top - menuSize.y), width, height, windowWidth, windowHeight);
     cad_render_viewport();
@@ -402,4 +450,24 @@ void update(SDL_Event* event)
 
     
     SDL_GL_SwapWindow(window);
+}
+
+void save_file_returned(void *userdata, const char * const *filelist, int filter)
+{
+    printf("Save file returned\n");
+
+    for (int i = 0; filelist[i] != NULL; i++)
+    {
+        printf("File: %s\n", filelist[i]);
+    }
+}
+
+void open_file_returned(void *userdata, const char * const *filelist, int filter)
+{
+    printf("Open file returned\n");
+
+    for (int i = 0; filelist[i] != NULL; i++)
+    {
+        printf("File: %s\n", filelist[i]);
+    }
 }
