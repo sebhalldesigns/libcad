@@ -175,9 +175,13 @@ void update(SDL_Event* event)
         if (igBeginMenu("File", true))
         {
 
-            SDL_DialogFileFilter filters[1];
+            SDL_DialogFileFilter filters[3];
             filters[0].name = "libcad models";
             filters[0].pattern = "lc";
+            filters[1].name = "STL files";
+            filters[1].pattern = "stl";
+            filters[2].name = "Wavefront (OBJ) files";
+            filters[2].pattern = "stl";
 
             if (igMenuItem_Bool("New", "Ctrl+N", false, true))
             {
