@@ -122,7 +122,7 @@ void render(int x, int y, int vpw, int vph, int w, int h)
     }
     
     vec2 minor_start = {fmodf(origin[0], minor_spacing) - minor_spacing, fmodf(origin[1], minor_spacing) - minor_spacing};
-    vec2 grid_end = {vpw, vph};
+    vec2 grid_end = {(float)vpw, (float)vph};
 
     draw_grid(minor_start, grid_end, minor_spacing, SkColorSetARGB(13, 255, 255, 255));
 

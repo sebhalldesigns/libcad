@@ -400,7 +400,7 @@ void cad_init_viewport()
     if (!gladLoadGL() && !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
     {
         printf("Failed to initialize GLAD\n");
-        return false;
+        return;
     }
     
     make_context();

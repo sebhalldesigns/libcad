@@ -10,6 +10,10 @@ if (WIN32)
     set(PLATFORM_LIBS 
         opengl32
     )
+elseif (APPLE)
+    set(PLATFORM_LIBS
+        "-framework OpenGL"
+    )
 else()
     set(PLATFORM_LIBS
         GL

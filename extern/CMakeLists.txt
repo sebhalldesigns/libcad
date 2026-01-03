@@ -123,7 +123,7 @@ if (EMSCRIPTEN)
 
     add_custom_command( 
         OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
-        COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_debug=false\ is_component_build=false\ skia_enable_tools=false\ skia_use_freetype=false\ skia_use_system_libpng=false\ skia_use_system_freetype2=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_webgl=true\ skia_use_gl=true\ target_os=\"emscripten\"\ target_cpu=\"wasm\"\ cc=\"${EMCC_PY}\"\ cxx=\"${EMCXX_PY}\"\ ar=\"${EMAR_PY}\"
+        COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_debug=false\ is_component_build=false\ skia_enable_tools=false\ skia_use_freetype=false\ skia_use_system_libpng=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_webgl=true\ skia_use_gl=true\ target_os=\"emscripten\"\ target_cpu=\"wasm\"\ cc=\"${EMCC_PY}\"\ cxx=\"${EMCXX_PY}\"\ ar=\"${EMAR_PY}\"
         DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
         COMMENT "Generating Skia build files"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
@@ -133,6 +133,15 @@ elseif (WIN32)
     add_custom_command( 
         OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
         COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_debug=false\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_gl=true\ extra_cflags=[\"/MT\"]\ extra_ldflags=[\"/MT\"]
+        DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
+        COMMENT "Generating Skia build files"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia
+        VERBATIM
+    )
+elseif (APPLE)
+    add_custom_command( 
+        OUTPUT ${CMAKE_BINARY_DIR}/skia_gen
+        COMMAND ${SKIA_BIN_DIR}/gn gen ${SKIA_BUILD_DIR} --args=is_official_build=true\ is_debug=false\ is_component_build=false\ skia_enable_tools=false\ skia_use_system_libpng=false\ skia_use_system_freetype2=false\ skia_use_system_zlib=false\ skia_use_system_libjpeg_turbo=false\ skia_use_system_harfbuzz=false\ skia_use_system_libwebp=false\ skia_use_system_expat=false\ skia_use_system_icu=false\ skia_use_gl=true
         DEPENDS ${CMAKE_BINARY_DIR}/gn_fetch
         COMMENT "Generating Skia build files"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/skia

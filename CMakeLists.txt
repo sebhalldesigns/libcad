@@ -30,6 +30,10 @@ if (NOT EMSCRIPTEN)
         set(PLATFORM_LIBS 
             opengl32
         )
+    elseif (APPLE)
+        set(PLATFORM_LIBS
+            "-framework OpenGL"
+        )
     else()
         set(PLATFORM_LIBS
             GL
@@ -63,7 +67,7 @@ if (NOT EMSCRIPTEN)
     
 
     # Optionally add Emscripten as an ExternalProject
-    option(BUILD_WASM_TARGET "Build WebAssembly target" ON)
+    option(BUILD_WASM_TARGET "Build WebAssembly target" OFF)
     
     if(BUILD_WASM_TARGET)
         include(ExternalProject)
