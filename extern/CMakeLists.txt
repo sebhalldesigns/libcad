@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 
 add_subdirectory(cglm)
+add_subdirectory(json)
 
 if (EMSCRIPTEN)
     target_compile_options(cglm PRIVATE

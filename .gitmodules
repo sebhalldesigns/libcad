@@ -13,3 +13,6 @@
 [submodule "extern/cglm"]
 	path = extern/cglm
 	url = https://github.com/recp/cglm
+[submodule "extern/json"]
+	path = extern/json
+	url = https://github.com/nlohmann/json.git
