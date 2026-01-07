@@ -12,6 +12,8 @@
 #include <skia/include/gpu/ganesh/gl/GrGLInterface.h>
 #include <skia/include/gpu/ganesh/gl/GrGLAssembleInterface.h>
 
+#include <skia/include/gpu/ganesh/gl/egl/GrGLMakeEGLInterface.h>
+
 #define X(x) (x[0])
 #define Y(y) (y[1])
 
@@ -46,6 +48,18 @@ static void draw_ellipse(vec2 center, vec2 size);
 void make_context()
 {
     sk_sp<const GrGLInterface> interface = GrGLMakeNativeInterface();
+
+    if (!interface.get())
+    {   
+        #if defined(__ANDROID__) || defined(__linux__)
+            interface = GrGLMakeEGLInterface();
+        #endif
+    }
+
+    if (!interface.get())
+    {
+        return;
+    }
 
     printf("interface %p\n", interface.get());
 
