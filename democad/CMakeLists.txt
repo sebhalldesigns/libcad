@@ -16,19 +16,21 @@ elseif (APPLE)
     )
 else()
     set(PLATFORM_LIBS
+        skia
+        EGL
         GL
+        dl
     )
 endif()
 
 target_link_libraries(democad PUBLIC
-    ${PLATFORM_LIBS}
-    skia
-    cglm
     SDL3-static
+    libcad
+    ${PLATFORM_LIBS}
+    nlohmann_json
+    cglm
     cimgui
     imgui_backends
-    libcad
-
 )
 
 set_target_properties(democad PROPERTIES

@@ -21,7 +21,7 @@ if (NOT EMSCRIPTEN)
     add_subdirectory(extern)
     add_subdirectory(democad)
 
-    add_library(libcad SHARED
+    add_library(libcad STATIC
         lib/libcad.c
         lib/lcdraw.cpp
     )
