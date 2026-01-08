@@ -62,6 +62,8 @@ extern "C" {
 
 #define X(x) (x[0])
 #define Y(y) (y[1])
+#define WIDTH(x) (x[2])
+#define HEIGHT(y) (y[3])
 
 /***************************************************************
 ** MARK: TYPEDEFS
@@ -77,10 +79,14 @@ int lc_draw_init();
 void lc_draw_begin(int w, int h);
 void lc_draw_end();
 
+void lc_draw_line(vec2 start, vec2 end, uint32_t color);
 void lc_draw_circle(vec2 center, float radius);
 void lc_draw_grid(vec2 start, vec2 end, float spacing, uint32_t color);
-void lc_draw_rect(vec2 center, vec2 size);
 void lc_draw_ellipse(vec2 center, vec2 size);
+
+void lc_draw_rect_filled(vec2 start, vec2 end, uint32_t color);
+
+void lc_draw_handle(vec2 pos, bool active);
 
 #ifdef __cplusplus
 }
