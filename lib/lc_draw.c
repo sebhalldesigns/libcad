@@ -159,8 +159,6 @@ void lc_draw_handle(vec2 pos, bool active)
         0
     );
     
-    printf("ACTIVE %d\n", active);
-
     ImDrawList_AddCircle(ig_drawlist, (ImVec2_c){pos[0], pos[1]}, HANDLE_SIZE, IM_COL32(255, 255, 255, 255), 0, 1.0f);
 }
 

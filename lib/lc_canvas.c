@@ -56,6 +56,10 @@ static vec2 origin = {0.0f, 0.0f};
 
 static vec4 cursor_pos = {0.0f, 0.0f, 0.0f, 0.0f};
 
+static vec2 pan_start_pos = {0.0f, 0.0f};
+static bool pan_active = false;
+
+static lc_canvas_item_t *active_item = NULL;
 static vec2 drag_start_pos = {0.0f, 0.0f};
 static bool drag_active = false;
 
@@ -63,6 +67,9 @@ static mat4 viewport_transform;
 static vec4 world_origin;
 
 static int cursor_request = CURSOR_NORMAL;
+
+static lc_canvas_item_t item;
+
 
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
@@ -75,19 +82,37 @@ static void render_canvas_item(lc_canvas_item_t *item);
 
 static bool item_contains(lc_canvas_item_t *item, vec4 point);
 
+
+
+  
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
 ***************************************************************/
 
 void lc_canvas_init()
 {
+    glm_mat4_zero(item.bounds);
 
+    item.bounds[0][0] = 0.0f;
+    item.bounds[0][1] = 0.0f;
+    item.bounds[1][0] = 100.0f;
+    item.bounds[1][1] = 0.0f;
+    item.bounds[2][0] = 100.0f;
+    item.bounds[2][1] = 100.0f;
+    item.bounds[3][0] = 0.0f;
+    item.bounds[3][1] = 100.0f;
+
+    item.bounds[0][3] = 1.0f;
+    item.bounds[1][3] = 1.0f;
+    item.bounds[2][3] = 1.0f;
+    item.bounds[3][3] = 1.0f;
 }
 
 void lc_canvas_render(float viewport_width, float viewport_height)
 {
     
     cursor_request = CURSOR_NORMAL;
+    active_item = NULL;
 
     viewport_size[0] = viewport_width;
     viewport_size[1] = viewport_height;
@@ -108,26 +133,12 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     render_grid();
     render_axes();
 
-    lc_canvas_item_t item;
+   
+
     item.is_hovered = false;
     item.hover_handle_index = -1;
-    glm_mat4_zero(item.bounds);
-    item.bounds[0][0] = 0.0f;
-    item.bounds[0][1] = 0.0f;
-    item.bounds[1][0] = 100.0f;
-    item.bounds[1][1] = 0.0f;
-    item.bounds[2][0] = 100.0f;
-    item.bounds[2][1] = 100.0f;
-    item.bounds[3][0] = 0.0f;
-    item.bounds[3][1] = 100.0f;
-
-    item.bounds[0][3] = 1.0f;
-    item.bounds[1][3] = 1.0f;
-    item.bounds[2][3] = 1.0f;
-    item.bounds[3][3] = 1.0f;
 
     glm_mat4_mul(viewport_transform, item.bounds, item.frame);
-
 
     item.is_hovered = item_contains(&item, cursor_pos);
 
@@ -144,6 +155,11 @@ void lc_canvas_render(float viewport_width, float viewport_height)
         cursor_request = CURSOR_MOVE;
     }
 
+    if (item.is_hovered)
+    {
+        active_item = &item;
+    }
+
     render_canvas_item(&item);
 }
 
@@ -152,23 +168,56 @@ void lc_canvas_set_cursor_pos(float x, float y)
     cursor_pos[0] = x;
     cursor_pos[1] = y;
 
-    if (drag_active)
+    if (pan_active)
+    {
+        vec2 delta;
+        glm_vec2_sub(cursor_pos, pan_start_pos, delta);
+        glm_vec2_scale(delta, 1.0f/zoom, delta);
+
+        glm_vec2_add(viewport_origin, delta, viewport_origin);
+        
+        glm_vec2_copy(cursor_pos, pan_start_pos);
+    }
+    
+    if (drag_active && active_item)
     {
         vec2 delta;
         glm_vec2_sub(cursor_pos, drag_start_pos, delta);
         glm_vec2_scale(delta, 1.0f/zoom, delta);
 
-        glm_vec2_add(viewport_origin, delta, viewport_origin);
-        
+        vec4 delta4 = {delta[0], delta[1], 0.0f, 1.0f};
+
+        if (active_item->hover_handle_index >= 0 && active_item->hover_handle_index < 4)
+        {
+            glm_vec2_add(active_item->bounds[active_item->hover_handle_index], delta, active_item->bounds[active_item->hover_handle_index]);
+        }
+
         glm_vec2_copy(cursor_pos, drag_start_pos);
+
+        
     }
 }
 
 void lc_canvas_set_cursor_button_state(int button, bool pressed)
 {
+
     switch (button)
     {
-        case 2:
+        case MOUSE_MIDDLE_BUTTON:
+        {
+            if (pressed)
+            {
+                glm_vec2_copy(cursor_pos, pan_start_pos);
+                pan_active = true;
+            }
+            else
+            {
+                pan_active = false;
+            }
+
+        } break;
+
+        case MOUSE_LEFT_BUTTON:
         {
             if (pressed)
             {
@@ -179,7 +228,6 @@ void lc_canvas_set_cursor_button_state(int button, bool pressed)
             {
                 drag_active = false;
             }
-
         } break;
 
         default:

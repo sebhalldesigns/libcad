@@ -67,6 +67,8 @@ static vec2 offset = {0.0f, 0.0f};
 cad_ctx_t  cad_create_context()
 {
     printf("cad_create_context called\n");
+    
+    lc_canvas_init();
 
     return (cad_ctx_t)1;
 }
@@ -104,7 +106,7 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 void cad_render_viewport()
 {
     lc_draw_begin(vp_width, vp_height);
-    
+
     lc_canvas_render((float)vp_width, (float)vp_height);
 
     lc_draw_end();

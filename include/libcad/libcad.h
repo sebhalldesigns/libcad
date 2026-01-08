@@ -23,8 +23,9 @@ extern "C" {
 #include <stddef.h>
 
 #define MOUSE_LEFT_BUTTON    1
-#define MOUSE_RIGHT_BUTTON   2
-#define MOUSE_MIDDLE_BUTTON  3
+#define MOUSE_MIDDLE_BUTTON  2
+#define MOUSE_RIGHT_BUTTON   3
+
 
 #define CURSOR_NORMAL       0
 #define CURSOR_MOVE         1
