@@ -381,11 +381,11 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
     x_pos = x;
     y_pos = y;
 
-    glEnable(GL_SCISSOR_TEST);
-    glViewport(x, y, vp_width, vp_height);
-    glScissor(x, y, vp_width, vp_height);
-    glClearColor(1.0f, 0.15f, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //glEnable(GL_SCISSOR_TEST);
+    //glViewport(x, y, vp_width, vp_height);
+    //glScissor(x, y, vp_width, vp_height);
+    //glClearColor(1.0f, 0.15f, 0.2f, 1.0f);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
 }
 

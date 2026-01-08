@@ -1,18 +1,28 @@
-#include <skia/include/core/SkCanvas.h>
-#include <skia/include/core/SkSurface.h>
-#include <skia/include/core/SkPaint.h>
-#include <skia/include/core/SkColor.h>
-#include <skia/include/core/SkColorSpace.h>
-#include <skia/include/gpu/ganesh/GrDirectContext.h>
-#include <skia/include/gpu/ganesh/GrBackendSurface.h>
-#include <skia/include/gpu/ganesh/SkSurfaceGanesh.h>
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#define CIMGUI_DEFINE_MACROS
+#define CIMGUI_USE_OPENGL3
+#include <cimgui/cimgui.h>
+#include <cimgui/cimgui_impl.h>
 
-#include <skia/include/gpu/ganesh/gl/GrGLDirectContext.h>
-#include <skia/include/gpu/ganesh/gl/GrGLBackendSurface.h>
-#include <skia/include/gpu/ganesh/gl/GrGLInterface.h>
-#include <skia/include/gpu/ganesh/gl/GrGLAssembleInterface.h>
-
-#include <skia/include/gpu/ganesh/gl/egl/GrGLMakeEGLInterface.h>
+#ifndef IM_COL32_R_SHIFT
+#ifdef IMGUI_USE_BGRA_PACKED_COLOR
+#define IM_COL32_R_SHIFT    16
+#define IM_COL32_G_SHIFT    8
+#define IM_COL32_B_SHIFT    0
+#define IM_COL32_A_SHIFT    24
+#define IM_COL32_A_MASK     0xFF000000
+#else
+#define IM_COL32_R_SHIFT    0
+#define IM_COL32_G_SHIFT    8
+#define IM_COL32_B_SHIFT    16
+#define IM_COL32_A_SHIFT    24
+#define IM_COL32_A_MASK     0xFF000000
+#endif
+#endif
+#define IM_COL32(R,G,B,A)    (((ImU32)(A)<<IM_COL32_A_SHIFT) | ((ImU32)(B)<<IM_COL32_B_SHIFT) | ((ImU32)(G)<<IM_COL32_G_SHIFT) | ((ImU32)(R)<<IM_COL32_R_SHIFT))
+#define IM_COL32_WHITE       IM_COL32(255,255,255,255)  // Opaque white = 0xFFFFFFFF
+#define IM_COL32_BLACK       IM_COL32(0,0,0,255)        // Opaque black
+#define IM_COL32_BLACK_TRANS IM_COL32(0,0,0,0)          // Transparent black = 0x00000000
 
 #define X(x) (x[0])
 #define Y(y) (y[1])
@@ -23,8 +33,6 @@
 
 #include "lcdraw.h"
 
-static sk_sp<GrDirectContext> context = NULL;
-
 static float zoom = 1.0f;
 
 static float offsetX = 0.0f;
@@ -34,84 +42,43 @@ static float dragOffsetY = 0.0f;
 
 static int surfaceWidth = 0;
 static int surfaceHeight = 0;
-static sk_sp<SkSurface> surface = NULL;
-static SkCanvas* canvas = NULL;
 
 static vec2 origin = {0.0f, 0.0f};
 
 static void draw_circle(vec2 center, float radius);
-static void draw_grid(vec2 start, vec2 end, float spacing, SkColor color);
+static void draw_grid(vec2 start, vec2 end, float spacing, uint32_t color);
 
 static void draw_rect(vec2 center, vec2 size);
 static void draw_ellipse(vec2 center, vec2 size);
 
+struct ImGuiContext* ig_context = NULL;
+struct ImGuiIO* ig_io = NULL;
+struct ImDrawList* ig_drawlist = NULL;
+
 void make_context()
 {
-    sk_sp<const GrGLInterface> interface = GrGLMakeNativeInterface();
 
-    if (!interface.get())
-    {   
-        #if defined(__ANDROID__) || defined(__linux__)
-            interface = GrGLMakeEGLInterface();
-        #endif
-    }
+    ig_context = igCreateContext(NULL);
+    ig_io = igGetIO_Nil();
 
-    if (!interface.get())
-    {
-        return;
-    }
+    const char* glsl_version = "#version 330 core";
+    ImGui_ImplOpenGL3_Init(glsl_version);
 
-    printf("interface %p\n", interface.get());
-
-    context = GrDirectContexts::MakeGL(interface);
-    printf("context %p\n", context.get());
 }
 
 void render(int x, int y, int vpw, int vph, int w, int h)
 {
+    ig_io->DisplaySize = ImVec2_c{(float)vpw, (float)vph};
+    ig_io->DeltaTime = 1.0f;
 
-    if (context) {
-        context->resetContext(); 
-    }
-
-    if (w != surfaceWidth || h != surfaceHeight || surface == NULL)
-    {
-        
-    }
-
-    GrGLFramebufferInfo fbInfo;
-        fbInfo.fFBOID = 0;
-        fbInfo.fFormat = (GrGLenum)GL_RGBA8;
-
-        GrBackendRenderTarget renderTarget = GrBackendRenderTargets::MakeGL(w, h, 0, 8, fbInfo);
-
-        surface = SkSurfaces::WrapBackendRenderTarget(context.get(), renderTarget, GrSurfaceOrigin::kBottomLeft_GrSurfaceOrigin, SkColorType::kRGBA_8888_SkColorType, SkColorSpace::MakeSRGB(), nullptr);
-        surfaceWidth = w;
-        surfaceHeight = h;
-   
-
-    canvas = surface->getCanvas();
-    canvas->setMatrix(SkMatrix::I());
-    canvas->translate(x, y);
-    canvas->clipRect(SkRect::MakeWH(vpw, vph));
-
-
+    
     origin[0] = (vpw / 2.0f) + offsetX + dragOffsetX;
     origin[1] = (vph / 2.0f) + offsetY + dragOffsetY;
 
-    canvas->clear(SkColorSetARGB(255, 25, 38, 51));
+    ImGui_ImplOpenGL3_NewFrame();
+    igNewFrame();
 
-    SkPaint paint;
-    paint.setStyle(SkPaint::kFill_Style);
-    paint.setColor(SkColorSetARGB(255, 255, 255, 255));
-    paint.setStrokeWidth(1);
-
-    canvas->drawRect(SkRect::MakeXYWH(10, 10, 10, 10), paint);
-
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(1);
-    
-
+   ig_drawlist = igGetForegroundDrawList_ViewportPtr(igGetMainViewport());
 
     /* DRAW MINOR GRID */
 
@@ -138,17 +105,16 @@ void render(int x, int y, int vpw, int vph, int w, int h)
     vec2 minor_start = {fmodf(origin[0], minor_spacing) - minor_spacing, fmodf(origin[1], minor_spacing) - minor_spacing};
     vec2 grid_end = {(float)vpw, (float)vph};
 
-    draw_grid(minor_start, grid_end, minor_spacing, SkColorSetARGB(13, 255, 255, 255));
+    draw_grid(minor_start, grid_end, minor_spacing, IM_COL32(255, 255, 255, 13));
 
     /* DRAW MAJOR GRID */
     float major_spacing = minor_spacing * major_minor_ratio;
     vec2 major_start = {fmodf(origin[0], major_spacing) - major_spacing, fmodf(origin[1], major_spacing) - major_spacing};
-    draw_grid(major_start, grid_end, major_spacing, SkColorSetARGB(25, 255, 255, 255));
+    draw_grid(major_start, grid_end, major_spacing, IM_COL32(255, 255, 255, 25));
 
     /* draw axes */
-    paint.setColor(SkColorSetARGB(150, 255, 255, 255));
-    canvas->drawLine(0, origin[1], w, origin[1], paint);
-    canvas->drawLine(origin[0], 0, origin[0], h, paint);
+    ImDrawList_AddLine(ig_drawlist, ImVec2_c{0, origin[1]}, ImVec2_c{(float)w, origin[1]}, IM_COL32(255, 255, 255, 150), 1.0f);
+    ImDrawList_AddLine(ig_drawlist, ImVec2_c{origin[0], 0}, ImVec2_c{origin[0], (float)h}, IM_COL32(255, 255, 255, 150), 1.0f);
 
     draw_circle(origin, 4.0f);
 
@@ -179,9 +145,12 @@ void render(int x, int y, int vpw, int vph, int w, int h)
     oval_size[1] *= zoom;
 
     draw_ellipse(oval_origin, oval_size);
-  
-    context->flushAndSubmit();
+
+    igRender();
+    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
+
 }
+
 
 void set_zoom(float z)
 {
@@ -194,49 +163,38 @@ void set_offset(vec2 vec)
     offsetY = vec[1];
 }
 
+
+
+
 static void draw_circle(vec2 center, float radius)
 {
-    static SkPaint paint;
-    paint.setAntiAlias(true);
-    paint.setStyle(SkPaint::kFill_Style);
-    paint.setColor(SkColorSetARGB(255, 200, 200, 200));
-
-    //canvas->drawCircle(SkPoint::Make(center[0] - 0.5f, center[1] - 0.5f), radius, paint);
-    canvas->drawCircle(SkPoint::Make(center[0] - 0.5f, center[1] - 0.5f), radius, paint);
-
+    ImDrawList_AddCircle(ig_drawlist, ImVec2_c{center[0], center[1]}, radius, IM_COL32(200, 200, 200, 255), 12, 1.0f);
 }
 
-static void draw_grid(vec2 start, vec2 end, float spacing, SkColor color)
+
+static void draw_grid(vec2 start, vec2 end, float spacing, uint32_t color)
 {
-    static SkPaint paint;
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setColor(color);
-    paint.setStrokeWidth(1);
 
     for (float x = start[0]; x <= end[0]; x += spacing)
     {
-        canvas->drawLine(x, start[1], x, end[1], paint);
+        ImDrawList_AddLine(ig_drawlist, ImVec2_c{x, start[1]}, ImVec2_c{x, end[1]}, color, 1.0f);
     }
 
     for (float y = start[1]; y <= end[1]; y += spacing)
     {
-        canvas->drawLine(start[0], y, end[0], y, paint);
+        ImDrawList_AddLine(ig_drawlist, ImVec2_c{start[0], y}, ImVec2_c{end[0], y}, color, 1.0f);
+
     }
 }
 
+
 static void draw_rect(vec2 center, vec2 size)
 {
-    static SkPaint paint;
-    paint.setStyle(SkPaint::kFill_Style);
-    paint.setColor(SkColorSetARGB(25, 255, 255, 255));
 
-    canvas->drawRect(SkRect::MakeXYWH(center[0] - size[0] / 2.0f, center[1] - size[1] / 2.0f, size[0], size[1]), paint);
+    ImDrawList_AddRectFilled(ig_drawlist, ImVec2_c{center[0] - size[0] / 2.0f, center[1] - size[1] / 2.0f}, ImVec2_c{center[0] + size[0] / 2.0f, center[1] + size[1] / 2.0f}, IM_COL32(255, 255, 255, 25), 0.0f, 0);
+    ImDrawList_AddRect(ig_drawlist, ImVec2_c{center[0] - size[0] / 2.0f, center[1] - size[1] / 2.0f}, ImVec2_c{center[0] + size[0] / 2.0f, center[1] + size[1] / 2.0f}, IM_COL32(255, 255, 255, 150), 0.0f, 0, 2.0f);
 
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setColor(SkColorSetARGB(150, 255, 255, 255));
-    paint.setStrokeWidth(2);
 
-    canvas->drawRect(SkRect::MakeXYWH(center[0] - size[0] / 2.0f, center[1] - size[1] / 2.0f, size[0], size[1]), paint);
 
     draw_circle(center, 4.0f);
 
@@ -258,20 +216,14 @@ static void draw_rect(vec2 center, vec2 size)
 
 }
 
+
 static void draw_ellipse(vec2 center, vec2 size)
 {
-    static SkPaint paint;
-    paint.setAntiAlias(true);
-    paint.setStyle(SkPaint::kFill_Style);
-    paint.setColor(SkColorSetARGB(25, 255, 255, 255));
 
-    canvas->drawOval(SkRect::MakeXYWH(center[0] - size[0] / 2.0f, center[1] - size[1] / 2.0f, size[0], size[1]), paint);
+    ImDrawList_AddEllipseFilled(ig_drawlist, ImVec2_c{center[0], center[1]}, ImVec2_c{size[0] / 2.0f, size[1] / 2.0f}, IM_COL32(255, 255, 255, 25), 0.0f, 0);
 
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setColor(SkColorSetARGB(150, 255, 255, 255));
-    paint.setStrokeWidth(2);
 
-    canvas->drawOval(SkRect::MakeXYWH(center[0] - size[0] / 2.0f, center[1] - size[1] / 2.0f, size[0], size[1]), paint);
+    ImDrawList_AddEllipse(ig_drawlist, ImVec2_c{center[0], center[1]}, ImVec2_c{size[0] / 2.0f, size[1] / 2.0f}, IM_COL32(255, 255, 255, 150), 0.0f, 0, 2.0f);
     
     draw_circle(center, 4.0f);
 

@@ -42,7 +42,6 @@ if (NOT EMSCRIPTEN)
 
     target_link_libraries(libcad PUBLIC
         ${PLATFORM_LIBS}
-        skia
         cglm
         SDL3-static
         cimgui
