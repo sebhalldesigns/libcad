@@ -23,7 +23,8 @@ if (NOT EMSCRIPTEN)
 
     add_library(libcad STATIC
         lib/libcad.c
-        lib/lcdraw.cpp
+        lib/lc_draw.c
+        lib/lc_canvas.c
     )
 
     if (WIN32)
@@ -99,7 +100,7 @@ else()
 
     add_executable(cad_wasm
         lib/libcad.c
-        lib/lcdraw.cpp  
+        lib/lcdraw.cppc
     )
 
     target_include_directories(cad_wasm PUBLIC
