@@ -30,8 +30,6 @@ extern "C" {
 
 #include <cglm/cglm.h>
 
-#include <glad/glad.h>
-
 #include <stdint.h>
 #include <stdbool.h>
 

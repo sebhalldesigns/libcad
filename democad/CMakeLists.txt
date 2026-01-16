@@ -14,9 +14,8 @@ elseif (APPLE)
     set(PLATFORM_LIBS
         "-framework OpenGL"
     )
-else()
+elseif(LINUX)
     set(PLATFORM_LIBS
-        skia
         EGL
         GL
         dl

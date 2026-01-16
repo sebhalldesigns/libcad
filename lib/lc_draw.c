@@ -17,6 +17,14 @@
 
 #include "lc_draw.h"
 
+
+#ifdef EMSCRIPTEN
+    #include <GLES3/gl3.h>
+#else
+    #include <glad/glad.h>
+#endif
+
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -46,7 +54,11 @@ int lc_draw_init()
     ig_context = igCreateContext(NULL);
     ig_io = igGetIO_Nil();
 
+    #ifdef EMSCRIPTEN
+    const char* glsl_version = "#version 300 es";
+    #else
     const char* glsl_version = "#version 330 core";
+    #endif
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     return true;

@@ -18,11 +18,14 @@
 #include <libcad/libcad.h>
 #include <stdio.h>
 
-#include <glad/glad.h>
-
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
 #include <cglm/cglm.h>
+
+#ifdef EMSCRIPTEN
+    #include <GLES3/gl3.h>
+#else
+    #include <glad/glad.h>
+#endif
 
 
 #include "lc_canvas.h"
@@ -115,12 +118,18 @@ void cad_render_viewport()
 
 void cad_init_viewport()
 {
+    printf("cad_init_viewport called\n");
 
+    #ifndef EMSCRIPTEN
     if (!gladLoadGL() && !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
     {
         printf("Failed to initialize GLAD\n");
         return;
     }
+    #endif
+
+    printf("GLAD initialized successfully\n");
+    printf("OpenGL %s\n", glGetString(GL_VERSION));
     
     if (!lc_draw_init())
     {
