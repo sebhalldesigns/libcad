@@ -60,6 +60,7 @@ static vec2 pan_start_pos = {0.0f, 0.0f};
 static bool pan_active = false;
 
 static lc_canvas_item_t *active_item = NULL;
+
 static vec2 drag_start_pos = {0.0f, 0.0f};
 static bool drag_active = false;
 
@@ -111,8 +112,7 @@ void lc_canvas_init()
 void lc_canvas_render(float viewport_width, float viewport_height)
 {
     
-    cursor_request = CURSOR_NORMAL;
-    active_item = NULL;
+    //active_item = NULL;
 
     viewport_size[0] = viewport_width;
     viewport_size[1] = viewport_height;
@@ -133,31 +133,29 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     render_grid();
     render_axes();
 
-   
-
-    item.is_hovered = false;
-    item.hover_handle_index = -1;
-
+    
     glm_mat4_mul(viewport_transform, item.bounds, item.frame);
 
-    item.is_hovered = item_contains(&item, cursor_pos);
+    if (&item != active_item)
+    {
 
-    if (item.hover_handle_index >= 0 && item.hover_handle_index < 4)
-    {
-        cursor_request = item.hover_handle_index % 2 == 0 ? CURSOR_RESIZE_NWSE : CURSOR_RESIZE_NESW;
-    }
-    else if (item.hover_handle_index >= 0)
-    {
-        cursor_request = item.hover_handle_index % 2 == 0 ? CURSOR_RESIZE_V : CURSOR_RESIZE_H;
-    }
-    else if (item.is_hovered)
-    {
-        cursor_request = CURSOR_MOVE;
-    }
+        cursor_request = CURSOR_NORMAL;
 
-    if (item.is_hovered)
-    {
-        active_item = &item;
+        item.hover_handle_index = -1;
+        item.is_hovered = item_contains(&item, cursor_pos);
+
+        if (item.hover_handle_index >= 0 && item.hover_handle_index < 4)
+        {
+            cursor_request = item.hover_handle_index % 2 == 0 ? CURSOR_RESIZE_NWSE : CURSOR_RESIZE_NESW;
+        }
+        else if (item.hover_handle_index >= 0 && item.hover_handle_index < 8)
+        {
+            cursor_request = item.hover_handle_index % 2 == 0 ? CURSOR_RESIZE_V : CURSOR_RESIZE_H;
+        }
+        else if (item.hover_handle_index == 8)
+        {
+            cursor_request = CURSOR_MOVE;
+        }
     }
 
     render_canvas_item(&item);
@@ -187,9 +185,72 @@ void lc_canvas_set_cursor_pos(float x, float y)
 
         vec4 delta4 = {delta[0], delta[1], 0.0f, 1.0f};
 
-        if (active_item->hover_handle_index >= 0 && active_item->hover_handle_index < 4)
+        /* HANDLE LOGIC */
+
+        if (active_item->hover_handle_index < 0)
         {
-            glm_vec2_add(active_item->bounds[active_item->hover_handle_index], delta, active_item->bounds[active_item->hover_handle_index]);
+            /* do nothing */
+        }
+        else if (active_item->hover_handle_index < 4)
+        {
+            /* for diagonal corners */
+            
+            /* add the delta directly to the curent handle */
+            X(active_item->bounds[active_item->hover_handle_index]) += X(delta);
+            Y(active_item->bounds[active_item->hover_handle_index]) += Y(delta);
+
+            /* get handles either side */
+            int next_index = (active_item->hover_handle_index + 1) % 4;
+            int prev_index = (active_item->hover_handle_index + 3) % 4;
+
+            if (active_item->hover_handle_index % 2 == 0)
+            {
+                /* if it's top left or bottom right, pin the next index to the same y and the previous to the same x */
+                Y(active_item->bounds[next_index]) = Y(active_item->bounds[active_item->hover_handle_index]);
+                X(active_item->bounds[prev_index]) = X(active_item->bounds[active_item->hover_handle_index]);
+            }
+            else
+            {
+                /* if its top left or bottom right, pin the next to the same X and the previous to the same y */
+                X(active_item->bounds[next_index]) = X(active_item->bounds[active_item->hover_handle_index]);
+                Y(active_item->bounds[prev_index]) = Y(active_item->bounds[active_item->hover_handle_index]);
+            }
+        }
+        else if (active_item->hover_handle_index < 8 && active_item->hover_handle_index % 2 == 0)
+        {
+            /* for vertical handles */
+
+            /*
+            **  for 4 we want 0 and 1
+            **  for 6 we want 2 and 3
+            */
+            int prev_index = (active_item->hover_handle_index - 4) % 4;
+            int next_index = (active_item->hover_handle_index - 3) % 4;
+            Y(active_item->bounds[prev_index]) += Y(delta);
+            Y(active_item->bounds[next_index]) += Y(delta);
+        }
+        else if (active_item->hover_handle_index < 8 && active_item->hover_handle_index % 2 == 1)
+        {
+            /* for horizontal handles */
+
+            /*
+            **  for 5 we want 1 and 2
+            **  for 7 we want 3 and 0
+            */
+            int prev_index = (active_item->hover_handle_index - 4) % 4;
+            int next_index = (active_item->hover_handle_index - 3) % 4;
+            X(active_item->bounds[prev_index]) += X(delta);
+            X(active_item->bounds[next_index]) += X(delta);
+        }
+        else if (active_item->hover_handle_index == 8)
+        {
+            /* for moving the whole item */
+
+            for (int i = 0; i < 4; i++)
+            {
+                X(active_item->bounds[i]) += X(delta);
+                Y(active_item->bounds[i]) += Y(delta);
+            }
         }
 
         glm_vec2_copy(cursor_pos, drag_start_pos);
@@ -223,10 +284,19 @@ void lc_canvas_set_cursor_button_state(int button, bool pressed)
             {
                 glm_vec2_copy(cursor_pos, drag_start_pos);
                 drag_active = true;
+                
+                item.is_hovered = item_contains(&item, cursor_pos);
+
+                if (item.is_hovered)
+                {
+                    active_item = &item;
+                }
             }
             else
             {
                 drag_active = false;
+
+                active_item = NULL;
             }
         } break;
 
@@ -378,22 +448,12 @@ static bool item_contains(lc_canvas_item_t *item, vec4 point)
     {   
         vec4 handle = {0.0f, 0.0f, 0.0f, 0.0f};
 
-        if (i % 2 == 0)
-        {
-            handle[0] = (X(item->frame[i]) + X(item->frame[i+1])) / 2.0f;
-            handle[1] = Y(item->frame[i]);
-        }
-        else if (i == 1) 
-        {
-            handle[0] = X(item->frame[1]);
-            handle[1] = (Y(item->frame[1]) + Y(item->frame[2])) / 2.0f;
-        }
-        else
-        {
-            handle[0] = X(item->frame[3]);
-            handle[1] = (Y(item->frame[3]) + Y(item->frame[0])) / 2.0f;
-        }
+        int prev_index = i;
+        int next_index = (i + 1) % 4;
 
+        X(handle) = (X(item->frame[prev_index]) + X(item->frame[next_index])) / 2.0f;
+        Y(handle) = (Y(item->frame[prev_index]) + Y(item->frame[next_index])) / 2.0f;
+        
         if (glm_vec4_distance(point, handle) <= HANDLE_CATCHMENT)
         {
             item->hover_handle_index = i + 4;
@@ -401,6 +461,12 @@ static bool item_contains(lc_canvas_item_t *item, vec4 point)
         } 
     }
 
-    return (X(point) >= X(item->frame[0])) && (X(point) <= X(item->frame[2]))
-        && (Y(point) >= Y(item->frame[0])) && (Y(point) <= Y(item->frame[2]));
+    if ((X(point) >= X(item->frame[0])) && (X(point) <= X(item->frame[2]))
+        && (Y(point) >= Y(item->frame[0])) && (Y(point) <= Y(item->frame[2])))
+    {
+        item->hover_handle_index = 8;
+        return true;    
+    }
+
+    return false;
 }
