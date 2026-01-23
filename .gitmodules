@@ -10,3 +10,6 @@
 [submodule "extern/json"]
 	path = extern/json
 	url = https://github.com/nlohmann/json.git
+[submodule "extern/jansson"]
+	path = extern/jansson
+	url = https://github.com/akheron/jansson

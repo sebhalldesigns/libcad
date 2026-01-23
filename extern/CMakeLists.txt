@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.16)
 add_subdirectory(cglm)
 add_subdirectory(json)
 
+set(JANSSON_EXAMPLES OFF CACHE BOOL "Don't build Jansson examples" FORCE)
+set(JANSSON_WITHOUT_TESTS ON CACHE BOOL "Don't build Jannson tests" FORCE)
+add_subdirectory(jansson)
+
 if (EMSCRIPTEN)
     target_compile_options(cglm PRIVATE
         -fPIC
@@ -23,8 +27,6 @@ if (EMSCRIPTEN)
         -fPIC
     )
 endif()
-
-
 
 set(SDL_SHARED OFF CACHE BOOL "Disable shared lib" FORCE) 
 set(SDL_STATIC ON CACHE BOOL "Enable static lib" FORCE)
