@@ -20,6 +20,8 @@
 
 #include <libcad/libcad.h>
 
+#include <jansson.h>
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -34,13 +36,21 @@
 ** MARK: TYPEDEFS
 ***************************************************************/
 
+struct lc_canvas_item_t;
+typedef void (*lc_canvas_draw_func_t)(struct lc_canvas_item_t *item);
+
 /* struct for items that need to be drawn to the canvas */
-typedef struct
+typedef struct lc_canvas_item_t
 {
+    int type;
     mat4 bounds;
     mat4 frame;
     bool is_hovered;
     int hover_handle_index;
+
+    lc_canvas_draw_func_t draw_func;
+    size_t data_size;
+    void *data;
 } lc_canvas_item_t;
 
 /***************************************************************
@@ -55,6 +65,7 @@ static float zoom = 1.0f;
 static vec2 origin = {0.0f, 0.0f};
 
 static vec4 cursor_pos = {0.0f, 0.0f, 0.0f, 0.0f};
+static bool cursor_valid = false;
 
 static vec2 pan_start_pos = {0.0f, 0.0f};
 static bool pan_active = false;
@@ -65,26 +76,206 @@ static vec2 drag_start_pos = {0.0f, 0.0f};
 static bool drag_active = false;
 
 static mat4 viewport_transform;
+static mat4 viewport_transform_inv;
 static vec4 world_origin;
 
 static int cursor_request = CURSOR_NORMAL;
 
 static lc_canvas_item_t item;
 
+static int modal_tool_id = 0;
+
+static vec4 tool_start_pos = {0.0f};
+static vec4 tool_start_pos_transformed = {0.0f};
+static bool tool_start_valid = false;
+
+static lc_canvas_item_t **items = NULL;
+static size_t items_count = 0;
+static size_t items_capacity = 0;
 
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
 
+static void draw_line(lc_canvas_item_t *item);
+static void draw_ellipse(lc_canvas_item_t *item);
+static void draw_rect(lc_canvas_item_t *item);
+
 static void render_axes();
 static void render_grid();
 static void render_canvas_item(lc_canvas_item_t *item);
 
+static void commit_modal_tool(vec4 start, vec4 end);
 
 static bool item_contains(lc_canvas_item_t *item, vec4 point);
 
+static const char* labels[] = {
+    "None",
+    "Line",
+    "Circle",
+    "Rectangle"
+};
+
+static void push_canvas_item(lc_canvas_item_t *item)
+{
+    if (items_count >= items_capacity)
+    {
+        size_t new_capacity = items_capacity == 0 ? 4 : items_capacity * 2;
+        lc_canvas_item_t **new_items = realloc(items, new_capacity * sizeof(lc_canvas_item_t*));
+        if (!new_items)
+        {
+            fprintf(stderr, "lc_canvas: Failed to allocate memory for canvas items\n");
+            return;
+        }
+
+        items = new_items;
+        items_capacity = new_capacity;
+    }
+
+    items[items_count++] = item; 
+}
+
+void lc_canvas_save_json(const char *path)
+{
+    FILE *file = fopen(path, "w");
+    if (!file)
+    {
+        fprintf(stderr, "lc_canvas: Failed to open file for saving JSON: %s\n", path);
+        return;
+    }
+
+    json_t *root = json_object();
+    json_t *items_array = json_array();
+    
+    for (size_t i = 0; i < items_count; i++)
+    {
+        lc_canvas_item_t *item = items[i];
+
+        json_t *item_obj = json_object();
+        json_object_set_new(item_obj, "type", json_integer(item->type));
+        json_object_set_new(item_obj, "bounds", json_array());
+        for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 4; col++)
+            {
+                json_array_append_new(json_object_get(item_obj, "bounds"), json_integer(item->bounds[row][col]));
+            }
+        }
+
+        json_array_append_new(items_array, item_obj);
+        
+    }
+
+    json_object_set_new(root, "items", items_array);
+
+    json_dumpf(root, file, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
+    fclose(file);
+
+    json_decref(root);
 
 
+}
+
+void lc_canvas_load_json(const char *path)
+{
+    for (size_t i = 0; i < items_count; i++)
+    {
+        free(items[i]);
+    }
+
+    items_count = 0;
+
+    FILE *file = fopen(path, "r");
+    if (!file)
+    {
+        fprintf(stderr, "lc_canvas: Failed to open file for loading JSON: %s\n", path);
+        return;
+    }
+
+    json_error_t error;
+    json_t *root = json_loadf(file, 0, &error);
+
+    if (!root)
+    {
+        fprintf(stderr, "lc_canvas: Failed to load JSON from file: %s\n", error.text);
+        fclose(file);
+        return;
+    }
+
+    json_t *items_array = json_object_get(root, "items");
+    if (!json_is_array(items_array))
+    {
+        fprintf(stderr, "lc_canvas: Invalid JSON format: 'items' is not an array\n");
+        json_decref(root);
+        fclose(file);
+        return;
+    }
+
+    size_t index;
+    json_t *item_obj;
+    json_array_foreach(items_array, index, item_obj)
+    {
+        lc_canvas_item_t *item = malloc(sizeof(lc_canvas_item_t));
+        if (!item)
+        {
+            fprintf(stderr, "lc_canvas: Failed to allocate memory for canvas item\n");
+            continue;
+        }
+
+        json_t *type_json = json_object_get(item_obj, "type");
+        if (!json_is_integer(type_json))
+        {
+            fprintf(stderr, "lc_canvas: Invalid JSON format: 'type' is not an integer\n");
+            free(item);
+            continue;
+        }
+        item->type = (int)json_integer_value(type_json);
+
+        json_t *bounds_json = json_object_get(item_obj, "bounds");
+        if (!json_is_array(bounds_json) || json_array_size(bounds_json) != 16)
+        {
+            fprintf(stderr, "lc_canvas: Invalid JSON format: 'bounds' is not a 16-element array\n");
+            free(item);
+            continue;
+        }
+
+        for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 4; col++)
+            {
+                json_t *value_json = json_array_get(bounds_json, row * 4 + col);
+                if (!json_is_integer(value_json))
+                {
+                    fprintf(stderr, "lc_canvas: Invalid JSON format: 'bounds' element is not an integer\n");
+                    free(item);
+                    continue;
+                }
+                item->bounds[row][col] = (float)json_integer_value(value_json);
+            }
+        }
+
+        // Set draw function based on type
+        switch (item->type)
+        {
+            case 1:
+                item->draw_func = draw_line;
+                break;
+            case 2:
+                item->draw_func = draw_ellipse;
+                break;
+            case 3:
+                item->draw_func = draw_rect;
+                break;
+            default:
+                item->draw_func = NULL;
+                break;
+        }
+
+        push_canvas_item(item);
+    }
+
+
+}
   
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -127,11 +318,19 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     
     // Finally, apply the pan offset
     glm_translate(viewport_transform, (vec3){viewport_origin[0], viewport_origin[1], 0.0f});
+    glm_mat4_inv(viewport_transform, viewport_transform_inv);
 
     glm_mat4_mulv(viewport_transform, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, world_origin);
 
     render_grid();
     render_axes();
+
+    for (size_t i = 0; i < items_count; i++)
+    {
+        glm_mat4_mul(viewport_transform, items[i]->bounds, items[i]->frame);
+
+        items[i]->draw_func(items[i]);
+    }
 
     
     glm_mat4_mul(viewport_transform, item.bounds, item.frame);
@@ -158,13 +357,39 @@ void lc_canvas_render(float viewport_width, float viewport_height)
         }
     }
 
-    render_canvas_item(&item);
+    //render_canvas_item(&item);
+    
+    glm_mat4_mulv(viewport_transform, tool_start_pos, tool_start_pos_transformed);
+
+    lc_draw_text((vec2){cursor_pos[0] + 15.0f, cursor_pos[1]}, labels[modal_tool_id], 14.0f, IM_COL32(255, 255, 255, 255));
+
+    if (tool_start_valid && modal_tool_id == 1)
+    {
+        lc_draw_line((vec2){tool_start_pos_transformed[0], tool_start_pos_transformed[1]}, cursor_pos, IM_COL32(255, 255, 255, 255));
+    }
+    else if (tool_start_valid && modal_tool_id == 2)
+    {
+        float dist = sqrtf((cursor_pos[0] - tool_start_pos_transformed[0]) * (cursor_pos[0] - tool_start_pos_transformed[0]) +
+                               (cursor_pos[1] - tool_start_pos_transformed[1]) * (cursor_pos[1] - tool_start_pos_transformed[1]));
+        lc_draw_circle((vec2){tool_start_pos_transformed[0], tool_start_pos_transformed[1]}, dist);
+    }
+    else if (tool_start_valid && modal_tool_id == 3)
+    {
+        lc_draw_rect((vec2){tool_start_pos_transformed[0], tool_start_pos_transformed[1]}, cursor_pos);
+    }                        
+    else if (drag_active)
+    {
+        lc_draw_rect_filled((vec2){fminf(drag_start_pos[0], cursor_pos[0]), fminf(drag_start_pos[1], cursor_pos[1])},
+                            (vec2){fmaxf(drag_start_pos[0], cursor_pos[0]), fmaxf(drag_start_pos[1], cursor_pos[1])},
+                            IM_COL32(255, 255, 255, 50));
+    }
 }
 
 void lc_canvas_set_cursor_pos(float x, float y)
 {
     cursor_pos[0] = x;
     cursor_pos[1] = y;
+    cursor_valid = true;
 
     if (pan_active)
     {
@@ -259,6 +484,11 @@ void lc_canvas_set_cursor_pos(float x, float y)
     }
 }
 
+void lc_canvas_set_cursor_lost()
+{
+    cursor_valid = false;
+}
+
 void lc_canvas_set_cursor_button_state(int button, bool pressed)
 {
 
@@ -282,21 +512,57 @@ void lc_canvas_set_cursor_button_state(int button, bool pressed)
         {
             if (pressed)
             {
-                glm_vec2_copy(cursor_pos, drag_start_pos);
-                drag_active = true;
-                
-                item.is_hovered = item_contains(&item, cursor_pos);
-
-                if (item.is_hovered)
+                if (modal_tool_id)
                 {
-                    active_item = &item;
+                    if (!tool_start_valid)
+                    {
+                        tool_start_pos[0] = cursor_pos[0];
+                        tool_start_pos[1] = cursor_pos[1];
+                        tool_start_pos[2] = 0.0f;
+                        tool_start_pos[3] = 1.0f;
+
+                        glm_mat4_mulv(viewport_transform_inv, tool_start_pos, tool_start_pos);
+
+                        tool_start_valid = true;
+                    }
+                    else
+                    {
+                        tool_start_valid = false;
+
+                        vec4 end_pos;
+                        end_pos[0] = cursor_pos[0];
+                        end_pos[1] = cursor_pos[1];
+                        end_pos[2] = 0.0f;
+                        end_pos[3] = 1.0f;
+
+                        glm_mat4_mulv(viewport_transform_inv, end_pos, end_pos);
+                        commit_modal_tool(tool_start_pos, end_pos);
+                    }
                 }
+                else
+                {
+                    glm_vec2_copy(cursor_pos, drag_start_pos);
+                    drag_active = true;
+                    
+                    item.is_hovered = item_contains(&item, cursor_pos);
+
+                    if (item.is_hovered)
+                    {
+                        active_item = &item;
+                    }
+                }
+                
+
+                
             }
             else
             {
+    
                 drag_active = false;
 
                 active_item = NULL;
+            
+                
             }
         } break;
 
@@ -321,6 +587,12 @@ int lc_canvas_get_cursor_type()
 {
     return cursor_request;
 
+}
+
+void lc_canvas_set_modal_tool(int tool_id)
+{
+    modal_tool_id = tool_id;
+    tool_start_valid = false;
 }
 
 /***************************************************************
@@ -469,4 +741,123 @@ static bool item_contains(lc_canvas_item_t *item, vec4 point)
     }
 
     return false;
+}
+
+static void commit_modal_tool(vec4 start, vec4 end)
+{
+    switch (modal_tool_id)
+    {
+        case 1: // Line
+        {
+            lc_canvas_item_t *new_item = calloc(1, sizeof(lc_canvas_item_t));
+            if (!new_item)
+            {
+                fprintf(stderr, "lc_canvas: Failed to allocate memory for new canvas item\n");
+                return;
+            }
+
+            new_item->type = 1; // Line
+            new_item->bounds[0][0] = start[0];
+            new_item->bounds[0][1] = start[1];
+            new_item->bounds[1][0] = end[0];
+            new_item->bounds[1][1] = end[1];
+            new_item->bounds[0][3] = 1.0f;
+            new_item->bounds[1][3] = 1.0f;
+
+            new_item->draw_func = draw_line;
+
+            push_canvas_item(new_item);
+
+        } break;
+
+        case 2: // Ellipse
+        {
+            lc_canvas_item_t *new_item = calloc(1, sizeof(lc_canvas_item_t));
+            if (!new_item)
+            {
+                fprintf(stderr, "lc_canvas: Failed to allocate memory for new canvas item\n");
+                return;
+            }
+
+            new_item->type = 2; // Ellipse
+
+            float radius = sqrtf((end[0] - start[0]) * (end[0] - start[0]) +
+                               (end[1] - start[1]) * (end[1] - start[1]));
+
+            new_item->bounds[0][0] = start[0] - radius;
+            new_item->bounds[0][1] = start[1] - radius;
+            new_item->bounds[1][0] = start[0] + radius;
+            new_item->bounds[1][1] = start[1] - radius;
+            new_item->bounds[2][0] = start[0] + radius;
+            new_item->bounds[2][1] = start[1] + radius;
+            new_item->bounds[3][0] = start[0] - radius;
+            new_item->bounds[3][1] = start[1] + radius;
+            new_item->bounds[0][3] = 1.0f;
+            new_item->bounds[1][3] = 1.0f;
+            new_item->bounds[2][3] = 1.0f;
+            new_item->bounds[3][3] = 1.0f;
+
+            new_item->draw_func = draw_ellipse;
+
+            push_canvas_item(new_item);
+        } break;
+
+        case 3: // Rectangle
+        {
+            lc_canvas_item_t *new_item = calloc(1, sizeof(lc_canvas_item_t));
+            if (!new_item)
+            {
+                fprintf(stderr, "lc_canvas: Failed to allocate memory for new canvas item\n");
+                return;
+            }
+
+            new_item->type = 3; // Rectangle
+            new_item->bounds[0][0] = start[0];
+            new_item->bounds[0][1] = start[1];
+            new_item->bounds[1][0] = end[0];
+            new_item->bounds[1][1] = start[1];
+            new_item->bounds[2][0] = end[0];
+            new_item->bounds[2][1] = end[1];
+            new_item->bounds[3][0] = start[0];
+            new_item->bounds[3][1] = end[1];
+            new_item->bounds[0][3] = 1.0f;
+            new_item->bounds[1][3] = 1.0f;
+            new_item->bounds[2][3] = 1.0f;
+            new_item->bounds[3][3] = 1.0f;
+
+            new_item->draw_func = draw_rect;
+
+            push_canvas_item(new_item);
+        } break;
+    }
+}
+
+static void draw_line(lc_canvas_item_t *item)
+{
+    lc_draw_line(
+        (vec2){item->frame[0][0], item->frame[0][1]},
+        (vec2){item->frame[1][0], item->frame[1][1]},
+        IM_COL32(255, 255, 255, 255)
+    );
+}
+
+static void draw_ellipse(lc_canvas_item_t *item)
+{
+    vec2 center;
+    center[0] = (item->frame[0][0] + item->frame[2][0]) / 2.0f;
+    center[1] = (item->frame[0][1] + item->frame[2][1]) / 2.0f;
+
+    vec2 size;
+    size[0] = fabsf(item->frame[1][0] - item->frame[0][0]);
+    size[1] = fabsf(item->frame[2][1] - item->frame[1][1]);
+
+    lc_draw_ellipse(center, size);
+}
+
+static void draw_rect(lc_canvas_item_t *item)
+{
+    lc_draw_rect(
+        (vec2){item->frame[0][0], item->frame[0][1]},
+        (vec2){item->frame[2][0], item->frame[2][1]}
+    );
 }

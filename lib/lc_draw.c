@@ -92,7 +92,7 @@ void lc_draw_line(vec2 start, vec2 end, uint32_t color)
 
 void lc_draw_circle(vec2 center, float radius)
 {
-    ImDrawList_AddCircle(ig_drawlist, (ImVec2_c){center[0], center[1]}, radius, IM_COL32(200, 200, 200, 255), 12, 1.0f);
+    ImDrawList_AddCircle(ig_drawlist, (ImVec2_c){center[0], center[1]}, radius, IM_COL32(200, 200, 200, 255), 0, 1.0f);
 }
 
 
@@ -111,6 +111,16 @@ void lc_draw_grid(vec2 start, vec2 end, float spacing, uint32_t color)
     }
 }
 
+void lc_draw_rect(vec2 start, vec2 end)
+{
+    ImDrawList_AddRect(ig_drawlist, 
+        (ImVec2_c){start[0], start[1]}, 
+        (ImVec2_c){end[0], end[1]},
+        IM_COL32(255, 255, 255, 255),
+        0.0f, 0, 1.0f
+    );
+}
+
 void lc_draw_rect_filled(vec2 start, vec2 end, uint32_t color)
 {
 
@@ -126,38 +136,12 @@ void lc_draw_rect_filled(vec2 start, vec2 end, uint32_t color)
 
 void lc_draw_ellipse(vec2 center, vec2 size)
 {
-
-    ImDrawList_AddEllipseFilled(ig_drawlist, 
-        (ImVec2_c){center[0], center[1]}, 
-        (ImVec2_c){size[0] / 2.0f, size[1] / 2.0f}, 
-        IM_COL32(255, 255, 255, 25),
-        0.0f, 0  /* setting num_segments to 0 requests that imgui decide */
-    );
-
     ImDrawList_AddEllipse(ig_drawlist, 
         (ImVec2_c){center[0], center[1]}, 
         (ImVec2_c){size[0] / 2.0f, size[1] / 2.0f},
         IM_COL32(255, 255, 255, 150), 
         0.0f, 0, 2.0f /* setting num_segments to 0 requests that imgui decide */
     );
-    
-    lc_draw_circle(center, 4.0f);
-
-    vec2 corners[4];
-    corners[0][0] = center[0];
-    corners[0][1] = center[1] - size[1] / 2.0f;
-    corners[1][0] = center[0] + size[0] / 2.0f;
-    corners[1][1] = center[1];
-    corners[2][0] = center[0];
-    corners[2][1] = center[1] + size[1] / 2.0f;
-    corners[3][0] = center[0] - size[0] / 2.0f;
-    corners[3][1] = center[1];
-
-    lc_draw_circle(corners[0], 4.0f);
-    lc_draw_circle(corners[1], 4.0f);
-    lc_draw_circle(corners[2], 4.0f);
-    lc_draw_circle(corners[3], 4.0f);
-
 }
 
 void lc_draw_handle(vec2 pos, bool active)
@@ -172,6 +156,16 @@ void lc_draw_handle(vec2 pos, bool active)
     );
     
     ImDrawList_AddCircle(ig_drawlist, (ImVec2_c){pos[0], pos[1]}, HANDLE_SIZE, IM_COL32(255, 255, 255, 255), 0, 1.0f);
+}
+
+void lc_draw_text(vec2 pos, const char *text, float size, uint32_t color)
+{
+    ImDrawList_AddText_Vec2(ig_drawlist, 
+        (ImVec2_c){pos[0], pos[1]},
+        color, 
+        text, 
+        NULL
+    );
 }
 
 /***************************************************************

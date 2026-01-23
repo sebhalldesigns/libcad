@@ -43,10 +43,16 @@ void lc_canvas_init();
 void lc_canvas_render(float viewport_width, float viewport_height);
 
 void lc_canvas_set_cursor_pos(float x, float y);
+void lc_canvas_set_cursor_lost();
 void lc_canvas_set_cursor_button_state(int button, bool pressed);
 void lc_canvas_axis_delta(int axis, float delta);
 
 int lc_canvas_get_cursor_type();
+
+void lc_canvas_set_modal_tool(int tool_id);
+
+void lc_canvas_save_json(const char *path);
+void lc_canvas_load_json(const char *path);
 
 #ifdef __cplusplus
 }

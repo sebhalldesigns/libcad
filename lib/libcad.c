@@ -88,7 +88,7 @@ void cad_set_cursor_pos(int x, int y)
 
 void cad_cursor_lost()
 {
-
+    lc_canvas_set_cursor_lost();
 }
 
 void cad_set_cursor_button_state(int button, bool pressed)
@@ -149,6 +149,26 @@ int cad_get_cursor_type()
     return lc_canvas_get_cursor_type();
 }
 
+
+void cad_start_modal_tool(int tool_id)
+{
+    lc_canvas_set_modal_tool(tool_id);
+}
+
+void cad_clear_modal_tool()
+{
+    lc_canvas_set_modal_tool(0);
+}
+
+void cad_save_json(const char *path)
+{
+    return lc_canvas_save_json(path);
+}
+
+void cad_load_json(const char *path)
+{
+    return lc_canvas_load_json(path);
+}
 
 /***************************************************************
 ** MARK: STATIC FUNCTIONS

@@ -48,6 +48,7 @@ if (NOT EMSCRIPTEN)
         cimgui
         imgui_backends
         glad
+        jansson
     )
 
     set_target_properties(libcad PROPERTIES

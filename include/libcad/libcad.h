@@ -57,9 +57,13 @@ EXPORT void         cad_cursor_lost();
 EXPORT void         cad_set_cursor_button_state(int button, bool pressed);
 EXPORT void         cad_axis_delta(int axis, float delta);
 
+EXPORT void         cad_start_modal_tool(int tool_id);
+EXPORT void         cad_clear_modal_tool();
+
 EXPORT int          cad_get_cursor_type();
 
-
+EXPORT void         cad_save_json(const char *path);
+EXPORT void         cad_load_json(const char *path);
 
 #ifdef __cplusplus
 }
