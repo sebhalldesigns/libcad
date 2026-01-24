@@ -38,6 +38,7 @@
 
 struct lc_canvas_item_t;
 typedef void (*lc_canvas_draw_func_t)(struct lc_canvas_item_t *item);
+typedef bool (*lc_canvas_hit_test_funct_t)(struct lc_canvas_item_t *item, vec4 point);
 
 /* struct for items that need to be drawn to the canvas */
 typedef struct lc_canvas_item_t
@@ -49,6 +50,7 @@ typedef struct lc_canvas_item_t
     int hover_handle_index;
 
     lc_canvas_draw_func_t draw_func;
+    lc_canvas_hit_test_funct_t hit_test_func;
     size_t data_size;
     void *data;
 } lc_canvas_item_t;
@@ -100,6 +102,10 @@ static size_t items_capacity = 0;
 static void draw_line(lc_canvas_item_t *item);
 static void draw_ellipse(lc_canvas_item_t *item);
 static void draw_rect(lc_canvas_item_t *item);
+
+static bool hit_test_line(lc_canvas_item_t *item, vec4 point);
+static bool hit_test_ellipse(lc_canvas_item_t *item, vec4 point);
+static bool hit_test_rect(lc_canvas_item_t *item, vec4 point);
 
 static void render_axes();
 static void render_grid();
@@ -259,15 +265,19 @@ void lc_canvas_load_json(const char *path)
         {
             case 1:
                 item->draw_func = draw_line;
+                item->hit_test_func = hit_test_line;
                 break;
             case 2:
                 item->draw_func = draw_ellipse;
+                item->hit_test_func = hit_test_ellipse;
                 break;
             case 3:
                 item->draw_func = draw_rect;
+                item->hit_test_func = hit_test_rect;
                 break;
             default:
                 item->draw_func = NULL;
+                item->hit_test_func = NULL;
                 break;
         }
 
@@ -375,7 +385,7 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     }
     else if (tool_start_valid && modal_tool_id == 3)
     {
-        lc_draw_rect((vec2){tool_start_pos_transformed[0], tool_start_pos_transformed[1]}, cursor_pos);
+        lc_draw_rect((vec2){tool_start_pos_transformed[0], tool_start_pos_transformed[1]}, cursor_pos, IM_COL32(255, 255, 255, 255));
     }                        
     else if (drag_active)
     {
@@ -481,6 +491,24 @@ void lc_canvas_set_cursor_pos(float x, float y)
         glm_vec2_copy(cursor_pos, drag_start_pos);
 
         
+    }
+    else 
+    {
+        active_item = NULL;
+
+        vec4 screen_mouse_pos = {x, y, 0.0f, 1.0f};
+        for (size_t i = 0; i < items_count; i++)
+        {
+            //items[i]->is_hovered = false;
+            //items[i]->hover_handle_index = -1;
+
+            if (items[i]->hit_test_func(items[i], screen_mouse_pos))
+            {
+                //items[i]->is_hovered = true;
+                active_item = items[i];
+                break;
+            }
+        }
     }
 }
 
@@ -765,6 +793,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
             new_item->bounds[1][3] = 1.0f;
 
             new_item->draw_func = draw_line;
+            new_item->hit_test_func = hit_test_line;
 
             push_canvas_item(new_item);
 
@@ -798,6 +827,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
             new_item->bounds[3][3] = 1.0f;
 
             new_item->draw_func = draw_ellipse;
+            new_item->hit_test_func = hit_test_ellipse;
 
             push_canvas_item(new_item);
         } break;
@@ -826,6 +856,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
             new_item->bounds[3][3] = 1.0f;
 
             new_item->draw_func = draw_rect;
+            new_item->hit_test_func = hit_test_rect;
 
             push_canvas_item(new_item);
         } break;
@@ -837,7 +868,7 @@ static void draw_line(lc_canvas_item_t *item)
     lc_draw_line(
         (vec2){item->frame[0][0], item->frame[0][1]},
         (vec2){item->frame[1][0], item->frame[1][1]},
-        IM_COL32(255, 255, 255, 255)
+        item == active_item ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 255, 255, 150)
     );
 }
 
@@ -851,13 +882,74 @@ static void draw_ellipse(lc_canvas_item_t *item)
     size[0] = fabsf(item->frame[1][0] - item->frame[0][0]);
     size[1] = fabsf(item->frame[2][1] - item->frame[1][1]);
 
-    lc_draw_ellipse(center, size);
+    lc_draw_ellipse(center, size,
+        item == active_item ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 255, 255, 150)
+    );
 }
 
 static void draw_rect(lc_canvas_item_t *item)
 {
     lc_draw_rect(
         (vec2){item->frame[0][0], item->frame[0][1]},
-        (vec2){item->frame[2][0], item->frame[2][1]}
+        (vec2){item->frame[2][0], item->frame[2][1]},
+        item == active_item ? IM_COL32(255, 255, 255, 255) : IM_COL32(255, 255, 255, 150)
     );
+}
+
+static bool hit_test_line(lc_canvas_item_t *item, vec4 point)
+{
+
+    vec2 A = { X(item->frame[0]), Y(item->frame[0]) };
+    vec2 B = { X(item->frame[1]), Y(item->frame[1]) };
+    vec2 P = { X(point), Y(point) };
+
+    vec2 AB = { X(B) - X(A), Y(B) - Y(A) };
+    vec2 AP = { X(P) - X(A), Y(P) - Y(A) };
+
+    float ab_len2 = X(AB)*X(AB) + Y(AB)*Y(AB);
+    if (ab_len2 == 0.0f)
+        return false; // degenerate segment
+
+    float t = (X(AP)*X(AB) + Y(AP)*Y(AB)) / ab_len2;
+    t = fmaxf(0.0f, fminf(1.0f, t));
+
+    vec2 C = { X(A) + t*X(AB), Y(A) + t*Y(AB) };
+
+    float dx = X(P) - X(C);
+    float dy = Y(P) - Y(C);
+    float dist = sqrtf(dx*dx + dy*dy);
+
+    return dist <= HANDLE_CATCHMENT;
+    
+}
+
+static bool hit_test_ellipse(lc_canvas_item_t *item, vec4 point)
+{
+    vec2 center = {
+        (item->frame[0][0] + item->frame[2][0]) / 2.0f,
+        (item->frame[0][1] + item->frame[2][1]) / 2.0f
+    };
+
+    float radius_x = fabsf(item->frame[1][0] - item->frame[0][0]) / 2.0f;
+    float radius_y = fabsf(item->frame[2][1] - item->frame[1][1]) / 2.0f;
+    float dx = X(point) - center[0];
+    float dy = Y(point) - center[1];
+
+    return ((dx * dx) / (radius_x * radius_x) + (dy * dy) / (radius_y * radius_y)) <= 1.0f;
+}
+
+static bool hit_test_rect(lc_canvas_item_t *item, vec4 point)
+{
+    printf("Point (%f, %f) is inside rectangle from (%f, %f) to (%f, %f)\n",
+               X(point), Y(point),
+               X(item->frame[0]), Y(item->frame[0]),
+               X(item->frame[2]), Y(item->frame[2]));
+
+    float min_x = fminf(X(item->frame[0]), X(item->frame[2]));
+    float max_x = fmaxf(X(item->frame[0]), X(item->frame[2]));
+    float min_y = fminf(Y(item->frame[0]), Y(item->frame[2]));
+    float max_y = fmaxf(Y(item->frame[0]), Y(item->frame[2]));
+
+    return (X(point) >= min_x) && (X(point) <= max_x)
+        && (Y(point) >= min_y) && (Y(point) <= max_y);
 }

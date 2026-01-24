@@ -111,12 +111,12 @@ void lc_draw_grid(vec2 start, vec2 end, float spacing, uint32_t color)
     }
 }
 
-void lc_draw_rect(vec2 start, vec2 end)
+void lc_draw_rect(vec2 start, vec2 end, uint32_t color)
 {
     ImDrawList_AddRect(ig_drawlist, 
         (ImVec2_c){start[0], start[1]}, 
         (ImVec2_c){end[0], end[1]},
-        IM_COL32(255, 255, 255, 255),
+        color,
         0.0f, 0, 1.0f
     );
 }
@@ -134,12 +134,12 @@ void lc_draw_rect_filled(vec2 start, vec2 end, uint32_t color)
 }
 
 
-void lc_draw_ellipse(vec2 center, vec2 size)
+void lc_draw_ellipse(vec2 center, vec2 size, uint32_t color)
 {
     ImDrawList_AddEllipse(ig_drawlist, 
         (ImVec2_c){center[0], center[1]}, 
         (ImVec2_c){size[0] / 2.0f, size[1] / 2.0f},
-        IM_COL32(255, 255, 255, 150), 
+        color, 
         0.0f, 0, 2.0f /* setting num_segments to 0 requests that imgui decide */
     );
 }
