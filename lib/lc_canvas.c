@@ -940,10 +940,6 @@ static bool hit_test_ellipse(lc_canvas_item_t *item, vec4 point)
 
 static bool hit_test_rect(lc_canvas_item_t *item, vec4 point)
 {
-    printf("Point (%f, %f) is inside rectangle from (%f, %f) to (%f, %f)\n",
-               X(point), Y(point),
-               X(item->frame[0]), Y(item->frame[0]),
-               X(item->frame[2]), Y(item->frame[2]));
 
     float min_x = fminf(X(item->frame[0]), X(item->frame[2]));
     float max_x = fmaxf(X(item->frame[0]), X(item->frame[2]));
