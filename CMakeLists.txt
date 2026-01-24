@@ -68,7 +68,7 @@ if (NOT EMSCRIPTEN)
 else()
 
     add_subdirectory(extern)
-    add_subdirectory(democad)
+    #add_subdirectory(democad)
 
     add_library(libcad STATIC
         lib/libcad.c
@@ -91,6 +91,7 @@ else()
         cimgui
         imgui_backends
         glad
+        jansson
     )
 
     set_target_properties(libcad PROPERTIES
