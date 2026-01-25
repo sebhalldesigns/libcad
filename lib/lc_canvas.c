@@ -308,6 +308,16 @@ void lc_canvas_init()
     item.bounds[1][3] = 1.0f;
     item.bounds[2][3] = 1.0f;
     item.bounds[3][3] = 1.0f;
+
+    modal_tool_id = 2;
+
+    vec4 start = {0.0f, 0.0f, 0.0f, 1.0f};
+    vec4 end = {0.0f, 1.0f, 0.0f, 1.0f};
+
+    commit_modal_tool(start, end);
+
+    modal_tool_id = 0;
+
 }
 
 void lc_canvas_render(float viewport_width, float viewport_height)
@@ -318,6 +328,8 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     viewport_size[0] = viewport_width;
     viewport_size[1] = viewport_height;
 
+    
+#if 0
     glm_mat4_identity(viewport_transform);
     
     // First, translate to viewport center
@@ -331,6 +343,8 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     glm_mat4_inv(viewport_transform, viewport_transform_inv);
 
     glm_mat4_mulv(viewport_transform, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, world_origin);
+#endif
+    
 
     render_grid();
     render_axes();
@@ -338,6 +352,16 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     for (size_t i = 0; i < items_count; i++)
     {
         glm_mat4_mul(viewport_transform, items[i]->bounds, items[i]->frame);
+
+        for (int j = 0; j < 4; j++)
+        {
+            float w = 1.0/items[i]->frame[j][3];
+            float ndc_x = items[i]->frame[j][0] * w;
+            float ndc_y = items[i]->frame[j][1] * w * -1.0f;
+
+            items[i]->frame[j][0] = (ndc_x + 1.0f) * 0.5f * viewport_width;
+            items[i]->frame[j][1] = (ndc_y + 1.0f) * 0.5f * viewport_height;
+        }
 
         items[i]->draw_func(items[i]);
     }
@@ -621,6 +645,17 @@ void lc_canvas_set_modal_tool(int tool_id)
 {
     modal_tool_id = tool_id;
     tool_start_valid = false;
+}
+
+void lc_canvas_set_view_matrix(mat4 matrix)
+{
+    glm_mat4_copy(matrix, viewport_transform);
+    
+    //glm_translate_x(viewport_transform, viewport_size[0] / 2.0f);
+    //glm_translate_y(viewport_transform, viewport_size[1] / 2.0f);
+
+    glm_mat4_inv(viewport_transform, viewport_transform_inv);
+    
 }
 
 /***************************************************************

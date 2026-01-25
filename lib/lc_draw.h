@@ -89,6 +89,9 @@ void lc_draw_handle(vec2 pos, bool active);
 
 void lc_draw_text(vec2 pos, const char *text, float size, uint32_t color);
 
+void lc_draw_set_view_matrix(mat4 matrix);
+void lc_draw_render(float viewport_width, float viewport_height);
+
 #ifdef __cplusplus
 }
 #endif

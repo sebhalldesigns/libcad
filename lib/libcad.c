@@ -117,13 +117,15 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 
 void cad_render_viewport()
 {
-    lc_scene_render((float)vp_width, (float)vp_height);
+    //lc_scene_render((float)vp_width, (float)vp_height);
 
-    lc_draw_begin(vp_width, vp_height);
+    //lc_draw_begin(vp_width, vp_height);
 
     //lc_canvas_render((float)vp_width, (float)vp_height);
 
-    lc_draw_end();
+    //lc_draw_end();
+
+    lc_draw_render((float)vp_width, (float)vp_height);
 
 }
 

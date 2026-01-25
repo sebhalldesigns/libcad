@@ -17,6 +17,9 @@
 
 #include "lc_scene.h"
 
+#include "lc_canvas.h"
+#include "lc_draw.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -243,6 +246,52 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, GL_FALSE, (float*)modelMatrix);
 
     camera_view_matrix(&cam, viewMatrix);
+
+    //printf("WIDTH HEIGHT: %.1f %.1f\n", viewport_width, viewport_height);
+
+    /* CANVAS PROJECTION -> CONVERTS FROM NDC TO WINDOW COORDS */
+    mat4 canvas_translate;
+    glm_mat4_identity(canvas_translate);
+    glm_translate(canvas_translate, (vec3){1.0f, 1.0f, 0.0f});
+
+    mat4 canvas_scale;
+    glm_mat4_identity(canvas_scale);
+    glm_scale(canvas_scale, (vec3){2.0f / viewport_width, 2.0f / viewport_height, 1.0f});
+
+    mat4 canvas_projection;
+    glm_mat4_identity(canvas_projection);
+    glm_mat4_mul(canvas_scale, canvas_translate, canvas_projection);
+
+    //printf("CANVAS PROJECTION MATRIX:\n");
+    //glm_mat4_print(canvas_projection, stdout);
+
+    /* CANVAS MODEL -> MOVE CANVAS POSITION WITHIN NDC */
+    mat4 canvas_model;
+    glm_mat4_identity(canvas_model);
+    glm_translate(canvas_model, (vec3){0.0f, 0.0f, -1.0f});
+
+    //printf("CANVAS MODEL MATRIX:\n");
+    //glm_mat4_print(canvas_model, stdout);
+
+    /* CANVAS TRANSFORM -> FINAL TRANSFORM */
+    mat4 canvas_transform;
+    glm_mat4_identity(canvas_transform);
+    glm_mat4_mul(canvas_transform, canvas_projection, canvas_transform);
+    glm_mat4_mul(canvas_model, canvas_transform, canvas_transform);
+    glm_mat4_mul(viewMatrix, canvas_transform, canvas_transform);
+    glm_mat4_mul(projectionMatrix, canvas_transform, canvas_transform);
+
+
+    //printf("CANVAS TRANSFORM MATRIX:\n");
+    //glm_mat4_print(canvas_transform, stdout);
+
+    lc_canvas_set_view_matrix(canvas_transform);
+
+    mat4 view_projection;
+    glm_mat4_identity(view_projection);
+    glm_mat4_mul(projectionMatrix, viewMatrix, view_projection);
+    lc_draw_set_view_matrix(view_projection);
+    
 
     glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE, (float*)viewMatrix);
     glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, (float*)projectionMatrix);

@@ -2,19 +2,19 @@
 **
 ** libcad Header File
 **
-** File         :  lc_canvas.h
-** Module       :  lc_canvas
+** File         :  lc_gpu.h
+** Module       :  lc_gpu
 ** Author       :  SH
-** Created      :  2026-01-08 (YYYY-MM-DD)
+** Created      :  2026-01-26 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  libcad internal canvas API
+** Description  :  libcad GPU API
 **
-**  Functions for managing the canvas rendering context.
+**  Functions for managing GPU resources and state.
 **
 ***************************************************************/
 
-#ifndef LC_CANVAS_H
-#define LC_CANVAS_H
+#ifndef LC_GPU_H
+#define LC_GPU_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,8 +25,6 @@ extern "C" {
 ***************************************************************/
 
 #include <stdbool.h>
-
-#include <cglm/cglm.h>
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -41,25 +39,8 @@ extern "C" {
 ***************************************************************/
 
 
-void lc_canvas_init();
-void lc_canvas_render(float viewport_width, float viewport_height);
-
-void lc_canvas_set_cursor_pos(float x, float y);
-void lc_canvas_set_cursor_lost();
-void lc_canvas_set_cursor_button_state(int button, bool pressed);
-void lc_canvas_axis_delta(int axis, float delta);
-
-int lc_canvas_get_cursor_type();
-
-void lc_canvas_set_modal_tool(int tool_id);
-
-void lc_canvas_save_json(const char *path);
-void lc_canvas_load_json(const char *path);
-
-void lc_canvas_set_view_matrix(mat4 matrix);
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* LC_CANVAS_H */
+#endif /* LC_GPU_H */
