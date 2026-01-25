@@ -30,6 +30,7 @@
 
 #include "lc_canvas.h"
 #include "lc_draw.h"
+#include "lc_scene.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -84,16 +85,24 @@ void cad_destroy_context(cad_ctx_t ctx)
 void cad_set_cursor_pos(int x, int y)
 {
     lc_canvas_set_cursor_pos((float)x, (float)y);
+    lc_scene_set_cursor_pos((float)x, (float)y);
 }
 
 void cad_cursor_lost()
 {
     lc_canvas_set_cursor_lost();
+    lc_scene_set_cursor_lost();
 }
 
 void cad_set_cursor_button_state(int button, bool pressed)
 {
     lc_canvas_set_cursor_button_state(button, pressed);
+    lc_scene_set_cursor_button_state(button, pressed);
+}
+
+void cad_set_modifier_state(int modifier, bool state)
+{
+    lc_scene_set_modifier_state(modifier, state);
 }
 
 void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
@@ -108,9 +117,11 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 
 void cad_render_viewport()
 {
+    lc_scene_render((float)vp_width, (float)vp_height);
+
     lc_draw_begin(vp_width, vp_height);
 
-    lc_canvas_render((float)vp_width, (float)vp_height);
+    //lc_canvas_render((float)vp_width, (float)vp_height);
 
     lc_draw_end();
 
@@ -137,11 +148,14 @@ void cad_init_viewport()
         return;
     }
 
+    lc_scene_init();
+
 }
 
 void cad_axis_delta(int axis, float delta)
 {
     lc_canvas_axis_delta(axis, delta);
+    lc_scene_axis_delta(axis, delta);
 }
 
 int cad_get_cursor_type()

@@ -26,6 +26,9 @@ extern "C" {
 #define MOUSE_MIDDLE_BUTTON  2
 #define MOUSE_RIGHT_BUTTON   3
 
+#define MODIFIER_CONTROL    1
+#define MODIFIER_SHIFT      2
+#define MODIFIER_ALT        3
 
 #define CURSOR_NORMAL       0
 #define CURSOR_MOVE         1
@@ -55,6 +58,7 @@ EXPORT void         cad_init_viewport();
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();
 EXPORT void         cad_set_cursor_button_state(int button, bool pressed);
+EXPORT void         cad_set_modifier_state(int modifier, bool state);
 EXPORT void         cad_axis_delta(int axis, float delta);
 
 EXPORT void         cad_start_modal_tool(int tool_id);
@@ -70,3 +74,4 @@ EXPORT void         cad_load_json(const char *path);
 #endif
 
 #endif /* LIBCAD_H */
+
