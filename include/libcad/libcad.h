@@ -69,6 +69,9 @@ EXPORT int          cad_get_cursor_type();
 EXPORT void         cad_save_json(const char *path);
 EXPORT void         cad_load_json(const char *path);
 
+EXPORT const char*  cad_get_hovered_name(void);
+EXPORT int          cad_get_hovered_id(void);
+
 #ifdef __cplusplus
 }
 #endif

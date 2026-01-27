@@ -92,6 +92,12 @@ void lc_draw_text(vec2 pos, const char *text, float size, uint32_t color);
 void lc_draw_set_view_matrix(mat4 matrix);
 void lc_draw_render(float viewport_width, float viewport_height);
 
+/* cursor and picking */
+void lc_draw_set_cursor_pos(float x, float y);
+void lc_draw_set_cursor_lost(void);
+int lc_draw_get_hovered_id(void);
+const char* lc_draw_get_hovered_name(void);
+
 #ifdef __cplusplus
 }
 #endif

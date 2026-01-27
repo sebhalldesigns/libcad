@@ -124,6 +124,24 @@ static bool cursor_valid = false;
 static vec2 pan_start_pos = {0.0f, 0.0f};
 static bool pan_active = false;
 
+/* multiple cube positions for the scene */
+#define NUM_CUBES 5
+static vec3 cube_positions[NUM_CUBES] = {
+    {0.0f, 0.0f, 0.0f},      /* center cube */
+    {0.0f, 0.0f, 3.0f},      /* back */
+    {0.0f, 0.0f, -3.0f},     /* front */
+    {0.0f, 3.0f, 0.0f},      /* top */
+    {0.0f, -3.0f, 0.0f}      /* bottom */
+};
+
+static vec4 cube_colors[NUM_CUBES] = {
+    {0.2f, 0.3f, 0.4f, 1.0f},   /* blue-gray */
+    {0.4f, 0.2f, 0.3f, 1.0f},   /* purple-gray */
+    {0.3f, 0.4f, 0.2f, 1.0f},   /* green-gray */
+    {0.4f, 0.3f, 0.2f, 1.0f},   /* orange-gray */
+    {0.2f, 0.4f, 0.4f, 1.0f}    /* teal */
+};
+
 
 
 /***************************************************************
@@ -284,27 +302,35 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE, (float*)viewMatrix);
     glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, (float*)projectionMatrix);
 
-    glUniform4f(glGetUniformLocation(program, "u_color"), 0.2f, 0.3f, 0.4f, 1.0f);
-
     glBindVertexArray(VAO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
-    glDrawElements(GL_TRIANGLES, sizeof(cube_indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
 
+    /* draw all cubes */
+    for (int i = 0; i < NUM_CUBES; i++)
+    {
+        mat4 cube_model;
+        glm_mat4_identity(cube_model);
+        glm_translate(cube_model, cube_positions[i]);
+
+        glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, GL_FALSE, (float*)cube_model);
+        glUniform4fv(glGetUniformLocation(program, "u_color"), 1, cube_colors[i]);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+        glDrawElements(GL_TRIANGLES, sizeof(cube_indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
 
 #ifndef __EMSCRIPTEN__
-    glEnable(GL_POLYGON_OFFSET_LINE);
-    glPolygonOffset(-1.0f, -1.0f);  /* pull lines forward */
-    glLineWidth(2.0f);
+        glEnable(GL_POLYGON_OFFSET_LINE);
+        glPolygonOffset(-1.0f, -1.0f);
+        glLineWidth(2.0f);
 #endif
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireEBO);
-
-    glUniform4f(glGetUniformLocation(program, "u_color"), 0.8f, 0.8f, 0.8f, 1.0f);
-    glDrawElements(GL_LINES, sizeof(cube_wireframe_indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireEBO);
+        glUniform4f(glGetUniformLocation(program, "u_color"), 0.8f, 0.8f, 0.8f, 1.0f);
+        glDrawElements(GL_LINES, sizeof(cube_wireframe_indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
 
 #ifndef __EMSCRIPTEN__
-    glDisable(GL_POLYGON_OFFSET_LINE);
+        glDisable(GL_POLYGON_OFFSET_LINE);
 #endif
+    }
 
 }
 

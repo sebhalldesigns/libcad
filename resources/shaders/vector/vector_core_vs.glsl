@@ -18,9 +18,11 @@ layout(location = 9) in float i_filled;
 
 layout(location = 10) in vec4 i_color;
 
+layout(location = 11) in float i_object_id;
+
 uniform mat4 u_view_projection;
 
-out vec2 v_plane;              
+out vec2 v_plane;
 out vec2 v_half_size;
 out float v_radius;
 out float v_corner_radius;
@@ -28,6 +30,7 @@ out float v_thickness_px;
 out float v_filled;
 out vec4 v_color;
 flat out int v_type;
+flat out int v_object_id;
 
 void main() {
     vec3 world_pos = i_center + v_pos.x * i_axis_x + v_pos.y * i_axis_y;
@@ -45,4 +48,5 @@ void main() {
     v_filled = i_filled;
     v_color = i_color;
     v_type = int(i_type);
+    v_object_id = int(i_object_id);
 }

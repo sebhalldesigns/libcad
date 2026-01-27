@@ -462,6 +462,21 @@ void update(SDL_Event* event)
 
     igBegin("Properties", NULL, 0);
 
+    igSeparatorText("Hover");
+
+    const char* hovered_name = cad_get_hovered_name();
+    int hovered_id = cad_get_hovered_id();
+
+    if (hovered_id > 0)
+    {
+        igTextColored((ImVec4){0.4f, 0.8f, 1.0f, 1.0f}, "%s", hovered_name);
+        igText("ID: %d", hovered_id);
+    }
+    else
+    {
+        igTextDisabled("(none)");
+    }
+
     igSeparatorText("Transform");
 
     static float position[3] = {0.0f, 0.0f, 0.0f};

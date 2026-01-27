@@ -134,6 +134,7 @@ if (NOT EMSCRIPTEN)
         resources/shaders/basic/basic_core_fs.glsl
         resources/shaders/vector/vector_core_vs.glsl
         resources/shaders/vector/vector_core_fs.glsl
+        resources/shaders/vector/vector_pick_fs.glsl
     )
 else()
     embed_resources(libcad

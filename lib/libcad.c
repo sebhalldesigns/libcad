@@ -86,12 +86,17 @@ void cad_set_cursor_pos(int x, int y)
 {
     lc_canvas_set_cursor_pos((float)x, (float)y);
     lc_scene_set_cursor_pos((float)x, (float)y);
+    /* convert to viewport-relative coordinates for picking */
+    float vp_x = (float)(x - x_pos);
+    float vp_y = (float)(y - y_pos);
+    lc_draw_set_cursor_pos(vp_x, vp_y);
 }
 
 void cad_cursor_lost()
 {
     lc_canvas_set_cursor_lost();
     lc_scene_set_cursor_lost();
+    lc_draw_set_cursor_lost();
 }
 
 void cad_set_cursor_button_state(int button, bool pressed)
@@ -183,6 +188,16 @@ void cad_save_json(const char *path)
 void cad_load_json(const char *path)
 {
     return lc_canvas_load_json(path);
+}
+
+const char* cad_get_hovered_name(void)
+{
+    return lc_draw_get_hovered_name();
+}
+
+int cad_get_hovered_id(void)
+{
+    return lc_draw_get_hovered_id();
 }
 
 /***************************************************************
