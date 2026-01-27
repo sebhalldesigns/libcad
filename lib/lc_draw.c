@@ -33,15 +33,15 @@
 ** MARK: TYPEDEFS
 ***************************************************************/
 
-typedef struct 
+typedef struct
 {
-    vec3 center;    float type;          // type stored as float, cast in shader
+    vec3 center;    float type;           /* type stored as float, cast in shader */
 
-    vec3 axis_x;     float radius;        // for circle: radius in plane units (same as vP)
-    vec3 axis_y;     float corner_radius;  // for rounded rect: corner radius in plane units
+    vec3 axis_x;     float radius;        /* for circle: radius in plane units (same as vP) */
+    vec3 axis_y;     float corner_radius; /* for rounded rect: corner radius in plane units */
 
-    vec2 half_size;   float thickness;   float filled; // filled: 1.0 fill, 0.0 stroke-only
-    vec4 color;                           // premultiplied or straight alpha; your choice
+    vec2 half_size;   float thickness;   float filled; /* filled: 1.0 fill, 0.0 stroke-only */
+    vec4 color;                           /* premultiplied or straight alpha; your choice */
 } vector_instance_t;
 
 /***************************************************************
@@ -80,6 +80,7 @@ static mat4 view_projection;
 ***************************************************************/
 
 static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset);
+static int check_shader_compile(GLuint shader, const char* name);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -87,6 +88,9 @@ static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset)
 
 int lc_draw_init()
 {
+    /* initialize view_projection to identity as safe default */
+    glm_mat4_identity(view_projection);
+
     ig_context = igCreateContext(NULL);
     ig_io = igGetIO_Nil();
 
@@ -115,9 +119,23 @@ int lc_draw_init()
     glShaderSource(vs, 1, (const GLchar**)&vs_src, NULL);
     glCompileShader(vs);
 
+    if (!check_shader_compile(vs, "vertex"))
+    {
+        free(vs_src);
+        free(fs_src);
+        return 0;
+    }
+
     GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fs, 1, (const GLchar**)&fs_src, NULL);
     glCompileShader(fs);
+
+    if (!check_shader_compile(fs, "fragment"))
+    {
+        free(vs_src);
+        free(fs_src);
+        return 0;
+    }
 
     program = glCreateProgram();
     glAttachShader(program, vs);
@@ -141,7 +159,7 @@ int lc_draw_init()
     
     u_view_projection = glGetUniformLocation(program, "u_view_projection");
 
-    // Unit quad [-1,1]^2 as two triangles
+    /* unit quad [-1,1]^2 as two triangles */
     const float quadVerts[12] = {
         -1.f, -1.f,
          1.f, -1.f,
@@ -307,36 +325,45 @@ void lc_draw_render(float viewport_width, float viewport_height)
     glBindBuffer(GL_ARRAY_BUFFER, vbo_instance);
 
     vector_instance_t instances[2];
-    // Circle
-    glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, instances[0].center);
-    instances[0].type = 0.0f;                 // MUST be 0 for circle in your shader
 
-    float r = 0.5f;
+    /* circle - on XY plane, to the left of the cube */
+    /* add padding to quad axes for stroke thickness */
+    float circle_radius = 1.5f;
+    float circle_padding = 0.15f;  /* extra space for stroke */
+    float circle_quad_size = circle_radius + circle_padding;
 
-    glm_vec3_copy((vec3){r, 0.0f, 0.0f}, instances[0].axis_x);
-    glm_vec3_copy((vec3){0.0f, r, 0.0f}, instances[0].axis_y);
+    glm_vec3_copy((vec3){-3.0f, 0.0f, 0.0f}, instances[0].center);
+    instances[0].type = 0.0f;  /* type 0 = circle in shader */
 
-    instances[0].radius = r;
-    instances[0].half_size[0] = r;            // REQUIRED (drives v_plane)
-    instances[0].half_size[1] = r;            // REQUIRED
+    glm_vec3_copy((vec3){circle_quad_size, 0.0f, 0.0f}, instances[0].axis_x);
+    glm_vec3_copy((vec3){0.0f, circle_quad_size, 0.0f}, instances[0].axis_y);
+
+    instances[0].radius = circle_radius;
+    instances[0].half_size[0] = circle_quad_size;  /* drives v_plane - must match axis */
+    instances[0].half_size[1] = circle_quad_size;
     instances[0].corner_radius = 0.0f;
 
     instances[0].thickness = 2.0f;
     instances[0].filled = 0.0f;
-    glm_vec4_copy((vec4){1.0f, 0.0f, 0.0f, 1.0f}, instances[0].color);
+    glm_vec4_copy((vec4){1.0f, 0.2f, 0.2f, 1.0f}, instances[0].color);
 
-    // Rectangle
-    glm_vec3_zero(instances[1].center);
-    instances[1].type = 1.0f; // rectangle
-    glm_vec3_zero(instances[1].axis_x);
-    instances[1].axis_x[0] = 1.0f;
-    glm_vec3_zero(instances[1].axis_y);
-    instances[1].axis_y[1] = 1.0f;
-    instances[1].half_size[0] = 40.0f;
-    instances[1].half_size[1] = 30.0f;
-    instances[1].thickness = 3.0f;
-    instances[1].filled = 1.0f;
-    glm_vec4_copy((vec4){0.0f, 0.0f, 1.0f, 0.5f}, instances[1].color);
+    /* rectangle - on XY plane, to the right of the cube */
+    float rect_half_w = 1.5f;
+    float rect_half_h = 1.0f;
+    float rect_padding = 0.15f;  /* extra space for stroke */
+    float rect_quad_w = rect_half_w + rect_padding;
+    float rect_quad_h = rect_half_h + rect_padding;
+
+    glm_vec3_copy((vec3){3.0f, 0.0f, 0.0f}, instances[1].center);
+    instances[1].type = 1.0f;  /* type 1 = rectangle */
+    glm_vec3_copy((vec3){rect_quad_w, 0.0f, 0.0f}, instances[1].axis_x);
+    glm_vec3_copy((vec3){0.0f, rect_quad_h, 0.0f}, instances[1].axis_y);
+    instances[1].half_size[0] = rect_half_w;  /* SDF uses actual shape size */
+    instances[1].half_size[1] = rect_half_h;
+    instances[1].corner_radius = 0.2f;
+    instances[1].thickness = 2.0f;
+    instances[1].filled = 0.0f;
+    glm_vec4_copy((vec4){0.2f, 0.5f, 1.0f, 1.0f}, instances[1].color);
 
     glBufferData(GL_ARRAY_BUFFER, sizeof(instances), NULL, GL_STREAM_DRAW); /* orphan */
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(instances), instances);
@@ -364,4 +391,19 @@ static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset)
     glEnableVertexAttribArray(loc);
     glVertexAttribPointer(loc, n, GL_FLOAT, GL_FALSE, stride, (void*)offset);
     glVertexAttribDivisor(loc, 1);
+}
+
+static int check_shader_compile(GLuint shader, const char* name)
+{
+    GLint success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        char info_log[512];
+        glGetShaderInfoLog(shader, 512, NULL, info_log);
+        fprintf(stderr, "lc_draw: %s shader compilation failed:\n%s\n", name, info_log);
+        return 0;
+    }
+    printf("lc_draw: %s shader compiled successfully\n", name);
+    return 1;
 }

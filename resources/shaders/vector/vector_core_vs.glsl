@@ -2,7 +2,7 @@
 
 layout(location = 0) in vec2 v_pos; /* per-vertex */
 
-// Per-instance attributes
+/* per-instance attributes */
 layout(location = 1) in vec3 i_center;
 layout(location = 2) in float i_type;
 
@@ -33,9 +33,10 @@ void main() {
     vec3 world_pos = i_center + v_pos.x * i_axis_x + v_pos.y * i_axis_y;
     gl_Position = u_view_projection * vec4(world_pos, 1.0);
 
-    // plane-local p. If axis lengths already represent half-extents,
-    // then vP should be in those same plane units.
-    v_plane = vec2(v_pos.x, v_pos.y) * i_half_size;
+    /* plane-local coords based on quad size (axis lengths) */
+    float quad_w = length(i_axis_x);
+    float quad_h = length(i_axis_y);
+    v_plane = vec2(v_pos.x * quad_w, v_pos.y * quad_h);
 
     v_half_size = i_half_size;
     v_radius = i_radius;

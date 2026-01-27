@@ -92,7 +92,7 @@ static bool orbitState = false;
 
 
 float cube_vertices[] = {
-   // positions
+    /* positions */
     -1.0,-1.0,-1.0,
     +1.0,-1.0,-1.0,
     +1.0,+1.0,-1.0,
@@ -113,9 +113,9 @@ unsigned int cube_indices[] = {
 };
 
 unsigned int cube_wireframe_indices[] = {
-    0,1, 1,2, 2,3, 3,0,  // front
-    4,5, 5,6, 6,7, 7,4,  // back
-    0,4, 1,5, 2,6, 3,7   // sides
+    0,1, 1,2, 2,3, 3,0,  /* front */
+    4,5, 5,6, 6,7, 7,4,  /* back */
+    0,4, 1,5, 2,6, 3,7   /* sides */
 };
 
 static vec4 cursor_pos = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -218,13 +218,13 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_BLEND);
     glDisable(GL_STENCIL_TEST);
-    glDisable(GL_CULL_FACE);  // or enable if you want it
+    glDisable(GL_CULL_FACE);
 
-    // Restore depth buffer
+    /* restore depth buffer */
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-    // Clear depth but not color (Skia already drew)
+    /* clear depth buffer */
     glClear(GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(program);
@@ -247,8 +247,6 @@ void lc_scene_render(float viewport_width, float viewport_height)
 
     camera_view_matrix(&cam, viewMatrix);
 
-    //printf("WIDTH HEIGHT: %.1f %.1f\n", viewport_width, viewport_height);
-
     /* CANVAS PROJECTION -> CONVERTS FROM NDC TO WINDOW COORDS */
     mat4 canvas_translate;
     glm_mat4_identity(canvas_translate);
@@ -262,16 +260,10 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glm_mat4_identity(canvas_projection);
     glm_mat4_mul(canvas_scale, canvas_translate, canvas_projection);
 
-    //printf("CANVAS PROJECTION MATRIX:\n");
-    //glm_mat4_print(canvas_projection, stdout);
-
     /* CANVAS MODEL -> MOVE CANVAS POSITION WITHIN NDC */
     mat4 canvas_model;
     glm_mat4_identity(canvas_model);
     glm_translate(canvas_model, (vec3){0.0f, 0.0f, -1.0f});
-
-    //printf("CANVAS MODEL MATRIX:\n");
-    //glm_mat4_print(canvas_model, stdout);
 
     /* CANVAS TRANSFORM -> FINAL TRANSFORM */
     mat4 canvas_transform;
@@ -280,10 +272,6 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glm_mat4_mul(canvas_model, canvas_transform, canvas_transform);
     glm_mat4_mul(viewMatrix, canvas_transform, canvas_transform);
     glm_mat4_mul(projectionMatrix, canvas_transform, canvas_transform);
-
-
-    //printf("CANVAS TRANSFORM MATRIX:\n");
-    //glm_mat4_print(canvas_transform, stdout);
 
     lc_canvas_set_view_matrix(canvas_transform);
 
@@ -305,7 +293,7 @@ void lc_scene_render(float viewport_width, float viewport_height)
 
 #ifndef __EMSCRIPTEN__
     glEnable(GL_POLYGON_OFFSET_LINE);
-    glPolygonOffset(-1.0f, -1.0f);  // pull lines forward
+    glPolygonOffset(-1.0f, -1.0f);  /* pull lines forward */
     glLineWidth(2.0f);
 #endif
 
@@ -430,7 +418,7 @@ static void camera_orbit(gm_camera_t* camera, vec2 delta)
     float phi = acosf(direction[1]);
 
     theta += yaw;
-    phi = glm_clamp(phi + pitch, 0.01f, 3.13f); // prevent gimbal lock
+    phi = glm_clamp(phi + pitch, 0.01f, 3.13f); /* prevent gimbal lock */
     
     direction[0] = sinf(phi) * sinf(theta);
     direction[1] = cosf(phi);
@@ -444,14 +432,14 @@ static void camera_orbit(gm_camera_t* camera, vec2 delta)
 static void camera_zoom(gm_camera_t* camera, float delta)
 {
     /* wheel > 0  → zoom in,  wheel < 0  → zoom out */
-    const float factor = (delta > 0.0f) ? 0.9f : 1.1111f;   // 10 % per notch
+    const float factor = (delta > 0.0f) ? 0.9f : 1.1111f;  /* 10% per notch */
 
     vec3 forward;
-    camera_forward(camera, forward);                // target – eye (unit)
+    camera_forward(camera, forward);  /* target - eye (unit) */
 
     float cur_dist = camera_distance(camera);
     float new_dist = cur_dist * factor;
-    new_dist = glm_max(new_dist, 0.01f);                   // never collapse
+    new_dist = glm_max(new_dist, 0.01f);  /* never collapse */
 
     /* eye = target – forward * new_dist */
     vec3 offset;

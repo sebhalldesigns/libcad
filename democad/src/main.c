@@ -77,9 +77,35 @@ int main()
     igStyleColorsDark(NULL);
 
     ImGuiStyle *style = igGetStyle();
-    style->TabRounding = 0.0f;
+    style->TabRounding = 2.0f;
+    style->FrameRounding = 2.0f;
+    style->GrabRounding = 2.0f;
     style->WindowMenuButtonPosition = ImGuiDir_None;
-    style->WindowBorderSize = 0.0f;
+    style->WindowBorderSize = 1.0f;
+    style->FrameBorderSize = 0.0f;
+    style->PopupBorderSize = 1.0f;
+    style->WindowPadding = (ImVec2){8.0f, 8.0f};
+    style->FramePadding = (ImVec2){4.0f, 3.0f};
+    style->ItemSpacing = (ImVec2){8.0f, 4.0f};
+
+    /* darker color scheme */
+    ImVec4* colors = style->Colors;
+    colors[ImGuiCol_WindowBg] = (ImVec4){0.08f, 0.08f, 0.10f, 1.0f};
+    colors[ImGuiCol_TitleBg] = (ImVec4){0.06f, 0.06f, 0.08f, 1.0f};
+    colors[ImGuiCol_TitleBgActive] = (ImVec4){0.10f, 0.10f, 0.12f, 1.0f};
+    colors[ImGuiCol_Tab] = (ImVec4){0.10f, 0.10f, 0.12f, 1.0f};
+    colors[ImGuiCol_TabSelected] = (ImVec4){0.18f, 0.18f, 0.22f, 1.0f};
+    colors[ImGuiCol_TabHovered] = (ImVec4){0.24f, 0.24f, 0.28f, 1.0f};
+    colors[ImGuiCol_MenuBarBg] = (ImVec4){0.10f, 0.10f, 0.12f, 1.0f};
+    colors[ImGuiCol_Header] = (ImVec4){0.18f, 0.18f, 0.22f, 1.0f};
+    colors[ImGuiCol_HeaderHovered] = (ImVec4){0.28f, 0.28f, 0.32f, 1.0f};
+    colors[ImGuiCol_HeaderActive] = (ImVec4){0.24f, 0.24f, 0.28f, 1.0f};
+    colors[ImGuiCol_Button] = (ImVec4){0.18f, 0.18f, 0.22f, 1.0f};
+    colors[ImGuiCol_ButtonHovered] = (ImVec4){0.28f, 0.28f, 0.32f, 1.0f};
+    colors[ImGuiCol_ButtonActive] = (ImVec4){0.22f, 0.22f, 0.26f, 1.0f};
+    colors[ImGuiCol_FrameBg] = (ImVec4){0.12f, 0.12f, 0.14f, 1.0f};
+    colors[ImGuiCol_FrameBgHovered] = (ImVec4){0.18f, 0.18f, 0.20f, 1.0f};
+    colors[ImGuiCol_FrameBgActive] = (ImVec4){0.16f, 0.16f, 0.18f, 1.0f};
 
     SDL_ShowWindow(window);
 
@@ -88,9 +114,9 @@ int main()
 
     SDL_AddEventWatch(event_watch, NULL);
 
-    //cad_create_context();
+    cad_create_context();
 
-    while( !quit )
+    while (!quit)
     {
         while(SDL_PollEvent( &event) != 0)
         {
@@ -134,7 +160,37 @@ bool event_watch(void *data, SDL_Event *event)
             cad_axis_delta(0, event->wheel.y);
         } break;
 
-        
+        case SDL_EVENT_KEY_DOWN:
+        {
+            if (event->key.key == SDLK_LSHIFT || event->key.key == SDLK_RSHIFT)
+            {
+                cad_set_modifier_state(MODIFIER_SHIFT, true);
+            }
+            else if (event->key.key == SDLK_LCTRL || event->key.key == SDLK_RCTRL)
+            {
+                cad_set_modifier_state(MODIFIER_CONTROL, true);
+            }
+            else if (event->key.key == SDLK_LALT || event->key.key == SDLK_RALT)
+            {
+                cad_set_modifier_state(MODIFIER_ALT, true);
+            }
+        } break;
+
+        case SDL_EVENT_KEY_UP:
+        {
+            if (event->key.key == SDLK_LSHIFT || event->key.key == SDLK_RSHIFT)
+            {
+                cad_set_modifier_state(MODIFIER_SHIFT, false);
+            }
+            else if (event->key.key == SDLK_LCTRL || event->key.key == SDLK_RCTRL)
+            {
+                cad_set_modifier_state(MODIFIER_CONTROL, false);
+            }
+            else if (event->key.key == SDLK_LALT || event->key.key == SDLK_RALT)
+            {
+                cad_set_modifier_state(MODIFIER_ALT, false);
+            }
+        } break;
 
         case SDL_EVENT_WINDOW_MOUSE_LEAVE:
         case SDL_EVENT_MOUSE_REMOVED:
@@ -142,14 +198,13 @@ bool event_watch(void *data, SDL_Event *event)
             cad_cursor_lost();
         } break;
     }
-    //update(event);
     return true;
 }
 
 void update(SDL_Event* event)
 {
-    //User requests quit
-    if(event->type == SDL_EVENT_QUIT)
+    /* user requests quit */
+    if (event->type == SDL_EVENT_QUIT)
     {
         quit = true;
     }
@@ -309,8 +364,8 @@ void update(SDL_Event* event)
         igDockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
         igDockBuilderSetNodeSize(dockspace_id, viewport->Size);
         
-        left_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.1f, NULL, &center_id);
-        right_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.11f, NULL, &center_id);
+        left_id = igDockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.15f, NULL, &center_id);
+        right_id = igDockBuilderSplitNode(center_id, ImGuiDir_Right, 0.18f, NULL, &center_id);
     
         igDockBuilderDockWindow("Explorer", left_id);
         igDockBuilderDockWindow("Terminal", left_id);
@@ -407,19 +462,41 @@ void update(SDL_Event* event)
 
     igBegin("Properties", NULL, 0);
 
-    igText("Properties content");
+    igSeparatorText("Transform");
+
+    static float position[3] = {0.0f, 0.0f, 0.0f};
+    static float rotation[3] = {0.0f, 0.0f, 0.0f};
+    static float scale[3] = {1.0f, 1.0f, 1.0f};
+
+    igDragFloat3("Position", position, 0.1f, -100.0f, 100.0f, "%.2f", 0);
+    igDragFloat3("Rotation", rotation, 1.0f, -360.0f, 360.0f, "%.1f", 0);
+    igDragFloat3("Scale", scale, 0.01f, 0.01f, 10.0f, "%.2f", 0);
+
+    igSeparatorText("Material");
+
+    static float color[4] = {0.5f, 0.5f, 0.5f, 1.0f};
+    igColorEdit4("Color", color, 0);
 
     igEnd();
 
     igBegin("Help", NULL, 0);
 
-    igText("Help content");
+    igSeparatorText("Navigation");
+    igBulletText("Middle Mouse: Pan");
+    igBulletText("Shift + Middle Mouse: Orbit");
+    igBulletText("Scroll Wheel: Zoom");
+
+    igSeparatorText("Selection");
+    igBulletText("Left Click: Select");
+    igBulletText("Escape: Deselect");
 
     igEnd();
 
     igBegin("Terminal", NULL, 0);
 
-    igText("Terminal content");
+    igTextDisabled("libcad v0.1-dev");
+    igSeparator();
+    igTextWrapped("Ready.");
 
     igEnd();
 

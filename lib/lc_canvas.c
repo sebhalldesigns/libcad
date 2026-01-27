@@ -260,7 +260,7 @@ void lc_canvas_load_json(const char *path)
             }
         }
 
-        // Set draw function based on type
+        /* set draw function based on type */
         switch (item->type)
         {
             case 1:
@@ -322,23 +322,19 @@ void lc_canvas_init()
 
 void lc_canvas_render(float viewport_width, float viewport_height)
 {
-    
-    //active_item = NULL;
-
     viewport_size[0] = viewport_width;
     viewport_size[1] = viewport_height;
 
-    
 #if 0
     glm_mat4_identity(viewport_transform);
-    
-    // First, translate to viewport center
+
+    /* translate to viewport center */
     glm_translate(viewport_transform, (vec3){viewport_size[0] / 2.0f, viewport_size[1] / 2.0f, 0.0f});
-    
-    // Then scale (zooms around viewport center)
+
+    /* scale (zooms around viewport center) */
     glm_scale_uni(viewport_transform, zoom);
-    
-    // Finally, apply the pan offset
+
+    /* apply the pan offset */
     glm_translate(viewport_transform, (vec3){viewport_origin[0], viewport_origin[1], 0.0f});
     glm_mat4_inv(viewport_transform, viewport_transform_inv);
 
@@ -391,8 +387,6 @@ void lc_canvas_render(float viewport_width, float viewport_height)
         }
     }
 
-    //render_canvas_item(&item);
-    
     glm_mat4_mulv(viewport_transform, tool_start_pos, tool_start_pos_transformed);
 
     lc_draw_text((vec2){cursor_pos[0] + 15.0f, cursor_pos[1]}, labels[modal_tool_id], 14.0f, IM_COL32(255, 255, 255, 255));
@@ -523,12 +517,8 @@ void lc_canvas_set_cursor_pos(float x, float y)
         vec4 screen_mouse_pos = {x, y, 0.0f, 1.0f};
         for (size_t i = 0; i < items_count; i++)
         {
-            //items[i]->is_hovered = false;
-            //items[i]->hover_handle_index = -1;
-
             if (items[i]->hit_test_func(items[i], screen_mouse_pos))
             {
-                //items[i]->is_hovered = true;
                 active_item = items[i];
                 break;
             }
@@ -627,7 +617,7 @@ void lc_canvas_set_cursor_button_state(int button, bool pressed)
 
 void lc_canvas_axis_delta(int axis, float delta)
 {
-    if (axis == 0) // Y axis for zoom
+    if (axis == 0) /* Y axis for zoom */
     {
         zoom *= expf(delta * ZOOM_SENSITIVITY);
         if (zoom < MIN_ZOOM) zoom = MIN_ZOOM;
@@ -650,12 +640,7 @@ void lc_canvas_set_modal_tool(int tool_id)
 void lc_canvas_set_view_matrix(mat4 matrix)
 {
     glm_mat4_copy(matrix, viewport_transform);
-    
-    //glm_translate_x(viewport_transform, viewport_size[0] / 2.0f);
-    //glm_translate_y(viewport_transform, viewport_size[1] / 2.0f);
-
     glm_mat4_inv(viewport_transform, viewport_transform_inv);
-    
 }
 
 /***************************************************************
@@ -810,7 +795,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
 {
     switch (modal_tool_id)
     {
-        case 1: // Line
+        case 1:  /* line */
         {
             lc_canvas_item_t *new_item = calloc(1, sizeof(lc_canvas_item_t));
             if (!new_item)
@@ -819,7 +804,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
                 return;
             }
 
-            new_item->type = 1; // Line
+            new_item->type = 1;  /* line */
             new_item->bounds[0][0] = start[0];
             new_item->bounds[0][1] = start[1];
             new_item->bounds[1][0] = end[0];
@@ -834,7 +819,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
 
         } break;
 
-        case 2: // Ellipse
+        case 2:  /* ellipse */
         {
             lc_canvas_item_t *new_item = calloc(1, sizeof(lc_canvas_item_t));
             if (!new_item)
@@ -843,7 +828,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
                 return;
             }
 
-            new_item->type = 2; // Ellipse
+            new_item->type = 2;  /* ellipse */
 
             float radius = sqrtf((end[0] - start[0]) * (end[0] - start[0]) +
                                (end[1] - start[1]) * (end[1] - start[1]));
@@ -867,7 +852,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
             push_canvas_item(new_item);
         } break;
 
-        case 3: // Rectangle
+        case 3:  /* rectangle */
         {
             lc_canvas_item_t *new_item = calloc(1, sizeof(lc_canvas_item_t));
             if (!new_item)
@@ -876,7 +861,7 @@ static void commit_modal_tool(vec4 start, vec4 end)
                 return;
             }
 
-            new_item->type = 3; // Rectangle
+            new_item->type = 3;  /* rectangle */
             new_item->bounds[0][0] = start[0];
             new_item->bounds[0][1] = start[1];
             new_item->bounds[1][0] = end[0];
@@ -943,7 +928,7 @@ static bool hit_test_line(lc_canvas_item_t *item, vec4 point)
 
     float ab_len2 = X(AB)*X(AB) + Y(AB)*Y(AB);
     if (ab_len2 == 0.0f)
-        return false; // degenerate segment
+        return false;  /* degenerate segment */
 
     float t = (X(AP)*X(AB) + Y(AP)*Y(AB)) / ab_len2;
     t = fmaxf(0.0f, fminf(1.0f, t));

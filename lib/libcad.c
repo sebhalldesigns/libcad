@@ -117,16 +117,15 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 
 void cad_render_viewport()
 {
-    //lc_scene_render((float)vp_width, (float)vp_height);
+    /* set viewport to panel dimensions (convert from top-left to bottom-left origin) */
+    int gl_y = height - y_pos - vp_height;
+    glViewport(x_pos, gl_y, vp_width, vp_height);
 
-    //lc_draw_begin(vp_width, vp_height);
+    /* render 3D scene (sets up view_projection matrix) */
+    lc_scene_render((float)vp_width, (float)vp_height);
 
-    //lc_canvas_render((float)vp_width, (float)vp_height);
-
-    //lc_draw_end();
-
+    /* render 2D vector shapes using instanced SDF */
     lc_draw_render((float)vp_width, (float)vp_height);
-
 }
 
 void cad_init_viewport()
