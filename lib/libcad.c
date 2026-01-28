@@ -17,6 +17,7 @@
 
 #include <libcad/libcad.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <SDL3/SDL.h>
 #include <cglm/cglm.h>
@@ -31,6 +32,7 @@
 #include "lc_canvas.h"
 #include "lc_draw.h"
 #include "lc_scene.h"
+#include "libcad_internal.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -126,11 +128,16 @@ void cad_render_viewport()
     int gl_y = height - y_pos - vp_height;
     glViewport(x_pos, gl_y, vp_width, vp_height);
 
-    /* render 3D scene (sets up view_projection matrix) */
+    /* build render context for this frame */
+    lc_render_context_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    lc_scene_compute_context(&ctx, (float)vp_width, (float)vp_height);
+
+    /* render 3D scene */
     lc_scene_render((float)vp_width, (float)vp_height);
 
-    /* render 2D vector shapes using instanced SDF */
-    lc_draw_render((float)vp_width, (float)vp_height);
+    /* render 2D vector shapes using context */
+    lc_draw_render_ctx(&ctx);
 }
 
 void cad_init_viewport()
@@ -198,6 +205,122 @@ const char* cad_get_hovered_name(void)
 int cad_get_hovered_id(void)
 {
     return lc_draw_get_hovered_id();
+}
+
+/* ---- Document Model (Phase 2) ---- */
+
+cad_sketch_t cad_create_sketch(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_create_sketch\n");
+    return CAD_INVALID_ENTITY;
+}
+
+cad_entity_t cad_sketch_add_line(cad_ctx_t ctx, cad_sketch_t sketch,
+                                  float x1, float y1, float x2, float y2)
+{
+    (void)ctx;
+    (void)sketch;
+    (void)x1;
+    (void)y1;
+    (void)x2;
+    (void)y2;
+    printf("STUB: cad_sketch_add_line\n");
+    return CAD_INVALID_ENTITY;
+}
+
+cad_entity_t cad_sketch_add_circle(cad_ctx_t ctx, cad_sketch_t sketch,
+                                    float cx, float cy, float radius)
+{
+    (void)ctx;
+    (void)sketch;
+    (void)cx;
+    (void)cy;
+    (void)radius;
+    printf("STUB: cad_sketch_add_circle\n");
+    return CAD_INVALID_ENTITY;
+}
+
+cad_entity_t cad_sketch_add_rect(cad_ctx_t ctx, cad_sketch_t sketch,
+                                  float x1, float y1, float x2, float y2)
+{
+    (void)ctx;
+    (void)sketch;
+    (void)x1;
+    (void)y1;
+    (void)x2;
+    (void)y2;
+    printf("STUB: cad_sketch_add_rect\n");
+    return CAD_INVALID_ENTITY;
+}
+
+void cad_delete_entity(cad_ctx_t ctx, cad_entity_t entity)
+{
+    (void)ctx;
+    (void)entity;
+    printf("STUB: cad_delete_entity\n");
+}
+
+void cad_set_entity_name(cad_ctx_t ctx, cad_entity_t entity, const char *name)
+{
+    (void)ctx;
+    (void)entity;
+    (void)name;
+    printf("STUB: cad_set_entity_name\n");
+}
+
+const char* cad_get_entity_name(cad_ctx_t ctx, cad_entity_t entity)
+{
+    (void)ctx;
+    (void)entity;
+    printf("STUB: cad_get_entity_name\n");
+    return NULL;
+}
+
+void cad_select_entity(cad_ctx_t ctx, cad_entity_t entity)
+{
+    (void)ctx;
+    (void)entity;
+    printf("STUB: cad_select_entity\n");
+}
+
+void cad_deselect_all(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_deselect_all\n");
+}
+
+int cad_get_selection_count(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_get_selection_count\n");
+    return 0;
+}
+
+void cad_undo(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_undo\n");
+}
+
+void cad_redo(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_redo\n");
+}
+
+bool cad_can_undo(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_can_undo\n");
+    return false;
+}
+
+bool cad_can_redo(cad_ctx_t ctx)
+{
+    (void)ctx;
+    printf("STUB: cad_can_redo\n");
+    return false;
 }
 
 /***************************************************************

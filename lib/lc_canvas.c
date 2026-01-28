@@ -17,6 +17,7 @@
 
 #include "lc_canvas.h"
 #include "lc_draw.h"
+#include "libcad_internal.h"
 
 #include <libcad/libcad.h>
 
@@ -641,6 +642,20 @@ void lc_canvas_set_view_matrix(mat4 matrix)
 {
     glm_mat4_copy(matrix, viewport_transform);
     glm_mat4_inv(viewport_transform, viewport_transform_inv);
+}
+
+void lc_canvas_render_ctx(const lc_render_context_t *ctx)
+{
+    /* copy view_projection from context to static state */
+    glm_mat4_copy(ctx->view_projection, viewport_transform);
+    glm_mat4_inv(viewport_transform, viewport_transform_inv);
+
+    /* set viewport dimensions */
+    viewport_size[0] = (float)ctx->viewport_width;
+    viewport_size[1] = (float)ctx->viewport_height;
+
+    /* call existing render function */
+    lc_canvas_render((float)ctx->viewport_width, (float)ctx->viewport_height);
 }
 
 /***************************************************************

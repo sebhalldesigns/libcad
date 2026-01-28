@@ -26,6 +26,7 @@ if (NOT EMSCRIPTEN)
         lib/lc_draw.c
         lib/lc_canvas.c
         lib/lc_scene.c
+        lib/lc_gpu.c
     )
 
     if (WIN32)
@@ -76,6 +77,7 @@ else()
         lib/lc_draw.c
         lib/lc_canvas.c
         lib/lc_scene.c
+        lib/lc_gpu.c
     )
 
     set(PLATFORM_LIBS

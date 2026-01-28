@@ -9,7 +9,12 @@
 ** License      :  MIT
 ** Description  :  libcad internal canvas API
 **
-**  Functions for managing the canvas rendering context.
+**  Module: lc_canvas
+**  Responsibility: 2D sketch plane management, modal drawing tools,
+**    pan/zoom state, canvas item storage, selection state.
+**  Owns: Pan/zoom transform, active tool, canvas items, hit test state.
+**  Uses: lc_draw (for rendering), cglm (for transforms).
+**  Does NOT own: GPU resources, 3D scene state, document model.
 **
 ***************************************************************/
 
@@ -28,6 +33,8 @@ extern "C" {
 
 #include <cglm/cglm.h>
 
+#include "libcad_internal.h"
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -43,6 +50,7 @@ extern "C" {
 
 void lc_canvas_init();
 void lc_canvas_render(float viewport_width, float viewport_height);
+void lc_canvas_render_ctx(const lc_render_context_t *ctx);
 
 void lc_canvas_set_cursor_pos(float x, float y);
 void lc_canvas_set_cursor_lost();

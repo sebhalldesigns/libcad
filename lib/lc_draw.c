@@ -16,6 +16,7 @@
 ***************************************************************/
 
 #include "lc_draw.h"
+#include "libcad_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,6 +76,18 @@ typedef enum {
     OBJ_3D_CUBE          = 100,
     OBJ_3D_SPHERE        = 101
 } object_type_t;
+
+/* GL state snapshot for save/restore across render passes */
+typedef struct {
+    GLint viewport[4];
+    GLint scissor_box[4];
+    GLboolean scissor_enabled;
+    GLboolean blend_enabled;
+    GLboolean depth_test_enabled;
+    GLint blend_src;
+    GLint blend_dst;
+    GLuint bound_fbo;
+} lc_gl_state_t;
 
 static const char* object_type_names[] = {
     "None",
@@ -151,6 +164,8 @@ static int check_program_link(GLuint prog, const char* name);
 static void create_pick_fbo(int width, int height);
 static void setup_test_shapes(void);
 static int pick_object_at(int x, int y, float vp_width, float vp_height);
+static void lc_gl_save_state(lc_gl_state_t *state);
+static void lc_gl_restore_state(const lc_gl_state_t *state);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -163,13 +178,6 @@ int lc_draw_init()
 
     ig_context = igCreateContext(NULL);
     ig_io = igGetIO_Nil();
-
-    #ifdef EMSCRIPTEN
-    const char* glsl_version = "#version 300 es";
-    #else
-    const char* glsl_version = "#version 330 core";
-    #endif
-    ImGui_ImplOpenGL3_Init(glsl_version);
 
 #if __EMSCRIPTEN__
     
@@ -481,6 +489,15 @@ void lc_draw_set_view_matrix(mat4 matrix)
     glm_mat4_copy(matrix, view_projection);
 }
 
+void lc_draw_render_ctx(const lc_render_context_t *ctx)
+{
+    /* copy view_projection from context to static state */
+    glm_mat4_copy(ctx->view_projection, view_projection);
+
+    /* call existing render function */
+    lc_draw_render((float)ctx->viewport_width, (float)ctx->viewport_height);
+}
+
 void lc_draw_set_cursor_pos(float x, float y)
 {
     cursor_pos[0] = x;
@@ -602,6 +619,10 @@ static int pick_object_at(int x, int y, float vp_width, float vp_height)
 {
     if (pick_fbo == 0) return 0;
 
+    /* save GL state before pick pass */
+    lc_gl_state_t saved_state;
+    lc_gl_save_state(&saved_state);
+
     /* render to pick FBO */
     glBindFramebuffer(GL_FRAMEBUFFER, pick_fbo);
     glViewport(0, 0, pick_fbo_width, pick_fbo_height);
@@ -633,7 +654,46 @@ static int pick_object_at(int x, int y, float vp_width, float vp_height)
     glBindVertexArray(0);
     glUseProgram(0);
 
+    /* restore GL state after pick pass */
+    lc_gl_restore_state(&saved_state);
+
     return picked_id;
+}
+
+static void lc_gl_save_state(lc_gl_state_t *state)
+{
+    glGetIntegerv(GL_VIEWPORT, state->viewport);
+    glGetIntegerv(GL_SCISSOR_BOX, state->scissor_box);
+    state->scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+    state->blend_enabled = glIsEnabled(GL_BLEND);
+    state->depth_test_enabled = glIsEnabled(GL_DEPTH_TEST);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &state->blend_src);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &state->blend_dst);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&state->bound_fbo);
+}
+
+static void lc_gl_restore_state(const lc_gl_state_t *state)
+{
+    glViewport(state->viewport[0], state->viewport[1], state->viewport[2], state->viewport[3]);
+    glScissor(state->scissor_box[0], state->scissor_box[1], state->scissor_box[2], state->scissor_box[3]);
+
+    if (state->scissor_enabled)
+        glEnable(GL_SCISSOR_TEST);
+    else
+        glDisable(GL_SCISSOR_TEST);
+
+    if (state->blend_enabled)
+        glEnable(GL_BLEND);
+    else
+        glDisable(GL_BLEND);
+
+    if (state->depth_test_enabled)
+        glEnable(GL_DEPTH_TEST);
+    else
+        glDisable(GL_DEPTH_TEST);
+
+    glBlendFunc(state->blend_src, state->blend_dst);
+    glBindFramebuffer(GL_FRAMEBUFFER, state->bound_fbo);
 }
 
 static void setup_test_shapes(void)

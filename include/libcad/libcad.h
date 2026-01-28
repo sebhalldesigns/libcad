@@ -41,6 +41,13 @@ extern "C" {
 typedef uintptr_t cad_ctx_t;
 typedef uintptr_t cad_model_t;
 
+/* Entity handle types for document model */
+typedef uint32_t cad_entity_t;
+typedef uint32_t cad_sketch_t;
+typedef uint32_t cad_body_t;
+
+#define CAD_INVALID_ENTITY ((cad_entity_t)0)
+
 EXPORT cad_ctx_t    cad_create_context();
 EXPORT void         cad_destroy_context(cad_ctx_t ctx);
 
@@ -71,6 +78,33 @@ EXPORT void         cad_load_json(const char *path);
 
 EXPORT const char*  cad_get_hovered_name(void);
 EXPORT int          cad_get_hovered_id(void);
+
+/* ---- Document Model (Phase 2) ---- */
+
+/* Sketch creation and management */
+EXPORT cad_sketch_t     cad_create_sketch(cad_ctx_t ctx);
+EXPORT cad_entity_t     cad_sketch_add_line(cad_ctx_t ctx, cad_sketch_t sketch,
+                                             float x1, float y1, float x2, float y2);
+EXPORT cad_entity_t     cad_sketch_add_circle(cad_ctx_t ctx, cad_sketch_t sketch,
+                                               float cx, float cy, float radius);
+EXPORT cad_entity_t     cad_sketch_add_rect(cad_ctx_t ctx, cad_sketch_t sketch,
+                                              float x1, float y1, float x2, float y2);
+EXPORT void             cad_delete_entity(cad_ctx_t ctx, cad_entity_t entity);
+
+/* Entity metadata */
+EXPORT void             cad_set_entity_name(cad_ctx_t ctx, cad_entity_t entity, const char *name);
+EXPORT const char*      cad_get_entity_name(cad_ctx_t ctx, cad_entity_t entity);
+
+/* Selection */
+EXPORT void             cad_select_entity(cad_ctx_t ctx, cad_entity_t entity);
+EXPORT void             cad_deselect_all(cad_ctx_t ctx);
+EXPORT int              cad_get_selection_count(cad_ctx_t ctx);
+
+/* Undo/Redo */
+EXPORT void             cad_undo(cad_ctx_t ctx);
+EXPORT void             cad_redo(cad_ctx_t ctx);
+EXPORT bool             cad_can_undo(cad_ctx_t ctx);
+EXPORT bool             cad_can_redo(cad_ctx_t ctx);
 
 #ifdef __cplusplus
 }

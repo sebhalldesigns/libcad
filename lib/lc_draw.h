@@ -9,6 +9,14 @@
 ** License      :  MIT
 ** Description  :  libcad internal drawing API
 **
+**  Module: lc_draw
+**  Responsibility: Instanced SDF vector rendering, GPU picking,
+**    shape instance management, ImGui context ownership.
+**  Owns: VAO/VBO, shader programs, pick FBO, instance buffer,
+**    hover state, ImGui context.
+**  Uses: OpenGL (via glad/GLES3), cimgui, cglm.
+**  Does NOT own: Document model, canvas state, 3D scene state.
+**
 ***************************************************************/
 
 #ifndef LC_DRAW_H
@@ -32,6 +40,8 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "libcad_internal.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -91,6 +101,7 @@ void lc_draw_text(vec2 pos, const char *text, float size, uint32_t color);
 
 void lc_draw_set_view_matrix(mat4 matrix);
 void lc_draw_render(float viewport_width, float viewport_height);
+void lc_draw_render_ctx(const lc_render_context_t *ctx);
 
 /* cursor and picking */
 void lc_draw_set_cursor_pos(float x, float y);

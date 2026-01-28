@@ -9,7 +9,13 @@
 ** License      :  MIT
 ** Description  :  libcad internal scene API
 **
-**  Functions for managing the scene rendering context.
+**  Module: lc_scene
+**  Responsibility: 3D scene management, orbit/pan camera, world-space
+**    object rendering, 3D input handling.
+**  Owns: Camera state (orbit angles, distance, target), 3D objects,
+**    view/projection matrices, modifier key state.
+**  Uses: OpenGL (via glad/GLES3), cglm (for 3D math).
+**  Does NOT own: 2D canvas state, SDF vector rendering, GPU resources.
 **
 ***************************************************************/
 
@@ -25,6 +31,7 @@ extern "C" {
 ***************************************************************/
 
 #include <stdbool.h>
+#include "libcad_internal.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -40,6 +47,7 @@ extern "C" {
 
 
 void lc_scene_init();
+void lc_scene_compute_context(lc_render_context_t *ctx, float viewport_width, float viewport_height);
 void lc_scene_render(float viewport_width, float viewport_height);
 
 void lc_scene_set_cursor_pos(float x, float y);

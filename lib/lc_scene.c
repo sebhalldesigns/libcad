@@ -19,6 +19,7 @@
 
 #include "lc_canvas.h"
 #include "lc_draw.h"
+#include "libcad_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -225,6 +226,40 @@ void lc_scene_init()
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(0); 
+}
+
+void lc_scene_compute_context(lc_render_context_t *ctx, float viewport_width, float viewport_height)
+{
+    /* compute perspective projection */
+    mat4 projection;
+    glm_mat4_identity(projection);
+    glm_perspective(glm_rad(45.0f), viewport_width / viewport_height, clipNear, clipFar, projection);
+
+    /* compute view matrix */
+    mat4 view;
+    glm_mat4_identity(view);
+    camera_view_matrix(&cam, view);
+
+    /* compute view-projection matrix */
+    glm_mat4_mul(projection, view, ctx->view_projection);
+
+    /* compute inverse view-projection for unprojection */
+    glm_mat4_inv(ctx->view_projection, ctx->view_projection_inv);
+
+    /* set viewport dimensions */
+    ctx->viewport_width = (int)viewport_width;
+    ctx->viewport_height = (int)viewport_height;
+
+    /* set canvas parameters */
+    ctx->canvas_origin[0] = 0.0f;
+    ctx->canvas_origin[1] = 0.0f;
+    ctx->canvas_normal[0] = 0.0f;
+    ctx->canvas_normal[1] = 0.0f;
+    ctx->canvas_normal[2] = 1.0f;
+
+    /* compute canvas zoom from camera distance */
+    float dist = camera_distance(&cam);
+    ctx->canvas_zoom = 10.0f / dist; /* reference distance of 10 units */
 }
 
 void lc_scene_render(float viewport_width, float viewport_height)
