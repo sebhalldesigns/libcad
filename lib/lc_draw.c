@@ -149,8 +149,8 @@ static int hovered_object_type = OBJ_NONE;
 static vec2 cursor_pos = {0.0f, 0.0f};
 static bool cursor_valid = false;
 
-/* test shapes storage */
-#define MAX_INSTANCES 64
+/* Shape instance storage - increased for grid rendering */
+#define MAX_INSTANCES 1024
 static vector_instance_t instances[MAX_INSTANCES];
 static int instance_count = 0;
 
@@ -158,6 +158,7 @@ static int instance_count = 0;
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
 
+static void add_line_instance(vec2 start, vec2 end, uint32_t color_packed, float thickness, int obj_id);
 static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset);
 static int check_shader_compile(GLuint shader, const char* name);
 static int check_program_link(GLuint prog, const char* name);
@@ -323,8 +324,12 @@ void lc_draw_begin(int w, int h)
     igNewFrame();
 
     ig_drawlist = igGetForegroundDrawList_ViewportPtr(igGetMainViewport());
-    
 
+    /* Reset instance count for this frame */
+    instance_count = 0;
+
+    /* Re-add test shapes for debugging */
+    setup_test_shapes();
 }
 
 void lc_draw_end()
@@ -337,7 +342,7 @@ void lc_draw_end()
 
 void lc_draw_line(vec2 start, vec2 end, uint32_t color)
 {
-    ImDrawList_AddLine(ig_drawlist, (ImVec2_c){start[0], start[1]}, (ImVec2_c){end[0], end[1]}, color, 1.0f);
+    add_line_instance(start, end, color, 1.0f, 0);
 }
 
 void lc_draw_circle(vec2 center, float radius)
@@ -538,6 +543,82 @@ const char* lc_draw_get_hovered_name(void)
 ** MARK: STATIC FUNCTIONS
 ***************************************************************/
 
+/* Add a line segment to the instance buffer */
+static void add_line_instance(vec2 start, vec2 end, uint32_t color_packed, float thickness, int obj_id)
+{
+    if (instance_count >= MAX_INSTANCES)
+    {
+        fprintf(stderr, "lc_draw: instance buffer full, cannot add line\n");
+        return;
+    }
+
+    /* Compute line midpoint */
+    vec3 center;
+    center[0] = (start[0] + end[0]) * 0.5f;
+    center[1] = (start[1] + end[1]) * 0.5f;
+    center[2] = 0.0f;
+
+    /* Compute line length and direction */
+    float dx = end[0] - start[0];
+    float dy = end[1] - start[1];
+    float length = sqrtf(dx * dx + dy * dy);
+    float half_length = length * 0.5f;
+
+    /* axis_x = normalized direction along line */
+    vec3 axis_x;
+    if (length > 0.0001f)
+    {
+        axis_x[0] = dx / length;
+        axis_x[1] = dy / length;
+        axis_x[2] = 0.0f;
+    }
+    else
+    {
+        /* Degenerate line - use identity */
+        axis_x[0] = 1.0f;
+        axis_x[1] = 0.0f;
+        axis_x[2] = 0.0f;
+    }
+
+    /* axis_y = perpendicular to line */
+    vec3 axis_y;
+    axis_y[0] = -axis_x[1];
+    axis_y[1] = axis_x[0];
+    axis_y[2] = 0.0f;
+
+    /* Scale axes by half_length to create bounding quad */
+    glm_vec3_scale(axis_x, half_length + thickness, axis_x);
+    glm_vec3_scale(axis_y, thickness, axis_y);
+
+    /* Unpack color */
+    vec4 color;
+    color[0] = ((color_packed >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+    color[1] = ((color_packed >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+    color[2] = ((color_packed >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+    color[3] = ((color_packed >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f;
+
+    /* Fill instance data */
+    vector_instance_t *inst = &instances[instance_count];
+    glm_vec3_copy(center, inst->center);
+    inst->type = (float)SHAPE_LINE;
+
+    glm_vec3_copy(axis_x, inst->axis_x);
+    inst->radius = half_length;  /* Point B x-coord in local space */
+
+    glm_vec3_copy(axis_y, inst->axis_y);
+    inst->corner_radius = 0.0f;  /* Point B y-coord in local space */
+
+    inst->half_size[0] = half_length;  /* Point A x-coord in local space */
+    inst->half_size[1] = 0.0f;         /* Point A y-coord in local space */
+
+    inst->thickness = thickness;
+    inst->filled = 0.0f;  /* Lines are stroked, not filled */
+
+    glm_vec4_copy(color, inst->color);
+    inst->object_id = (float)obj_id;
+
+    instance_count++;
+}
 
 static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset)
 {

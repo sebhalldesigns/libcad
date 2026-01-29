@@ -98,7 +98,7 @@ lc_gpu_fbo_t lc_gpu_create_fbo(void);
 void lc_gpu_fbo_attach_texture(lc_gpu_fbo_t fbo, lc_gpu_texture_t tex);
 void lc_gpu_fbo_attach_depth(lc_gpu_fbo_t fbo, int width, int height);
 int lc_gpu_fbo_check_complete(lc_gpu_fbo_t fbo);
-void lc_gpu_destroy_fbo(lc_gpu_fbo_t fbo)
+void lc_gpu_destroy_fbo(lc_gpu_fbo_t fbo);
 
 
 #ifdef __cplusplus

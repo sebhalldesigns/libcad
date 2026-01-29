@@ -32,6 +32,7 @@
 #include "lc_canvas.h"
 #include "lc_draw.h"
 #include "lc_scene.h"
+#include "lc_entity.h"
 #include "libcad_internal.h"
 
 /***************************************************************
@@ -154,7 +155,10 @@ void cad_init_viewport()
 
     printf("GLAD initialized successfully\n");
     printf("OpenGL %s\n", glGetString(GL_VERSION));
-    
+
+    /* Initialize entity system */
+    lc_entity_init();
+
     if (!lc_draw_init())
     {
         printf("Failed to initialize lc_draw\n");
@@ -212,53 +216,98 @@ int cad_get_hovered_id(void)
 cad_sketch_t cad_create_sketch(cad_ctx_t ctx)
 {
     (void)ctx;
-    printf("STUB: cad_create_sketch\n");
-    return CAD_INVALID_ENTITY;
+
+    /* Create sketch at origin, XY plane */
+    vec3 origin = {0.0f, 0.0f, 0.0f};
+    vec3 normal = {0.0f, 0.0f, 1.0f};
+    vec3 x_axis = {1.0f, 0.0f, 0.0f};
+
+    lc_entity_handle_t handle = lc_entity_create_sketch(origin, normal, x_axis);
+    if (handle == LC_ENTITY_INVALID)
+    {
+        printf("[cad_create_sketch] Failed to create sketch\n");
+        return CAD_INVALID_ENTITY;
+    }
+
+    printf("[cad_create_sketch] Created sketch (handle: 0x%08X)\n", handle);
+    return (cad_sketch_t)handle;
 }
 
 cad_entity_t cad_sketch_add_line(cad_ctx_t ctx, cad_sketch_t sketch,
                                   float x1, float y1, float x2, float y2)
 {
     (void)ctx;
-    (void)sketch;
-    (void)x1;
-    (void)y1;
-    (void)x2;
-    (void)y2;
-    printf("STUB: cad_sketch_add_line\n");
-    return CAD_INVALID_ENTITY;
+
+    vec2 start = {x1, y1};
+    vec2 end = {x2, y2};
+    uint32_t color = 0xFFFFFFFF; /* White */
+    float thickness = 2.0f;
+
+    lc_entity_handle_t handle = lc_entity_create_line((lc_entity_handle_t)sketch,
+                                                        start, end, color, thickness);
+    if (handle == LC_ENTITY_INVALID)
+    {
+        printf("[cad_sketch_add_line] Failed to create line\n");
+        return CAD_INVALID_ENTITY;
+    }
+
+    printf("[cad_sketch_add_line] Created line (handle: 0x%08X)\n", handle);
+    return (cad_entity_t)handle;
 }
 
 cad_entity_t cad_sketch_add_circle(cad_ctx_t ctx, cad_sketch_t sketch,
                                     float cx, float cy, float radius)
 {
     (void)ctx;
-    (void)sketch;
-    (void)cx;
-    (void)cy;
-    (void)radius;
-    printf("STUB: cad_sketch_add_circle\n");
-    return CAD_INVALID_ENTITY;
+
+    vec2 center = {cx, cy};
+    uint32_t color = 0xFFFFFFFF; /* White */
+
+    lc_entity_handle_t handle = lc_entity_create_circle((lc_entity_handle_t)sketch,
+                                                          center, radius, color);
+    if (handle == LC_ENTITY_INVALID)
+    {
+        printf("[cad_sketch_add_circle] Failed to create circle\n");
+        return CAD_INVALID_ENTITY;
+    }
+
+    printf("[cad_sketch_add_circle] Created circle (handle: 0x%08X)\n", handle);
+    return (cad_entity_t)handle;
 }
 
 cad_entity_t cad_sketch_add_rect(cad_ctx_t ctx, cad_sketch_t sketch,
                                   float x1, float y1, float x2, float y2)
 {
     (void)ctx;
-    (void)sketch;
-    (void)x1;
-    (void)y1;
-    (void)x2;
-    (void)y2;
-    printf("STUB: cad_sketch_add_rect\n");
-    return CAD_INVALID_ENTITY;
+
+    vec2 min = {x1, y1};
+    vec2 max = {x2, y2};
+    uint32_t color = 0xFFFFFFFF; /* White */
+
+    lc_entity_handle_t handle = lc_entity_create_rect((lc_entity_handle_t)sketch,
+                                                        min, max, color);
+    if (handle == LC_ENTITY_INVALID)
+    {
+        printf("[cad_sketch_add_rect] Failed to create rectangle\n");
+        return CAD_INVALID_ENTITY;
+    }
+
+    printf("[cad_sketch_add_rect] Created rectangle (handle: 0x%08X)\n", handle);
+    return (cad_entity_t)handle;
 }
 
 void cad_delete_entity(cad_ctx_t ctx, cad_entity_t entity)
 {
     (void)ctx;
-    (void)entity;
-    printf("STUB: cad_delete_entity\n");
+
+    if (lc_entity_destroy((lc_entity_handle_t)entity))
+    {
+        printf("[cad_delete_entity] Deleted entity (handle: 0x%08X)\n", entity);
+    }
+    else
+    {
+        printf("[cad_delete_entity] Failed to delete entity (handle: 0x%08X)\n", entity);
+    }
 }
 
 void cad_set_entity_name(cad_ctx_t ctx, cad_entity_t entity, const char *name)

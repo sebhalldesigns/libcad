@@ -21,12 +21,23 @@ if (NOT EMSCRIPTEN)
     add_subdirectory(extern)
     add_subdirectory(democad)
 
+    # Entity system test executable
+    add_executable(test_entity test_entity.c)
+    target_link_libraries(test_entity PRIVATE libcad)
+    target_include_directories(test_entity PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
     add_library(libcad STATIC
         lib/libcad.c
         lib/lc_draw.c
         lib/lc_canvas.c
         lib/lc_scene.c
         lib/lc_gpu.c
+        lib/lc_entity.c
+        lib/lc_document.c
+        lib/lc_undo.c
     )
 
     if (WIN32)
@@ -78,6 +89,9 @@ else()
         lib/lc_canvas.c
         lib/lc_scene.c
         lib/lc_gpu.c
+        lib/lc_entity.c
+        lib/lc_document.c
+        lib/lc_undo.c
     )
 
     set(PLATFORM_LIBS

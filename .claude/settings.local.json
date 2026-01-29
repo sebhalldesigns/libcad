@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(cmake --build:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(cmake:*)",
+      "Bash(\"Debug\\\\test_entity.exe\")",
+      "Bash(test_entity.exe)",
+      "Bash(./test_entity.exe:*)",
+      "Bash(cmd.exe /c test_entity.exe)",
+      "Bash(ls:*)"
     ]
   }
 }

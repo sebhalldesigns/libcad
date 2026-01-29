@@ -20,8 +20,8 @@ Tracks progress against `docs/action-plan.md`.
 
 ### 3. Consolidate 2D Drawing (HIGH)
 - [x] **3.1** Identify ImGui DrawList calls — found 10 in `lc_draw.c` wrapper functions
-- [ ] **3.2** Add missing SDF shape functions (axes, grid) to instanced pipeline
-- [ ] **3.3** Replace ImGui DrawList calls in `lc_draw.c` wrappers with SDF instancing
+- [x] **3.2** Add missing SDF shape functions (axes, grid) to instanced pipeline — `lc_draw_line()` and `lc_draw_grid()` now use SDF instancing
+- [~] **3.3** Replace ImGui DrawList calls in `lc_draw.c` wrappers with SDF instancing — PARTIAL: line and grid done; still TODO: circle, rect, ellipse, handle, text
 - [ ] **3.4** Remove cimgui includes from `lc_draw.h`
 
 ### 4. Module Boundary Cleanup (HIGH)
@@ -42,15 +42,54 @@ Tracks progress against `docs/action-plan.md`.
 ## What's Next
 
 ### Remaining Phase 1 work:
-- [ ] **3.2-3.4** Migrate ImGui DrawList wrappers in `lc_draw.c` to SDF instancing pipeline
+- [~] **3.3-3.4** Complete migration of remaining shapes (circle, rect, ellipse, handle, text) to SDF instancing
 - [ ] **4.3b** Refactor `lc_draw.c` to actually USE `lc_gpu` API instead of raw GL calls
 - [ ] **2.4** Canvas-as-plane documentation
 
+### Completed 2026-01-29:
+- ✓ Increased MAX_INSTANCES from 64 to 1024 to accommodate grid rendering
+- ✓ Added frame reset logic to `lc_draw_begin()` to enable dynamic instance accumulation
+- ✓ Implemented `add_line_instance()` helper function for SDF line rendering
+- ✓ Converted `lc_draw_line()` from ImGui DrawList to SDF instancing (SHAPE_LINE)
+- ✓ Grid rendering now uses SDF pipeline (calls `lc_draw_line()` in loops)
+- ✓ Axes rendering now uses SDF pipeline (in `lc_canvas.c`, calls `lc_draw_line()`)
+
 ### Phase 2: Document Model & Entity Storage
-- [ ] Create `lc_entity.c` — entity handle system with sparse storage
-- [ ] Create `lc_document.c` — document tree (assembly -> body -> sketch -> geometry)
-- [ ] Create `lc_undo.c` — undo/redo command stack
-- [ ] Wire entity stubs in `libcad.c` to actual entity system
+
+**Completed 2026-01-29:**
+- [x] **Architecture Design** — Created comprehensive `docs/phase2-entity-document-architecture.md` with full specification for entity system, document tree, and undo/redo (generational indices, intrusive linked lists, hybrid undo approach)
+
+**Implementation Tasks:**
+- [x] **Phase 2A** (COMPLETED): Created `lc_entity.c/h` (834 + 266 lines)
+  - Generational index handles (16-bit index + 16-bit generation)
+  - Free list allocation with O(1) create/destroy
+  - Intrusive tree structure (parent, first_child, next/prev sibling)
+  - Type-specific data structures (sketch, body, line, circle, rect)
+  - Complete API: init, shutdown, create, destroy, validation, tree manipulation, enumeration
+  - Integrated into libcad.c (entity_init, create_sketch, add_line/circle/rect)
+  - Test suite created (test_entity.c with 6 test categories)
+  - Build verified: compiles successfully on Windows/MSVC
+- [x] **Phase 2B** (COMPLETED): Created `lc_document.c/h` (612 + 172 lines)
+  - Open-addressed metadata hash table (1024 slots, linear probing)
+  - Dynamic selection array (starts at 16, grows 2x, shrinks at 25% usage)
+  - Complete API: metadata (name, layer), selection, visibility/locking, query by name
+  - Default values: visible=true, locked=false, name="", layer=""
+  - Integrated into CMakeLists.txt for both native and Emscripten builds
+  - Build verified: libcad.lib now 500KB (was 414KB)
+- [x] **Phase 2C** (COMPLETED): Created `lc_undo.c/h` (669 + 178 lines)
+  - Hybrid approach: immutable snapshots for create/delete, delta commands for property changes
+  - Command stack with 100 entry capacity, overflow drops oldest
+  - Command grouping for multi-step operations (GROUP_BEGIN/GROUP_END markers)
+  - Complete undo/redo logic with forward/backward traversal
+  - Deep copying of entity snapshots including type-specific data
+  - Complete API: init, shutdown, record, begin/end_group, undo/redo, can_undo/redo, clear
+  - Integrated into CMakeLists.txt
+  - Build verified: libcad.lib now 537KB (was 500KB)
+- [ ] **Phase 2D** (PARTIAL): Wire entity stubs in `libcad.c` — sketch/geometry functions done, metadata/selection/undo stubs remain
+- [ ] **Phase 2E** (1-2 days): Modify `lc_canvas.c` to query entity tree instead of internal `items` array
+- [ ] **Phase 2F** (1 day): Implement JSON serialization using jansson
+
+**Estimated Total Effort: 7-10 days**
 
 ## Phase 3-7
 Not started.
