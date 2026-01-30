@@ -106,6 +106,65 @@ EXPORT void             cad_redo(cad_ctx_t ctx);
 EXPORT bool             cad_can_undo(cad_ctx_t ctx);
 EXPORT bool             cad_can_redo(cad_ctx_t ctx);
 
+/* ---- Constraint System (Phase 3) ---- */
+
+/* Constraint creation */
+EXPORT cad_entity_t     cad_constraint_distance_point_point(cad_ctx_t ctx,
+                                                             cad_entity_t point1,
+                                                             cad_entity_t point2,
+                                                             float distance);
+EXPORT cad_entity_t     cad_constraint_distance_point_line(cad_ctx_t ctx,
+                                                            cad_entity_t point,
+                                                            cad_entity_t line,
+                                                            float distance);
+EXPORT cad_entity_t     cad_constraint_angle_line_line(cad_ctx_t ctx,
+                                                        cad_entity_t line1,
+                                                        cad_entity_t line2,
+                                                        float angle_radians);
+EXPORT cad_entity_t     cad_constraint_parallel(cad_ctx_t ctx,
+                                                 cad_entity_t line1,
+                                                 cad_entity_t line2);
+EXPORT cad_entity_t     cad_constraint_perpendicular(cad_ctx_t ctx,
+                                                      cad_entity_t line1,
+                                                      cad_entity_t line2);
+EXPORT cad_entity_t     cad_constraint_horizontal(cad_ctx_t ctx, cad_entity_t line);
+EXPORT cad_entity_t     cad_constraint_vertical(cad_ctx_t ctx, cad_entity_t line);
+EXPORT cad_entity_t     cad_constraint_coincident_point_point(cad_ctx_t ctx,
+                                                               cad_entity_t point1,
+                                                               cad_entity_t point2);
+EXPORT cad_entity_t     cad_constraint_coincident_point_line(cad_ctx_t ctx,
+                                                              cad_entity_t point,
+                                                              cad_entity_t line);
+EXPORT cad_entity_t     cad_constraint_coincident_point_circle(cad_ctx_t ctx,
+                                                                cad_entity_t point,
+                                                                cad_entity_t circle);
+EXPORT cad_entity_t     cad_constraint_tangent_line_circle(cad_ctx_t ctx,
+                                                            cad_entity_t line,
+                                                            cad_entity_t circle);
+EXPORT cad_entity_t     cad_constraint_tangent_circle_circle(cad_ctx_t ctx,
+                                                              cad_entity_t circle1,
+                                                              cad_entity_t circle2);
+EXPORT cad_entity_t     cad_constraint_equal_length(cad_ctx_t ctx,
+                                                     cad_entity_t line1,
+                                                     cad_entity_t line2);
+EXPORT cad_entity_t     cad_constraint_equal_radius(cad_ctx_t ctx,
+                                                     cad_entity_t circle1,
+                                                     cad_entity_t circle2);
+EXPORT cad_entity_t     cad_constraint_fix_point(cad_ctx_t ctx, cad_entity_t point);
+
+/* Constraint management */
+EXPORT bool             cad_constraint_delete(cad_ctx_t ctx, cad_entity_t constraint);
+EXPORT bool             cad_constraint_set_value(cad_ctx_t ctx, cad_entity_t constraint, float value);
+EXPORT float            cad_constraint_get_value(cad_ctx_t ctx, cad_entity_t constraint);
+EXPORT float            cad_constraint_get_error(cad_ctx_t ctx, cad_entity_t constraint);
+EXPORT bool             cad_constraint_is_satisfied(cad_ctx_t ctx, cad_entity_t constraint);
+
+/* Sketch constraint analysis */
+EXPORT int              cad_sketch_get_dof(cad_ctx_t ctx, cad_sketch_t sketch);
+EXPORT bool             cad_sketch_is_fully_constrained(cad_ctx_t ctx, cad_sketch_t sketch);
+EXPORT bool             cad_sketch_is_over_constrained(cad_ctx_t ctx, cad_sketch_t sketch);
+EXPORT int              cad_sketch_get_constraint_count(cad_ctx_t ctx, cad_sketch_t sketch);
+
 #ifdef __cplusplus
 }
 #endif

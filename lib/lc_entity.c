@@ -327,6 +327,43 @@ void* lc_entity_get_data(lc_entity_handle_t handle)
     }
 }
 
+bool lc_entity_set_data(lc_entity_handle_t handle, void *data)
+{
+    lc_entity_slot_t *slot = lc_entity_get_slot(handle);
+    if (slot == NULL)
+    {
+        return false;
+    }
+
+    /* Set appropriate data pointer based on type */
+    switch (slot->type)
+    {
+        case LC_ENTITY_TYPE_SKETCH:
+            slot->data.sketch = (lc_sketch_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_BODY:
+            slot->data.body = (lc_body_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_CONSTRAINT:
+            slot->data.constraint = (lc_constraint_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_GEOMETRY_LINE:
+            slot->data.geometry_line = (lc_geometry_line_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_GEOMETRY_CIRCLE:
+            slot->data.geometry_circle = (lc_geometry_circle_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_GEOMETRY_RECT:
+            slot->data.geometry_rect = (lc_geometry_rect_data_t*)data;
+            break;
+        default:
+            slot->data.generic = data;
+            break;
+    }
+
+    return true;
+}
+
 bool lc_entity_set_user_data(lc_entity_handle_t handle, void *user_data,
                               void (*destructor)(void*))
 {

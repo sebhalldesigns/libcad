@@ -29,6 +29,22 @@ if (NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_LIST_DIR}/include
     )
 
+    # Constraint system test executable
+    add_executable(test_constraint test_constraint.c)
+    target_link_libraries(test_constraint PRIVATE libcad)
+    target_include_directories(test_constraint PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
+    # Constraint graph and DOF analysis test
+    add_executable(test_graph test_graph.c)
+    target_link_libraries(test_graph PRIVATE libcad)
+    target_include_directories(test_graph PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
     add_library(libcad STATIC
         lib/libcad.c
         lib/lc_draw.c
@@ -38,6 +54,7 @@ if (NOT EMSCRIPTEN)
         lib/lc_entity.c
         lib/lc_document.c
         lib/lc_undo.c
+        lib/lc_constraint.c
     )
 
     if (WIN32)
@@ -92,6 +109,7 @@ else()
         lib/lc_entity.c
         lib/lc_document.c
         lib/lc_undo.c
+        lib/lc_constraint.c
     )
 
     set(PLATFORM_LIBS

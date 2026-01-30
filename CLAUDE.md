@@ -198,6 +198,42 @@ Implemented complete undo/redo command system as specified in `docs/phase2-entit
 
 **All core infrastructure complete** - Entity system, document model, and undo/redo are fully implemented (2,115 lines of C99 code across 6 files). Ready for integration and rendering.
 
+**Session Changelog:** See `docs/session-2026-01-29-changelog.md` for complete details and token usage tracking.
+
+**Phase 3 Constraint System Architecture (COMPLETED 2026-01-29)**
+- Created `docs/phase3-constraint-system-architecture.md` (47KB)
+- 15 constraint types with squared error functions
+- Constraint graph with DOF analysis
+- Solver-agnostic design
+- 8-12 day implementation plan
+
+**Phase 4 B-Rep Kernel Architecture (COMPLETED 2026-01-29)**
+- Created `docs/phase4-brep-kernel-architecture.md` (1077 lines)
+- Complete topology hierarchy (Vertex → Edge → Loop → Face → Shell → Solid)
+- Edge-use pattern integrated with entity system
+- Geometric primitives (lines, arcs, planes, cylinders, spheres, etc.)
+- Euler operators for manifold validity
+- 12-18 day implementation plan
+
+**Resume Document:** `docs/RESUME-SESSION.md` created for clean session continuation
+
+**Phase 3A-3B Implementation (COMPLETED 2026-01-29)**
+- Created `lib/lc_constraint.c/h` (459 + 124 lines)
+- 16 constraint types with full data structures
+- 15 constraint creation functions
+- Management API (init, shutdown, destroy, evaluate)
+- Test suite: `test_constraint.c`
+- Build verified: libcad.lib = 579KB (+42KB)
+
+**Session Summary:**
+- Total code written: 2,698 lines of C99
+- Architecture docs: 3 comprehensive specifications
+- Token used: ~38k (19% of budget)
+- Token remaining: ~88k (44%)
+
+**Next Session:** Phase 3C - Implement constraint error functions (~15-20k tokens)
+**Resume:** Read `docs/NEXT-SESSION-START-HERE.md`
+
 ### What was built
 - **`lc_gpu.c/h`** is now a real module (~535 lines) with handle-based GPU resource management (buffers, shaders, programs, VAOs, textures, FBOs). `lc_draw.c` and `lc_scene.c` have NOT yet been refactored to use it — they still call raw GL. That migration is next.
 - **Render context pipeline**: `lc_render_context_t` (defined in `lib/libcad_internal.h`) flows from `libcad.c` -> `lc_scene_compute_context()` -> `lc_draw_render_ctx()` / `lc_canvas_render_ctx()`. The old `set_view_matrix()` functions still exist for backward compat but the new context path is wired up.

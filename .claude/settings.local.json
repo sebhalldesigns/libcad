@@ -8,7 +8,13 @@
       "Bash(test_entity.exe)",
       "Bash(./test_entity.exe:*)",
       "Bash(cmd.exe /c test_entity.exe)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(./test_constraint.exe:*)",
+      "Bash(test_constraint.exe:*)",
+      "Bash(\"C:\\\\Users\\\\sebam\\\\lunarcad\\\\libcad\\\\build\\\\Debug\\\\test_constraint.exe\")",
+      "Bash(cmd.exe /c \"cd C:\\\\Users\\\\sebam\\\\lunarcad\\\\libcad\\\\build\\\\Debug && test_constraint.exe\")",
+      "Bash(gcc:*)",
+      "Bash(./test_error_math.exe:*)"
     ]
   }
 }

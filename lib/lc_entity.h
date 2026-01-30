@@ -103,13 +103,43 @@ typedef struct lc_body_data_t
 
 } lc_body_data_t;
 
-/* Constraint data (future; Phase 3).
- * Included here for completeness but not implemented in Phase 2. */
+/* Constraint type enumeration.
+ * Determines which error function to use and which parameters are valid. */
+typedef enum lc_constraint_type_t
+{
+    LC_CONSTRAINT_DISTANCE_POINT_POINT = 0,  /* Distance between two points */
+    LC_CONSTRAINT_DISTANCE_POINT_LINE,       /* Perpendicular distance from point to line */
+    LC_CONSTRAINT_DISTANCE_LINE_LINE_PARALLEL, /* Parallel distance between two parallel lines */
+    LC_CONSTRAINT_ANGLE_LINE_LINE,           /* Angle between two lines */
+    LC_CONSTRAINT_COINCIDENT_POINT_POINT,    /* Two points at same location */
+    LC_CONSTRAINT_COINCIDENT_POINT_LINE,     /* Point lies on line */
+    LC_CONSTRAINT_COINCIDENT_POINT_CIRCLE,   /* Point lies on circle */
+    LC_CONSTRAINT_PARALLEL,                  /* Two lines parallel */
+    LC_CONSTRAINT_PERPENDICULAR,             /* Two lines perpendicular */
+    LC_CONSTRAINT_HORIZONTAL,                /* Line is horizontal */
+    LC_CONSTRAINT_VERTICAL,                  /* Line is vertical */
+    LC_CONSTRAINT_TANGENT_LINE_CIRCLE,       /* Line is tangent to circle */
+    LC_CONSTRAINT_TANGENT_CIRCLE_CIRCLE,     /* Two circles are tangent */
+    LC_CONSTRAINT_EQUAL_LENGTH,              /* Two line segments have equal length */
+    LC_CONSTRAINT_EQUAL_RADIUS,              /* Two circles have equal radius */
+    LC_CONSTRAINT_FIX_POINT,                 /* Point locked to specific position */
+    LC_CONSTRAINT_TYPE_COUNT
+} lc_constraint_type_t;
+
+/* Constraint state flags */
+#define LC_CONSTRAINT_FLAG_SATISFIED   (1 << 0)  /* Error below tolerance */
+#define LC_CONSTRAINT_FLAG_CONFLICTED  (1 << 1)  /* Conflicts with other constraints */
+
+/* Constraint data attached to LC_ENTITY_TYPE_CONSTRAINT entities.
+ * Stores constraint type, referenced entities, parameters, and solver state. */
 typedef struct lc_constraint_data_t
 {
-    int constraint_type;
-    lc_entity_handle_t entities[4];  /* Constraint references (e.g., two lines) */
-    float value;                     /* Constraint parameter (distance, angle, etc.) */
+    lc_constraint_type_t type;        /* Constraint type */
+    lc_entity_handle_t entities[4];   /* Referenced entities (1-4) */
+    float value;                       /* Parameter (distance, angle) */
+    float weight;                      /* Solver weight (1.0 = normal) */
+    float error;                       /* Current error/residual */
+    uint32_t flags;                    /* Status flags */
 } lc_constraint_data_t;
 
 /* 2D line geometry in a sketch. */
@@ -209,6 +239,12 @@ bool lc_entity_set_flags(lc_entity_handle_t handle, uint32_t flags);
  * Returns NULL if handle is invalid or type mismatch.
  * Caller must cast to appropriate type based on entity type. */
 void* lc_entity_get_data(lc_entity_handle_t handle);
+
+/* Set type-specific data pointer.
+ * Caller is responsible for allocating data.
+ * Returns true if successful, false if handle is invalid.
+ * Note: Does not free old data; caller must do that first if needed. */
+bool lc_entity_set_data(lc_entity_handle_t handle, void *data);
 
 /* Attach user data to an entity.
  * If destructor is non-NULL, it will be called when entity is destroyed.

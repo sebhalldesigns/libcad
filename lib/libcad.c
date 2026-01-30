@@ -33,6 +33,7 @@
 #include "lc_draw.h"
 #include "lc_scene.h"
 #include "lc_entity.h"
+#include "lc_constraint.h"
 #include "libcad_internal.h"
 
 /***************************************************************
@@ -158,6 +159,9 @@ void cad_init_viewport()
 
     /* Initialize entity system */
     lc_entity_init();
+
+    /* Initialize constraint system */
+    lc_constraint_init();
 
     if (!lc_draw_init())
     {

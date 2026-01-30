@@ -91,8 +91,66 @@ Tracks progress against `docs/action-plan.md`.
 
 **Estimated Total Effort: 7-10 days**
 
-## Phase 3-7
-Not started.
+## Phase 3: Constraint System
+
+**Architecture Design (COMPLETED 2026-01-29):**
+- [x] Created comprehensive architecture document `docs/phase3-constraint-system-architecture.md`
+- 15 constraint types with error functions
+- Constraint graph + DOF analysis
+- Integration with Phase 2 entity system
+- 8-12 day implementation plan (phases 3A-3G)
+
+**Implementation Tasks:**
+- [x] **Phase 3A** (COMPLETED): Extended entity system with 16 constraint types, full constraint data structure
+- [x] **Phase 3B** (COMPLETED): Created lc_constraint.c/h (459 + 124 lines) with 15 creation functions, management API
+- [x] **Phase 3C** (COMPLETED 2026-01-30): Implemented error functions for all 16 constraint types
+  - Added geometry query helpers: get_point_position, get_line_endpoints, get_circle_params
+  - Implemented 15 error computation functions (distance, angle, coincident, parallel, perpendicular, horizontal, vertical, tangent, equal, fix)
+  - Updated lc_constraint_evaluate() to dispatch to appropriate error function
+  - Added comprehensive error tolerance checking (1e-6)
+  - File grew from 459 to 1050 lines (+591 lines)
+  - Library size: 606KB (was 579KB, +27KB)
+  - Test suite extended with 10 comprehensive error evaluation tests
+  - Math validation: All error functions verified with standalone tests
+- [x] **Phase 3D** (COMPLETED 2026-01-30): Constraint graph & DOF analysis
+  - Added graph data structures to libcad_internal.h (lc_constraint_graph_t, node/edge types)
+  - Implemented graph caching system (up to 16 sketches)
+  - Implemented lc_constraint_build_graph() - builds graph from sketch entities
+  - Implemented DOF computation for entity types (line=4, circle=3, rect=4)
+  - Implemented DOF removed computation for constraint types (1 or 2 DOF per constraint)
+  - Implemented graph analysis with node flags (under/fully/over-constrained)
+  - Implemented lc_constraint_get_dof() - returns net DOF for sketch
+  - Implemented lc_constraint_is_fully_constrained() and lc_constraint_is_over_constrained()
+  - Implemented lc_constraint_invalidate_graph() for cache management
+  - File grew from 1050 to 1470 lines (+420 lines)
+  - Header grew from 151 to 178 lines (+27 lines)
+  - Library size: 619KB (was 606KB, +13KB)
+  - Test suite: test_graph.c with 8 DOF analysis scenarios
+- [ ] **Phase 3E** (1 day): Public API integration
+- [ ] **Phase 3F** (1 day): Undo/redo integration
+- [ ] **Phase 3G** (1 day, optional): Constraint visualization
+
+## Phase 4: B-Rep Topology Kernel
+
+**Architecture Design (COMPLETED 2026-01-29):**
+- [x] Created comprehensive architecture document `docs/phase4-brep-kernel-architecture.md` (1077 lines)
+- Complete B-Rep hierarchy (Vertex, Edge, Loop, Face, Shell, Solid)
+- Edge-use pattern for topology representation
+- Geometric primitives (curves, surfaces)
+- Euler operators for manifold validity
+- 12-18 day implementation plan (phases 4A-4G)
+
+**Implementation Tasks (Ready to Begin):**
+- [ ] **Phase 4A** (2-3 days): Geometry system - curves, surfaces, evaluation functions
+- [ ] **Phase 4B** (1-2 days): B-Rep entity types - vertex, edge, loop, face, shell, solid
+- [ ] **Phase 4C** (2-3 days): Primitive construction - box, cylinder, sphere
+- [ ] **Phase 4D** (1-2 days): Topological queries - navigation, adjacency
+- [ ] **Phase 4E** (2-3 days): Tessellation - mesh generation for rendering
+- [ ] **Phase 4F** (1-2 days): Rendering integration - display B-Rep bodies
+- [ ] **Phase 4G** (2-3 days, optional): Euler operators - MVEF, MEV, MEF, etc.
+
+## Phase 5-7
+Not started yet.
 
 ## Build Status
 All changes compile cleanly on Windows (MSVC) with zero errors and zero warnings from libcad code.
