@@ -29,6 +29,10 @@ extern "C" {
 #include <stddef.h>
 #include <cglm/cglm.h>
 
+/* Forward declarations for geometry handles (from lc_geometry.h) */
+typedef uint32_t lc_curve_handle_t;
+typedef uint32_t lc_surface_handle_t;
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -71,14 +75,19 @@ typedef enum lc_entity_type_t
     LC_ENTITY_TYPE_INVALID = 0,
     LC_ENTITY_TYPE_ASSEMBLY,      /* Root or sub-assembly */
     LC_ENTITY_TYPE_SKETCH,        /* 2D sketch plane */
-    LC_ENTITY_TYPE_BODY,          /* 3D solid body */
-    LC_ENTITY_TYPE_FACE,          /* B-Rep face (future) */
-    LC_ENTITY_TYPE_EDGE,          /* B-Rep edge (future) */
-    LC_ENTITY_TYPE_VERTEX,        /* B-Rep vertex (future) */
-    LC_ENTITY_TYPE_CONSTRAINT,    /* 2D constraint (future) */
+    LC_ENTITY_TYPE_BODY,          /* 3D solid body (placeholder, not B-Rep solid) */
+    LC_ENTITY_TYPE_CONSTRAINT,    /* 2D constraint */
     LC_ENTITY_TYPE_GEOMETRY_LINE, /* 2D line in sketch */
     LC_ENTITY_TYPE_GEOMETRY_CIRCLE, /* 2D circle in sketch */
     LC_ENTITY_TYPE_GEOMETRY_RECT,  /* 2D rectangle in sketch */
+    /* B-Rep topology types (Phase 4) */
+    LC_ENTITY_TYPE_VERTEX,        /* B-Rep vertex (3D point) */
+    LC_ENTITY_TYPE_EDGE,          /* B-Rep edge (curve between two vertices) */
+    LC_ENTITY_TYPE_EDGE_USE,      /* B-Rep edge use (edge participation in loop) */
+    LC_ENTITY_TYPE_LOOP,          /* B-Rep loop (closed chain of edges) */
+    LC_ENTITY_TYPE_FACE,          /* B-Rep face (bounded surface) */
+    LC_ENTITY_TYPE_SHELL,         /* B-Rep shell (collection of faces) */
+    LC_ENTITY_TYPE_SOLID,         /* B-Rep solid (volumetric body) */
     LC_ENTITY_TYPE_COUNT
 } lc_entity_type_t;
 
@@ -167,6 +176,110 @@ typedef struct lc_geometry_rect_data_t
     uint32_t color;
 } lc_geometry_rect_data_t;
 
+/* B-Rep Topology Data Structures (Phase 4) */
+
+/* Vertex data attached to LC_ENTITY_TYPE_VERTEX entities.
+ * Represents a point in 3D space. */
+typedef struct lc_vertex_data_t
+{
+    vec3 position;  /* 3D position in world coordinates */
+
+    /* Topology links: use entity tree (parent = solid, siblings = other vertices) */
+    /* Edge list: stored as parent → first_child chain in entity system */
+
+} lc_vertex_data_t;
+
+/* Edge data attached to LC_ENTITY_TYPE_EDGE entities.
+ * Represents a curve between two vertices. */
+typedef struct lc_edge_data_t
+{
+    /* Topology: start and end vertices */
+    lc_entity_handle_t vertex_start;  /* Start vertex */
+    lc_entity_handle_t vertex_end;    /* End vertex */
+
+    /* Geometry: curve definition */
+    lc_curve_handle_t curve;          /* Curve geometry (line, arc, spline) */
+    float u_start;                    /* Curve parameter at start vertex */
+    float u_end;                      /* Curve parameter at end vertex */
+
+    /* Topology links: edge usage records (one per adjacent face) */
+    /* Stored as children: LC_ENTITY_TYPE_EDGE_USE (see below) */
+
+} lc_edge_data_t;
+
+/* Edge use data attached to LC_ENTITY_TYPE_EDGE_USE entities.
+ * Represents an edge's participation in a loop.
+ * Edge uses are children of edge entities.
+ * This allows one edge to be shared by two faces with different orientations. */
+typedef struct lc_edge_use_data_t
+{
+    lc_entity_handle_t edge;          /* Parent edge */
+    lc_entity_handle_t loop;          /* Loop containing this edge use */
+    lc_entity_handle_t next_in_loop;  /* Next edge use in loop */
+    lc_entity_handle_t prev_in_loop;  /* Previous edge use in loop */
+    bool forward;                     /* True if edge direction matches loop direction */
+
+} lc_edge_use_data_t;
+
+/* Loop data attached to LC_ENTITY_TYPE_LOOP entities.
+ * Represents a closed chain of edges forming a face boundary. */
+typedef struct lc_loop_data_t
+{
+    lc_entity_handle_t face;          /* Parent face */
+    bool is_outer;                    /* True if outer loop, false if hole */
+
+    /* Edge use list: stored as parent → first_child chain */
+    /* First edge use: lc_entity_get_first_child(loop_handle) */
+    /* Traverse: edge_use → next_in_loop → ... → back to first */
+
+} lc_loop_data_t;
+
+/* Face data attached to LC_ENTITY_TYPE_FACE entities.
+ * Represents a bounded surface. */
+typedef struct lc_face_data_t
+{
+    /* Geometry: surface definition */
+    lc_surface_handle_t surface;      /* Surface geometry (plane, cylinder, sphere, etc.) */
+
+    /* Topology: loops (one outer, zero or more inner holes) */
+    lc_entity_handle_t outer_loop;    /* Outer boundary loop */
+    /* Inner loops (holes): stored as children after outer loop */
+
+    /* Orientation: surface normal direction */
+    bool forward;                     /* True if surface normal matches face orientation */
+
+    /* Tessellation cache (for rendering) */
+    uint32_t mesh_vertex_count;
+    uint32_t mesh_triangle_count;
+    void *mesh_data;                  /* Triangle mesh (vertices + indices) */
+    bool mesh_dirty;                  /* True if mesh needs regeneration */
+
+} lc_face_data_t;
+
+/* Shell data attached to LC_ENTITY_TYPE_SHELL entities.
+ * Represents a collection of faces forming a closed or open surface. */
+typedef struct lc_shell_data_t
+{
+    bool is_closed;                   /* True if shell is closed (manifold) */
+
+    /* Face list: stored as parent → first_child chain in entity system */
+
+} lc_shell_data_t;
+
+/* Solid data attached to LC_ENTITY_TYPE_SOLID entities.
+ * Represents a volumetric solid body. */
+typedef struct lc_solid_data_t
+{
+    /* Shell list: stored as parent → first_child chain */
+    /* First shell is outer shell; subsequent shells are voids (holes) */
+
+    /* Bounding box (for culling and selection) */
+    vec3 bbox_min;
+    vec3 bbox_max;
+    bool bbox_dirty;                  /* True if bbox needs recalculation */
+
+} lc_solid_data_t;
+
 /* Entity storage slot.
  * Uses discriminated union pattern for type-specific data. */
 typedef struct lc_entity_slot_t
@@ -190,6 +303,14 @@ typedef struct lc_entity_slot_t
         lc_geometry_line_data_t *geometry_line;
         lc_geometry_circle_data_t *geometry_circle;
         lc_geometry_rect_data_t *geometry_rect;
+        /* B-Rep topology data (Phase 4) */
+        lc_vertex_data_t *vertex;
+        lc_edge_data_t *edge;
+        lc_edge_use_data_t *edge_use;
+        lc_loop_data_t *loop;
+        lc_face_data_t *face;
+        lc_shell_data_t *shell;
+        lc_solid_data_t *solid;
         void *generic;            /* For future entity types */
     } data;
 

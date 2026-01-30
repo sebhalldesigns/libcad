@@ -126,9 +126,40 @@ Tracks progress against `docs/action-plan.md`.
   - Header grew from 151 to 178 lines (+27 lines)
   - Library size: 619KB (was 606KB, +13KB)
   - Test suite: test_graph.c with 8 DOF analysis scenarios
-- [ ] **Phase 3E** (1 day): Public API integration
-- [ ] **Phase 3F** (1 day): Undo/redo integration
+- [x] **Phase 3E** (COMPLETED 2026-01-30): Public API integration
+  - Added 24 constraint functions to public API (libcad.h)
+  - Implemented wrapper functions in libcad.c
+  - Constraint creation: 15 functions (distance, angle, parallel, coincident, tangent, equal, fix)
+  - Constraint management: 5 functions (delete, set/get value, get error, is satisfied)
+  - Sketch analysis: 4 functions (get DOF, is fully/over constrained, get count)
+  - All wrappers convert public handles to internal handles
+  - libcad.c grew from 377 to 658 lines (+281 lines)
+  - libcad.h grew from 114 to 173 lines (+59 lines)
+  - Library size: 638KB (was 619KB, +19KB)
+- [x] **Phase 3F** (COMPLETED 2026-01-30): Undo/redo integration
+  - Added LC_PROPERTY_CONSTRAINT_VALUE to undo property types
+  - Entity creation now records CREATE_ENTITY undo commands
+  - Entity deletion now records DELETE_ENTITY undo commands
+  - Constraint value modification records MODIFY_PROPERTY commands
+  - Added lc_constraint_invalidate_all_graphs() for bulk invalidation
+  - Undo/redo automatically invalidate all constraint graphs
+  - Graph invalidation on entity/constraint destruction
+  - lc_entity.c: 834 → 900 lines (+66 lines)
+  - lc_undo.c: 669 → 676 lines (+7 lines)
+  - lc_constraint.c: 1470 → 1485 lines (+15 lines)
+  - libcad.c: 658 → 678 lines (+20 lines)
+  - Library size: 642KB (was 638KB, +4KB)
 - [ ] **Phase 3G** (1 day, optional): Constraint visualization
+
+**Completed 2026-01-30:**
+- ✓ Phase 4A: Geometry System - Complete curve and surface implementation
+- ✓ 3 curve types (line, circle, ellipse) with full parameterization
+- ✓ 5 surface types (plane, cylinder, sphere, cone, torus) with full parameterization
+- ✓ Evaluation functions for position, tangent, and normals
+- ✓ Curve length computation (exact for line/circle, approximate for ellipse)
+- ✓ Geometry registry with 65K capacity for curves and surfaces
+- ✓ Test suite with 9 comprehensive tests covering all types
+- ✓ Added to CMakeLists.txt for both native and Emscripten builds
 
 ## Phase 4: B-Rep Topology Kernel
 
@@ -140,8 +171,18 @@ Tracks progress against `docs/action-plan.md`.
 - Euler operators for manifold validity
 - 12-18 day implementation plan (phases 4A-4G)
 
-**Implementation Tasks (Ready to Begin):**
-- [ ] **Phase 4A** (2-3 days): Geometry system - curves, surfaces, evaluation functions
+**Implementation Tasks:**
+- [x] **Phase 4A** (COMPLETED 2026-01-30): Geometry system - curves, surfaces, evaluation functions
+  - Created lc_geometry.h (304 lines) - Type definitions for curves and surfaces
+  - Created lc_geometry.c (811 lines) - Full implementation with registry and evaluation
+  - Geometry registry: 65,536 curves + 65,536 surfaces capacity
+  - Curve types: line, circle, ellipse (with evaluation and tangent computation)
+  - Surface types: plane, cylinder, sphere, cone, torus (with evaluation and normal computation)
+  - Evaluation functions: eval_curve, eval_curve_tangent, eval_surface, eval_surface_normal
+  - Utility functions: curve_length (exact for line/circle, approximate for ellipse)
+  - Projection/intersection functions stubbed for future implementation
+  - Test suite: test_geometry.c with 9 comprehensive tests (8 geometric types + large scale)
+  - Build verified: All tests pass, library size 363KB (Release build)
 - [ ] **Phase 4B** (1-2 days): B-Rep entity types - vertex, edge, loop, face, shell, solid
 - [ ] **Phase 4C** (2-3 days): Primitive construction - box, cylinder, sphere
 - [ ] **Phase 4D** (1-2 days): Topological queries - navigation, adjacency

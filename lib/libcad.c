@@ -34,6 +34,7 @@
 #include "lc_scene.h"
 #include "lc_entity.h"
 #include "lc_constraint.h"
+#include "lc_undo.h"
 #include "libcad_internal.h"
 
 /***************************************************************
@@ -374,6 +375,296 @@ bool cad_can_redo(cad_ctx_t ctx)
     (void)ctx;
     printf("STUB: cad_can_redo\n");
     return false;
+}
+
+/* ---- Constraint System (Phase 3) ---- */
+
+cad_entity_t cad_constraint_distance_point_point(cad_ctx_t ctx,
+                                                  cad_entity_t point1,
+                                                  cad_entity_t point2,
+                                                  float distance)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)point1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)point2;
+    lc_entity_handle_t constraint = lc_constraint_create_distance_point_point(h1, h2, distance);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_distance_point_line(cad_ctx_t ctx,
+                                                 cad_entity_t point,
+                                                 cad_entity_t line,
+                                                 float distance)
+{
+    (void)ctx;
+    lc_entity_handle_t h_point = (lc_entity_handle_t)point;
+    lc_entity_handle_t h_line = (lc_entity_handle_t)line;
+    lc_entity_handle_t constraint = lc_constraint_create_distance_point_line(h_point, h_line, distance);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_angle_line_line(cad_ctx_t ctx,
+                                             cad_entity_t line1,
+                                             cad_entity_t line2,
+                                             float angle_radians)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)line1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)line2;
+    lc_entity_handle_t constraint = lc_constraint_create_angle_line_line(h1, h2, angle_radians);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_parallel(cad_ctx_t ctx,
+                                      cad_entity_t line1,
+                                      cad_entity_t line2)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)line1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)line2;
+    lc_entity_handle_t constraint = lc_constraint_create_parallel(h1, h2);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_perpendicular(cad_ctx_t ctx,
+                                           cad_entity_t line1,
+                                           cad_entity_t line2)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)line1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)line2;
+    lc_entity_handle_t constraint = lc_constraint_create_perpendicular(h1, h2);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_horizontal(cad_ctx_t ctx, cad_entity_t line)
+{
+    (void)ctx;
+    lc_entity_handle_t h_line = (lc_entity_handle_t)line;
+    lc_entity_handle_t constraint = lc_constraint_create_horizontal(h_line);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_vertical(cad_ctx_t ctx, cad_entity_t line)
+{
+    (void)ctx;
+    lc_entity_handle_t h_line = (lc_entity_handle_t)line;
+    lc_entity_handle_t constraint = lc_constraint_create_vertical(h_line);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_coincident_point_point(cad_ctx_t ctx,
+                                                    cad_entity_t point1,
+                                                    cad_entity_t point2)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)point1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)point2;
+    lc_entity_handle_t constraint = lc_constraint_create_coincident_point_point(h1, h2);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_coincident_point_line(cad_ctx_t ctx,
+                                                   cad_entity_t point,
+                                                   cad_entity_t line)
+{
+    (void)ctx;
+    lc_entity_handle_t h_point = (lc_entity_handle_t)point;
+    lc_entity_handle_t h_line = (lc_entity_handle_t)line;
+    lc_entity_handle_t constraint = lc_constraint_create_coincident_point_line(h_point, h_line);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_coincident_point_circle(cad_ctx_t ctx,
+                                                     cad_entity_t point,
+                                                     cad_entity_t circle)
+{
+    (void)ctx;
+    lc_entity_handle_t h_point = (lc_entity_handle_t)point;
+    lc_entity_handle_t h_circle = (lc_entity_handle_t)circle;
+    lc_entity_handle_t constraint = lc_constraint_create_coincident_point_circle(h_point, h_circle);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_tangent_line_circle(cad_ctx_t ctx,
+                                                 cad_entity_t line,
+                                                 cad_entity_t circle)
+{
+    (void)ctx;
+    lc_entity_handle_t h_line = (lc_entity_handle_t)line;
+    lc_entity_handle_t h_circle = (lc_entity_handle_t)circle;
+    lc_entity_handle_t constraint = lc_constraint_create_tangent_line_circle(h_line, h_circle);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_tangent_circle_circle(cad_ctx_t ctx,
+                                                   cad_entity_t circle1,
+                                                   cad_entity_t circle2)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)circle1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)circle2;
+    lc_entity_handle_t constraint = lc_constraint_create_tangent_circle_circle(h1, h2);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_equal_length(cad_ctx_t ctx,
+                                          cad_entity_t line1,
+                                          cad_entity_t line2)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)line1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)line2;
+    lc_entity_handle_t constraint = lc_constraint_create_equal_length(h1, h2);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_equal_radius(cad_ctx_t ctx,
+                                          cad_entity_t circle1,
+                                          cad_entity_t circle2)
+{
+    (void)ctx;
+    lc_entity_handle_t h1 = (lc_entity_handle_t)circle1;
+    lc_entity_handle_t h2 = (lc_entity_handle_t)circle2;
+    lc_entity_handle_t constraint = lc_constraint_create_equal_radius(h1, h2);
+    return (cad_entity_t)constraint;
+}
+
+cad_entity_t cad_constraint_fix_point(cad_ctx_t ctx, cad_entity_t point)
+{
+    (void)ctx;
+    lc_entity_handle_t h_point = (lc_entity_handle_t)point;
+    lc_entity_handle_t constraint = lc_constraint_create_fix_point(h_point);
+    return (cad_entity_t)constraint;
+}
+
+bool cad_constraint_delete(cad_ctx_t ctx, cad_entity_t constraint)
+{
+    (void)ctx;
+    lc_entity_handle_t h_constraint = (lc_entity_handle_t)constraint;
+    return lc_constraint_destroy(h_constraint);
+}
+
+bool cad_constraint_set_value(cad_ctx_t ctx, cad_entity_t constraint, float value)
+{
+    (void)ctx;
+    lc_entity_handle_t h_constraint = (lc_entity_handle_t)constraint;
+
+    /* Get constraint data */
+    lc_constraint_data_t *data = (lc_constraint_data_t*)lc_entity_get_data(h_constraint);
+    if (data == NULL)
+    {
+        return false;
+    }
+
+    /* Record undo command */
+    lc_undo_command_t cmd;
+    cmd.type = LC_COMMAND_MODIFY_PROPERTY;
+    cmd.entity = h_constraint;
+    cmd.data.modify_property.property_id = LC_PROPERTY_CONSTRAINT_VALUE;
+
+    /* Serialize old and new values (just store float as bytes) */
+    memcpy(cmd.data.modify_property.old_value, &data->value, sizeof(float));
+    memcpy(cmd.data.modify_property.new_value, &value, sizeof(float));
+    memset(cmd.data.modify_property.old_value + sizeof(float), 0,
+           LC_PROPERTY_VALUE_MAX_SIZE - sizeof(float));
+    memset(cmd.data.modify_property.new_value + sizeof(float), 0,
+           LC_PROPERTY_VALUE_MAX_SIZE - sizeof(float));
+
+    lc_undo_record_command(&cmd);
+
+    /* Update value */
+    data->value = value;
+
+    /* Invalidate graph (constraint parameters changed) */
+    lc_entity_handle_t parent = lc_entity_get_parent(h_constraint);
+    if (parent != LC_ENTITY_INVALID && lc_entity_get_type(parent) == LC_ENTITY_TYPE_SKETCH)
+    {
+        lc_constraint_invalidate_graph(parent);
+    }
+
+    return true;
+}
+
+float cad_constraint_get_value(cad_ctx_t ctx, cad_entity_t constraint)
+{
+    (void)ctx;
+    lc_entity_handle_t h_constraint = (lc_entity_handle_t)constraint;
+
+    /* Get constraint data */
+    lc_constraint_data_t *data = (lc_constraint_data_t*)lc_entity_get_data(h_constraint);
+    if (data == NULL)
+    {
+        return 0.0f;
+    }
+
+    return data->value;
+}
+
+float cad_constraint_get_error(cad_ctx_t ctx, cad_entity_t constraint)
+{
+    (void)ctx;
+    lc_entity_handle_t h_constraint = (lc_entity_handle_t)constraint;
+    return lc_constraint_get_error(h_constraint);
+}
+
+bool cad_constraint_is_satisfied(cad_ctx_t ctx, cad_entity_t constraint)
+{
+    (void)ctx;
+    lc_entity_handle_t h_constraint = (lc_entity_handle_t)constraint;
+
+    /* Evaluate constraint to update satisfaction flag */
+    lc_constraint_evaluate(h_constraint);
+
+    /* Get constraint data */
+    lc_constraint_data_t *data = (lc_constraint_data_t*)lc_entity_get_data(h_constraint);
+    if (data == NULL)
+    {
+        return false;
+    }
+
+    return (data->flags & LC_CONSTRAINT_FLAG_SATISFIED) != 0;
+}
+
+int cad_sketch_get_dof(cad_ctx_t ctx, cad_sketch_t sketch)
+{
+    (void)ctx;
+    lc_entity_handle_t h_sketch = (lc_entity_handle_t)sketch;
+    return lc_constraint_get_dof(h_sketch);
+}
+
+bool cad_sketch_is_fully_constrained(cad_ctx_t ctx, cad_sketch_t sketch)
+{
+    (void)ctx;
+    lc_entity_handle_t h_sketch = (lc_entity_handle_t)sketch;
+    return lc_constraint_is_fully_constrained(h_sketch);
+}
+
+bool cad_sketch_is_over_constrained(cad_ctx_t ctx, cad_sketch_t sketch)
+{
+    (void)ctx;
+    lc_entity_handle_t h_sketch = (lc_entity_handle_t)sketch;
+    return lc_constraint_is_over_constrained(h_sketch);
+}
+
+int cad_sketch_get_constraint_count(cad_ctx_t ctx, cad_sketch_t sketch)
+{
+    (void)ctx;
+    lc_entity_handle_t h_sketch = (lc_entity_handle_t)sketch;
+
+    /* Count constraint entities in sketch */
+    int count = 0;
+    lc_entity_handle_t child = lc_entity_get_first_child(h_sketch);
+    while (child != LC_ENTITY_INVALID)
+    {
+        if (lc_entity_get_type(child) == LC_ENTITY_TYPE_CONSTRAINT)
+        {
+            count++;
+        }
+        child = lc_entity_get_next_sibling(child);
+    }
+
+    return count;
 }
 
 /***************************************************************

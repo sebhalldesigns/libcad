@@ -634,6 +634,21 @@ void lc_constraint_invalidate_graph(lc_entity_handle_t sketch)
     }
 }
 
+void lc_constraint_invalidate_all_graphs(void)
+{
+    if (!g_initialized)
+    {
+        return;
+    }
+
+    /* Invalidate all cached graphs */
+    int i;
+    for (i = 0; i < g_graph_count; i++)
+    {
+        g_graphs[i].valid = false;
+    }
+}
+
 int lc_constraint_get_dof(lc_entity_handle_t sketch)
 {
     if (!g_initialized)

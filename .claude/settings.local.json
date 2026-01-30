@@ -14,7 +14,9 @@
       "Bash(\"C:\\\\Users\\\\sebam\\\\lunarcad\\\\libcad\\\\build\\\\Debug\\\\test_constraint.exe\")",
       "Bash(cmd.exe /c \"cd C:\\\\Users\\\\sebam\\\\lunarcad\\\\libcad\\\\build\\\\Debug && test_constraint.exe\")",
       "Bash(gcc:*)",
-      "Bash(./test_error_math.exe:*)"
+      "Bash(./test_error_math.exe:*)",
+      "Bash(./test_geometry.exe:*)",
+      "Bash(./test_brep_entities.exe:*)"
     ]
   }
 }

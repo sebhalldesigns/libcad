@@ -155,6 +155,10 @@ bool lc_constraint_build_graph(lc_entity_handle_t sketch);
  * Forces rebuild on next call to lc_constraint_build_graph(). */
 void lc_constraint_invalidate_graph(lc_entity_handle_t sketch);
 
+/* Invalidate all cached constraint graphs.
+ * Called after undo/redo to ensure all graphs are rebuilt. */
+void lc_constraint_invalidate_all_graphs(void);
+
 /* Get degrees of freedom analysis for a sketch.
  * Returns total unconstrained DOF:
  *   > 0: under-constrained (needs more constraints)

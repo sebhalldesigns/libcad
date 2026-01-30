@@ -22,6 +22,7 @@
 #include "lc_undo.h"
 #include "lc_entity.h"
 #include "lc_document.h"
+#include "lc_constraint.h"
 #include "libcad_internal.h"
 #include <stdlib.h>
 #include <string.h>
@@ -294,6 +295,9 @@ bool lc_undo_perform(void)
     /* Update redo index */
     g_undo_stack.redo_index = g_undo_stack.undo_index + 1;
 
+    /* Invalidate all constraint graphs (entity/constraint state may have changed) */
+    lc_constraint_invalidate_all_graphs();
+
     return success;
 }
 
@@ -354,6 +358,9 @@ bool lc_redo_perform(void)
 
     /* Update undo index */
     g_undo_stack.undo_index = g_undo_stack.redo_index - 1;
+
+    /* Invalidate all constraint graphs (entity/constraint state may have changed) */
+    lc_constraint_invalidate_all_graphs();
 
     return success;
 }

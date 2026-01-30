@@ -64,6 +64,7 @@ typedef enum lc_property_id_t
     LC_PROPERTY_LAYER,
     LC_PROPERTY_POSITION,  /* For sketch origin, body transform, etc. */
     LC_PROPERTY_COLOR,
+    LC_PROPERTY_CONSTRAINT_VALUE,  /* For constraint distance/angle parameters */
 } lc_property_id_t;
 
 /* Undo command stores enough information to reverse an operation.

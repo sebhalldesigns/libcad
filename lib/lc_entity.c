@@ -18,6 +18,8 @@
 ***************************************************************/
 
 #include "lc_entity.h"
+#include "lc_undo.h"
+#include "lc_constraint.h"
 #include "libcad_internal.h"
 #include <stdlib.h>
 #include <string.h>
@@ -163,6 +165,13 @@ lc_entity_handle_t lc_entity_create(lc_entity_type_t type)
 
     g_registry.slot_count++;
 
+    /* Record undo command for entity creation */
+    lc_undo_command_t cmd;
+    cmd.type = LC_COMMAND_CREATE_ENTITY;
+    cmd.entity = handle;
+    cmd.data.create.snapshot = *slot;  /* Snapshot current state */
+    lc_undo_record_command(&cmd);
+
     return handle;
 }
 
@@ -177,6 +186,26 @@ bool lc_entity_destroy(lc_entity_handle_t handle)
     if (slot == NULL)
     {
         return false;
+    }
+
+    /* Record undo command before destroying (need snapshot of current state) */
+    lc_undo_command_t cmd;
+    cmd.type = LC_COMMAND_DELETE_ENTITY;
+    cmd.entity = handle;
+    cmd.data.delete_entity.snapshot = *slot;  /* Snapshot current state */
+    lc_undo_record_command(&cmd);
+
+    /* Invalidate graph if this is a constraint or geometry entity in a sketch */
+    lc_entity_handle_t parent = slot->parent;
+    if (parent != LC_ENTITY_INVALID && lc_entity_get_type(parent) == LC_ENTITY_TYPE_SKETCH)
+    {
+        if (slot->type == LC_ENTITY_TYPE_CONSTRAINT ||
+            slot->type == LC_ENTITY_TYPE_GEOMETRY_LINE ||
+            slot->type == LC_ENTITY_TYPE_GEOMETRY_CIRCLE ||
+            slot->type == LC_ENTITY_TYPE_GEOMETRY_RECT)
+        {
+            lc_constraint_invalidate_graph(parent);
+        }
     }
 
     /* Call user data destructor if present */
@@ -322,6 +351,21 @@ void* lc_entity_get_data(lc_entity_handle_t handle)
             return slot->data.geometry_circle;
         case LC_ENTITY_TYPE_GEOMETRY_RECT:
             return slot->data.geometry_rect;
+        /* B-Rep topology types (Phase 4) */
+        case LC_ENTITY_TYPE_VERTEX:
+            return slot->data.vertex;
+        case LC_ENTITY_TYPE_EDGE:
+            return slot->data.edge;
+        case LC_ENTITY_TYPE_EDGE_USE:
+            return slot->data.edge_use;
+        case LC_ENTITY_TYPE_LOOP:
+            return slot->data.loop;
+        case LC_ENTITY_TYPE_FACE:
+            return slot->data.face;
+        case LC_ENTITY_TYPE_SHELL:
+            return slot->data.shell;
+        case LC_ENTITY_TYPE_SOLID:
+            return slot->data.solid;
         default:
             return slot->data.generic;
     }
@@ -355,6 +399,28 @@ bool lc_entity_set_data(lc_entity_handle_t handle, void *data)
             break;
         case LC_ENTITY_TYPE_GEOMETRY_RECT:
             slot->data.geometry_rect = (lc_geometry_rect_data_t*)data;
+            break;
+        /* B-Rep topology types (Phase 4) */
+        case LC_ENTITY_TYPE_VERTEX:
+            slot->data.vertex = (lc_vertex_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_EDGE:
+            slot->data.edge = (lc_edge_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_EDGE_USE:
+            slot->data.edge_use = (lc_edge_use_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_LOOP:
+            slot->data.loop = (lc_loop_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_FACE:
+            slot->data.face = (lc_face_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_SHELL:
+            slot->data.shell = (lc_shell_data_t*)data;
+            break;
+        case LC_ENTITY_TYPE_SOLID:
+            slot->data.solid = (lc_solid_data_t*)data;
             break;
         default:
             slot->data.generic = data;
@@ -861,6 +927,68 @@ static void lc_entity_free_data(lc_entity_slot_t *slot)
             {
                 free(slot->data.geometry_rect);
                 slot->data.geometry_rect = NULL;
+            }
+            break;
+
+        /* B-Rep topology types (Phase 4) */
+        case LC_ENTITY_TYPE_VERTEX:
+            if (slot->data.vertex != NULL)
+            {
+                free(slot->data.vertex);
+                slot->data.vertex = NULL;
+            }
+            break;
+
+        case LC_ENTITY_TYPE_EDGE:
+            if (slot->data.edge != NULL)
+            {
+                free(slot->data.edge);
+                slot->data.edge = NULL;
+            }
+            break;
+
+        case LC_ENTITY_TYPE_EDGE_USE:
+            if (slot->data.edge_use != NULL)
+            {
+                free(slot->data.edge_use);
+                slot->data.edge_use = NULL;
+            }
+            break;
+
+        case LC_ENTITY_TYPE_LOOP:
+            if (slot->data.loop != NULL)
+            {
+                free(slot->data.loop);
+                slot->data.loop = NULL;
+            }
+            break;
+
+        case LC_ENTITY_TYPE_FACE:
+            if (slot->data.face != NULL)
+            {
+                /* Free tessellation mesh data if present */
+                if (slot->data.face->mesh_data != NULL)
+                {
+                    free(slot->data.face->mesh_data);
+                }
+                free(slot->data.face);
+                slot->data.face = NULL;
+            }
+            break;
+
+        case LC_ENTITY_TYPE_SHELL:
+            if (slot->data.shell != NULL)
+            {
+                free(slot->data.shell);
+                slot->data.shell = NULL;
+            }
+            break;
+
+        case LC_ENTITY_TYPE_SOLID:
+            if (slot->data.solid != NULL)
+            {
+                free(slot->data.solid);
+                slot->data.solid = NULL;
             }
             break;
 
