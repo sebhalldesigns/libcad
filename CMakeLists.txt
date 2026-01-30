@@ -69,6 +69,22 @@ if (NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_LIST_DIR}/include
     )
 
+    # B-Rep tessellation test executable
+    add_executable(test_tessellate test_tessellate.c)
+    target_link_libraries(test_tessellate PRIVATE libcad)
+    target_include_directories(test_tessellate PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
+    # B-Rep primitives test executable
+    add_executable(test_primitives test_primitives.c)
+    target_link_libraries(test_primitives PRIVATE libcad)
+    target_include_directories(test_primitives PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
     add_library(libcad STATIC
         lib/libcad.c
         lib/lc_draw.c
@@ -82,6 +98,7 @@ if (NOT EMSCRIPTEN)
         lib/lc_geometry.c
         lib/lc_brep.c
         lib/lc_topology.c
+        lib/lc_tessellate.c
     )
 
     if (WIN32)
@@ -140,6 +157,7 @@ else()
         lib/lc_geometry.c
         lib/lc_brep.c
         lib/lc_topology.c
+        lib/lc_tessellate.c
     )
 
     set(PLATFORM_LIBS

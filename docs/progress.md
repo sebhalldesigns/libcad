@@ -208,7 +208,24 @@ Tracks progress against `docs/action-plan.md`.
   - Bounding box: compute_bbox (walks all unique vertices)
   - Test suite: test_brep.c with 7 tests (creation, traversal, bbox, validation, destroy, edge sharing, multiple boxes)
   - All 7 tests pass: V=8, E=12, F=6, Euler=2, correct bbox, edge adjacency=2
-- [ ] **Phase 4E** (2-3 days): Tessellation - mesh generation for rendering
+- [x] **Phase 4E** (COMPLETED 2026-01-30): Tessellation - mesh generation for rendering
+  - Created lc_tessellate.h (90 lines) - Tessellation API with mesh types and functions
+  - Created lc_tessellate.c (457 lines) - Full tessellation implementation
+  - Mesh vertex structure: position[3] + normal[3]
+  - Mesh structure: vertices array + indices array
+  - Face tessellation: tessellate_face() with mesh caching in face_data->mesh_data
+  - Solid tessellation: tessellate_solid() traverses all faces and tessellates each
+  - Planar face support: ear-clipping triangulation (fan from first vertex for convex faces)
+  - Face normal computation: cross product of first two edges, respects face->forward flag
+  - Mesh management: get_mesh(), invalidate(), free_mesh()
+  - Mesh caching: stored in lc_face_data_t->mesh_data with dirty flag
+  - Test suite: test_tessellate.c (379 lines) with 6 comprehensive tests
+  - All 6 tests pass: box faces have 4 vertices + 2 triangles each (12 total)
+  - Face normals verified: unit length, axis-aligned for box faces
+  - Mesh invalidation and cleanup verified
+  - Vertex positions verified within bounding box
+  - Added to CMakeLists.txt for both native and Emscripten builds
+  - Build verified: libcad.lib now 425KB, all existing tests still pass
 - [ ] **Phase 4F** (1-2 days): Rendering integration - display B-Rep bodies
 - [ ] **Phase 4G** (2-3 days, optional): Euler operators - MVEF, MEV, MEF, etc.
 

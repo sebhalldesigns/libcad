@@ -30,9 +30,13 @@
 
 /* MARK: CONSTANTS & MACROS */
 
-#define MAX_EDGES 64
-#define MAX_VERTICES 64
-#define MAX_ENTITIES 256
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#define MAX_EDGES 2048
+#define MAX_VERTICES 1024
+#define MAX_ENTITIES 8192
 
 /* MARK: STATIC VARIABLES */
 
@@ -256,23 +260,800 @@ lc_entity_handle_t lc_brep_create_box(vec3 origin, vec3 dimensions)
 
 lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float radius, float height, int segments)
 {
-    (void)base_center;
-    (void)axis;
-    (void)radius;
-    (void)height;
-    (void)segments;
-    printf("[lc_brep] lc_brep_create_cylinder() not yet implemented\n");
-    return LC_ENTITY_INVALID;
+    if (!g_brep_initialized)
+    {
+        printf("[lc_brep] ERROR: lc_brep_create_cylinder() called before lc_brep_init()\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Validate parameters */
+    if (segments < 3)
+    {
+        printf("[lc_brep] ERROR: Cylinder segments must be >= 3 (got %d)\n", segments);
+        return LC_ENTITY_INVALID;
+    }
+    if (radius <= 0.0f)
+    {
+        printf("[lc_brep] ERROR: Cylinder radius must be > 0 (got %f)\n", radius);
+        return LC_ENTITY_INVALID;
+    }
+    if (height <= 0.0f)
+    {
+        printf("[lc_brep] ERROR: Cylinder height must be > 0 (got %f)\n", height);
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Create solid entity */
+    lc_entity_handle_t solid = create_solid_entity();
+    if (solid == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create solid entity\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Create shell entity */
+    lc_entity_handle_t shell = create_shell(true);
+    if (shell == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create shell entity\n");
+        lc_entity_destroy(solid);
+        return LC_ENTITY_INVALID;
+    }
+    lc_entity_add_child(solid, shell);
+
+    /* Normalize the axis */
+    vec3 axis_normalized;
+    glm_vec3_copy(axis, axis_normalized);
+    glm_vec3_normalize(axis_normalized);
+
+    /* Compute two perpendicular vectors to the axis */
+    vec3 up = {0.0f, 0.0f, 1.0f};
+    if (fabsf(glm_vec3_dot(axis_normalized, up)) > 0.99f)
+    {
+        glm_vec3_copy((vec3){1.0f, 0.0f, 0.0f}, up);
+    }
+    vec3 u_axis, v_axis;
+    glm_vec3_cross(axis_normalized, up, u_axis);
+    glm_vec3_normalize(u_axis);
+    glm_vec3_cross(axis_normalized, u_axis, v_axis);
+    glm_vec3_normalize(v_axis);
+
+    /* Compute top center */
+    vec3 top_center;
+    glm_vec3_scale(axis_normalized, height, top_center);
+    glm_vec3_add(base_center, top_center, top_center);
+
+    /* Create vertices: bottom ring + top ring */
+    lc_entity_handle_t vertices[MAX_VERTICES];
+    int vertex_count = 0;
+    int i;
+
+    /* Bottom ring vertices */
+    for (i = 0; i < segments; i++)
+    {
+        float theta = 2.0f * M_PI * i / segments;
+        float cos_theta = cosf(theta);
+        float sin_theta = sinf(theta);
+
+        vec3 offset;
+        vec3 u_scaled, v_scaled;
+        glm_vec3_scale(u_axis, radius * cos_theta, u_scaled);
+        glm_vec3_scale(v_axis, radius * sin_theta, v_scaled);
+        glm_vec3_add(u_scaled, v_scaled, offset);
+
+        vec3 position;
+        glm_vec3_add(base_center, offset, position);
+
+        vertices[vertex_count] = create_vertex(position);
+        if (vertices[vertex_count] == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create bottom vertex %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+        vertex_count++;
+    }
+
+    /* Top ring vertices */
+    for (i = 0; i < segments; i++)
+    {
+        float theta = 2.0f * M_PI * i / segments;
+        float cos_theta = cosf(theta);
+        float sin_theta = sinf(theta);
+
+        vec3 offset;
+        vec3 u_scaled, v_scaled;
+        glm_vec3_scale(u_axis, radius * cos_theta, u_scaled);
+        glm_vec3_scale(v_axis, radius * sin_theta, v_scaled);
+        glm_vec3_add(u_scaled, v_scaled, offset);
+
+        vec3 position;
+        glm_vec3_add(top_center, offset, position);
+
+        vertices[vertex_count] = create_vertex(position);
+        if (vertices[vertex_count] == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create top vertex %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+        vertex_count++;
+    }
+
+    /* Edge storage for sharing between faces */
+    lc_entity_handle_t edges[MAX_EDGES];
+    int edge_count = 0;
+
+    /* Create side faces (one quad per segment) */
+    int seg;
+    for (seg = 0; seg < segments; seg++)
+    {
+        int bottom_i = seg;
+        int bottom_j = (seg + 1) % segments;
+        int top_i = segments + seg;
+        int top_j = segments + ((seg + 1) % segments);
+
+        /* Face vertices in CCW order from outside: bottom[i], bottom[j], top[j], top[i] */
+        int vidx[4] = {bottom_i, bottom_j, top_j, top_i};
+
+        /* Create plane surface for this face */
+        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
+        lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
+        lc_vertex_data_t *v3_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[3]]);
+
+        vec3 edge1, edge2;
+        glm_vec3_sub(v1_data->position, v0_data->position, edge1);
+        glm_vec3_normalize(edge1);
+        glm_vec3_sub(v3_data->position, v0_data->position, edge2);
+        glm_vec3_normalize(edge2);
+
+        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
+        if (surface == LC_SURFACE_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create plane surface for side face %d\n", seg);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        /* Create face entity */
+        lc_entity_handle_t face = create_face(surface, true);
+        if (face == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create side face entity %d\n", seg);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        /* Create loop entity */
+        lc_entity_handle_t loop = create_loop(face, true);
+        if (loop == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create loop for side face %d\n", seg);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_add_child(face, loop);
+
+        lc_face_data_t *face_data = (lc_face_data_t *)lc_entity_get_data(face);
+        if (face_data)
+        {
+            face_data->outer_loop = loop;
+        }
+
+        /* Create edge uses for this face (4 edges) */
+        lc_entity_handle_t edge_uses[4];
+        int edge_idx;
+        for (edge_idx = 0; edge_idx < 4; edge_idx++)
+        {
+            int v_start_idx = vidx[edge_idx];
+            int v_end_idx = vidx[(edge_idx + 1) % 4];
+            lc_entity_handle_t v_start = vertices[v_start_idx];
+            lc_entity_handle_t v_end = vertices[v_end_idx];
+
+            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            if (edge == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to find/create edge for side face %d edge %d\n", seg, edge_idx);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edge);
+            bool forward = (edge_data->vertex_start == v_start);
+
+            lc_entity_handle_t edge_use = create_edge_use(edge, loop, forward);
+            if (edge_use == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create edge use\n");
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            edge_uses[edge_idx] = edge_use;
+        }
+
+        link_edge_uses_in_loop(edge_uses, 4);
+        lc_entity_add_child(shell, face);
+    }
+
+    /* Create bottom cap face (reversed winding for outward normal pointing down) */
+    {
+        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[0]);
+
+        vec3 normal;
+        glm_vec3_negate_to(axis_normalized, normal);
+
+        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, u_axis, v_axis);
+        if (surface == LC_SURFACE_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create plane surface for bottom cap\n");
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t face = create_face(surface, true);
+        if (face == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create bottom cap face\n");
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t loop = create_loop(face, true);
+        if (loop == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create loop for bottom cap\n");
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_add_child(face, loop);
+
+        lc_face_data_t *face_data = (lc_face_data_t *)lc_entity_get_data(face);
+        if (face_data)
+        {
+            face_data->outer_loop = loop;
+        }
+
+        /* Create edge uses for bottom cap (reversed order) */
+        lc_entity_handle_t edge_uses[MAX_EDGES];
+        for (i = 0; i < segments; i++)
+        {
+            int v_start_idx = (segments - i) % segments;
+            int v_end_idx = (segments - i - 1 + segments) % segments;
+            lc_entity_handle_t v_start = vertices[v_start_idx];
+            lc_entity_handle_t v_end = vertices[v_end_idx];
+
+            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            if (edge == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to find/create edge for bottom cap edge %d\n", i);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edge);
+            bool forward = (edge_data->vertex_start == v_start);
+
+            lc_entity_handle_t edge_use = create_edge_use(edge, loop, forward);
+            if (edge_use == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create edge use for bottom cap\n");
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            edge_uses[i] = edge_use;
+        }
+
+        link_edge_uses_in_loop(edge_uses, segments);
+        lc_entity_add_child(shell, face);
+    }
+
+    /* Create top cap face */
+    {
+        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[segments]);
+
+        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, u_axis, v_axis);
+        if (surface == LC_SURFACE_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create plane surface for top cap\n");
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t face = create_face(surface, true);
+        if (face == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create top cap face\n");
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t loop = create_loop(face, true);
+        if (loop == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create loop for top cap\n");
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_add_child(face, loop);
+
+        lc_face_data_t *face_data = (lc_face_data_t *)lc_entity_get_data(face);
+        if (face_data)
+        {
+            face_data->outer_loop = loop;
+        }
+
+        /* Create edge uses for top cap */
+        lc_entity_handle_t edge_uses[MAX_EDGES];
+        for (i = 0; i < segments; i++)
+        {
+            int v_start_idx = segments + i;
+            int v_end_idx = segments + ((i + 1) % segments);
+            lc_entity_handle_t v_start = vertices[v_start_idx];
+            lc_entity_handle_t v_end = vertices[v_end_idx];
+
+            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            if (edge == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to find/create edge for top cap edge %d\n", i);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edge);
+            bool forward = (edge_data->vertex_start == v_start);
+
+            lc_entity_handle_t edge_use = create_edge_use(edge, loop, forward);
+            if (edge_use == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create edge use for top cap\n");
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            edge_uses[i] = edge_use;
+        }
+
+        link_edge_uses_in_loop(edge_uses, segments);
+        lc_entity_add_child(shell, face);
+    }
+
+    /* Set solid's bounding box */
+    lc_solid_data_t *solid_data = (lc_solid_data_t *)lc_entity_get_data(solid);
+    if (solid_data)
+    {
+        /* Bounding box is cylinder extents */
+        glm_vec3_copy(base_center, solid_data->bbox_min);
+        solid_data->bbox_min[0] -= radius;
+        solid_data->bbox_min[1] -= radius;
+        solid_data->bbox_min[2] -= radius;
+
+        glm_vec3_copy(top_center, solid_data->bbox_max);
+        solid_data->bbox_max[0] += radius;
+        solid_data->bbox_max[1] += radius;
+        solid_data->bbox_max[2] += radius;
+
+        /* Ensure min < max for each axis */
+        for (i = 0; i < 3; i++)
+        {
+            if (solid_data->bbox_min[i] > solid_data->bbox_max[i])
+            {
+                float temp = solid_data->bbox_min[i];
+                solid_data->bbox_min[i] = solid_data->bbox_max[i];
+                solid_data->bbox_max[i] = temp;
+            }
+        }
+
+        solid_data->bbox_dirty = false;
+    }
+
+    return solid;
 }
 
 lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segments, int v_segments)
 {
-    (void)center;
-    (void)radius;
-    (void)u_segments;
-    (void)v_segments;
-    printf("[lc_brep] lc_brep_create_sphere() not yet implemented\n");
-    return LC_ENTITY_INVALID;
+    if (!g_brep_initialized)
+    {
+        printf("[lc_brep] ERROR: lc_brep_create_sphere() called before lc_brep_init()\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Validate parameters */
+    if (u_segments < 3)
+    {
+        printf("[lc_brep] ERROR: Sphere u_segments must be >= 3 (got %d)\n", u_segments);
+        return LC_ENTITY_INVALID;
+    }
+    if (v_segments < 2)
+    {
+        printf("[lc_brep] ERROR: Sphere v_segments must be >= 2 (got %d)\n", v_segments);
+        return LC_ENTITY_INVALID;
+    }
+    if (radius <= 0.0f)
+    {
+        printf("[lc_brep] ERROR: Sphere radius must be > 0 (got %f)\n", radius);
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Create solid entity */
+    lc_entity_handle_t solid = create_solid_entity();
+    if (solid == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create solid entity\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Create shell entity */
+    lc_entity_handle_t shell = create_shell(true);
+    if (shell == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create shell entity\n");
+        lc_entity_destroy(solid);
+        return LC_ENTITY_INVALID;
+    }
+    lc_entity_add_child(solid, shell);
+
+    /* Create vertices: north pole + rings + south pole */
+    lc_entity_handle_t vertices[MAX_VERTICES];
+    int vertex_count = 0;
+
+    /* North pole (phi = 0, pointing up +Z) */
+    vec3 north_pos;
+    glm_vec3_copy(center, north_pos);
+    north_pos[2] += radius;
+    vertices[vertex_count] = create_vertex(north_pos);
+    if (vertices[vertex_count] == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create north pole vertex\n");
+        lc_entity_destroy(solid);
+        return LC_ENTITY_INVALID;
+    }
+    int north_pole_idx = vertex_count;
+    vertex_count++;
+
+    /* Latitude rings (j = 1 to v_segments-1) */
+    int j, i;
+    for (j = 1; j < v_segments; j++)
+    {
+        float phi = M_PI * j / v_segments;
+        float sin_phi = sinf(phi);
+        float cos_phi = cosf(phi);
+
+        for (i = 0; i < u_segments; i++)
+        {
+            float theta = 2.0f * M_PI * i / u_segments;
+            float cos_theta = cosf(theta);
+            float sin_theta = sinf(theta);
+
+            vec3 position;
+            position[0] = center[0] + radius * sin_phi * cos_theta;
+            position[1] = center[1] + radius * sin_phi * sin_theta;
+            position[2] = center[2] + radius * cos_phi;
+
+            vertices[vertex_count] = create_vertex(position);
+            if (vertices[vertex_count] == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create ring vertex (j=%d, i=%d)\n", j, i);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+            vertex_count++;
+        }
+    }
+
+    /* South pole (phi = π, pointing down -Z) */
+    vec3 south_pos;
+    glm_vec3_copy(center, south_pos);
+    south_pos[2] -= radius;
+    vertices[vertex_count] = create_vertex(south_pos);
+    if (vertices[vertex_count] == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create south pole vertex\n");
+        lc_entity_destroy(solid);
+        return LC_ENTITY_INVALID;
+    }
+    int south_pole_idx = vertex_count;
+    vertex_count++;
+
+    /* Edge storage for sharing between faces */
+    lc_entity_handle_t edges[MAX_EDGES];
+    int edge_count = 0;
+
+    /* Create north pole triangle fan faces */
+    for (i = 0; i < u_segments; i++)
+    {
+        int ring0_i = 1 + i;
+        int ring0_j = 1 + ((i + 1) % u_segments);
+
+        /* Triangle: north_pole, ring0_i, ring0_j */
+        int vidx[3] = {north_pole_idx, ring0_i, ring0_j};
+
+        /* Create plane surface */
+        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
+        lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
+        lc_vertex_data_t *v2_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[2]]);
+
+        vec3 edge1, edge2;
+        glm_vec3_sub(v1_data->position, v0_data->position, edge1);
+        glm_vec3_normalize(edge1);
+        glm_vec3_sub(v2_data->position, v0_data->position, edge2);
+        glm_vec3_normalize(edge2);
+
+        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
+        if (surface == LC_SURFACE_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create plane surface for north pole face %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t face = create_face(surface, true);
+        if (face == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create north pole face %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t loop = create_loop(face, true);
+        if (loop == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create loop for north pole face %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_add_child(face, loop);
+
+        lc_face_data_t *face_data = (lc_face_data_t *)lc_entity_get_data(face);
+        if (face_data)
+        {
+            face_data->outer_loop = loop;
+        }
+
+        /* Create edge uses (3 edges for triangle) */
+        lc_entity_handle_t edge_uses[3];
+        int edge_idx;
+        for (edge_idx = 0; edge_idx < 3; edge_idx++)
+        {
+            int v_start_idx = vidx[edge_idx];
+            int v_end_idx = vidx[(edge_idx + 1) % 3];
+            lc_entity_handle_t v_start = vertices[v_start_idx];
+            lc_entity_handle_t v_end = vertices[v_end_idx];
+
+            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            if (edge == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to find/create edge for north pole face %d edge %d\n", i, edge_idx);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edge);
+            bool forward = (edge_data->vertex_start == v_start);
+
+            lc_entity_handle_t edge_use = create_edge_use(edge, loop, forward);
+            if (edge_use == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create edge use for north pole\n");
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            edge_uses[edge_idx] = edge_use;
+        }
+
+        link_edge_uses_in_loop(edge_uses, 3);
+        lc_entity_add_child(shell, face);
+    }
+
+    /* Create middle quad strip faces (between rings) */
+    for (j = 1; j < v_segments - 1; j++)
+    {
+        int ring_base = 1 + (j - 1) * u_segments;
+        int next_ring_base = 1 + j * u_segments;
+
+        for (i = 0; i < u_segments; i++)
+        {
+            int ring_i = ring_base + i;
+            int ring_j = ring_base + ((i + 1) % u_segments);
+            int next_ring_i = next_ring_base + i;
+            int next_ring_j = next_ring_base + ((i + 1) % u_segments);
+
+            /* Quad: ring_i, ring_j, next_ring_j, next_ring_i */
+            int vidx[4] = {ring_i, ring_j, next_ring_j, next_ring_i};
+
+            /* Create plane surface */
+            lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
+            lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
+            lc_vertex_data_t *v3_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[3]]);
+
+            vec3 edge1, edge2;
+            glm_vec3_sub(v1_data->position, v0_data->position, edge1);
+            glm_vec3_normalize(edge1);
+            glm_vec3_sub(v3_data->position, v0_data->position, edge2);
+            glm_vec3_normalize(edge2);
+
+            lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
+            if (surface == LC_SURFACE_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create plane surface for middle face (j=%d, i=%d)\n", j, i);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_entity_handle_t face = create_face(surface, true);
+            if (face == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create middle face (j=%d, i=%d)\n", j, i);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_entity_handle_t loop = create_loop(face, true);
+            if (loop == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create loop for middle face (j=%d, i=%d)\n", j, i);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_entity_add_child(face, loop);
+
+            lc_face_data_t *face_data = (lc_face_data_t *)lc_entity_get_data(face);
+            if (face_data)
+            {
+                face_data->outer_loop = loop;
+            }
+
+            /* Create edge uses (4 edges for quad) */
+            lc_entity_handle_t edge_uses[4];
+            int edge_idx;
+            for (edge_idx = 0; edge_idx < 4; edge_idx++)
+            {
+                int v_start_idx = vidx[edge_idx];
+                int v_end_idx = vidx[(edge_idx + 1) % 4];
+                lc_entity_handle_t v_start = vertices[v_start_idx];
+                lc_entity_handle_t v_end = vertices[v_end_idx];
+
+                lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+                if (edge == LC_ENTITY_INVALID)
+                {
+                    printf("[lc_brep] ERROR: Failed to find/create edge for middle face (j=%d, i=%d, edge=%d)\n", j, i, edge_idx);
+                    lc_entity_destroy(solid);
+                    return LC_ENTITY_INVALID;
+                }
+
+                lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edge);
+                bool forward = (edge_data->vertex_start == v_start);
+
+                lc_entity_handle_t edge_use = create_edge_use(edge, loop, forward);
+                if (edge_use == LC_ENTITY_INVALID)
+                {
+                    printf("[lc_brep] ERROR: Failed to create edge use for middle face\n");
+                    lc_entity_destroy(solid);
+                    return LC_ENTITY_INVALID;
+                }
+
+                edge_uses[edge_idx] = edge_use;
+            }
+
+            link_edge_uses_in_loop(edge_uses, 4);
+            lc_entity_add_child(shell, face);
+        }
+    }
+
+    /* Create south pole triangle fan faces */
+    int last_ring_base = 1 + (v_segments - 2) * u_segments;
+    for (i = 0; i < u_segments; i++)
+    {
+        int ring_i = last_ring_base + i;
+        int ring_j = last_ring_base + ((i + 1) % u_segments);
+
+        /* Triangle: ring_i, south_pole, ring_j (reversed winding for outward normal) */
+        int vidx[3] = {ring_i, south_pole_idx, ring_j};
+
+        /* Create plane surface */
+        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
+        lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
+        lc_vertex_data_t *v2_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[2]]);
+
+        vec3 edge1, edge2;
+        glm_vec3_sub(v1_data->position, v0_data->position, edge1);
+        glm_vec3_normalize(edge1);
+        glm_vec3_sub(v2_data->position, v0_data->position, edge2);
+        glm_vec3_normalize(edge2);
+
+        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
+        if (surface == LC_SURFACE_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create plane surface for south pole face %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t face = create_face(surface, true);
+        if (face == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create south pole face %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_handle_t loop = create_loop(face, true);
+        if (loop == LC_ENTITY_INVALID)
+        {
+            printf("[lc_brep] ERROR: Failed to create loop for south pole face %d\n", i);
+            lc_entity_destroy(solid);
+            return LC_ENTITY_INVALID;
+        }
+
+        lc_entity_add_child(face, loop);
+
+        lc_face_data_t *face_data = (lc_face_data_t *)lc_entity_get_data(face);
+        if (face_data)
+        {
+            face_data->outer_loop = loop;
+        }
+
+        /* Create edge uses (3 edges for triangle) */
+        lc_entity_handle_t edge_uses[3];
+        int edge_idx;
+        for (edge_idx = 0; edge_idx < 3; edge_idx++)
+        {
+            int v_start_idx = vidx[edge_idx];
+            int v_end_idx = vidx[(edge_idx + 1) % 3];
+            lc_entity_handle_t v_start = vertices[v_start_idx];
+            lc_entity_handle_t v_end = vertices[v_end_idx];
+
+            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            if (edge == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to find/create edge for south pole face %d edge %d\n", i, edge_idx);
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edge);
+            bool forward = (edge_data->vertex_start == v_start);
+
+            lc_entity_handle_t edge_use = create_edge_use(edge, loop, forward);
+            if (edge_use == LC_ENTITY_INVALID)
+            {
+                printf("[lc_brep] ERROR: Failed to create edge use for south pole\n");
+                lc_entity_destroy(solid);
+                return LC_ENTITY_INVALID;
+            }
+
+            edge_uses[edge_idx] = edge_use;
+        }
+
+        link_edge_uses_in_loop(edge_uses, 3);
+        lc_entity_add_child(shell, face);
+    }
+
+    /* Set solid's bounding box */
+    lc_solid_data_t *solid_data = (lc_solid_data_t *)lc_entity_get_data(solid);
+    if (solid_data)
+    {
+        glm_vec3_copy(center, solid_data->bbox_min);
+        solid_data->bbox_min[0] -= radius;
+        solid_data->bbox_min[1] -= radius;
+        solid_data->bbox_min[2] -= radius;
+
+        glm_vec3_copy(center, solid_data->bbox_max);
+        solid_data->bbox_max[0] += radius;
+        solid_data->bbox_max[1] += radius;
+        solid_data->bbox_max[2] += radius;
+
+        solid_data->bbox_dirty = false;
+    }
+
+    return solid;
 }
 
 bool lc_brep_validate_solid(lc_entity_handle_t solid)
