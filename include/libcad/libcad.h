@@ -165,6 +165,53 @@ EXPORT bool             cad_sketch_is_fully_constrained(cad_ctx_t ctx, cad_sketc
 EXPORT bool             cad_sketch_is_over_constrained(cad_ctx_t ctx, cad_sketch_t sketch);
 EXPORT int              cad_sketch_get_constraint_count(cad_ctx_t ctx, cad_sketch_t sketch);
 
+/* ---- B-Rep Solid Modeling (Phase 4) ---- */
+
+/* Create a box solid (rectangular prism).
+ * ox, oy, oz: origin corner at minimum x, y, z
+ * dx, dy, dz: dimensions (width, height, depth)
+ * Returns solid entity handle on success, CAD_INVALID_ENTITY on failure. */
+EXPORT cad_entity_t     cad_create_box(cad_ctx_t ctx,
+                                        float ox, float oy, float oz,
+                                        float dx, float dy, float dz);
+
+/* Create a cylinder solid.
+ * cx, cy, cz: center of bottom circle
+ * ax, ay, az: axis direction
+ * radius: cylinder radius
+ * height: cylinder height
+ * segments: number of segments for circle approximation
+ * Returns solid entity handle on success, CAD_INVALID_ENTITY on failure. */
+EXPORT cad_entity_t     cad_create_cylinder(cad_ctx_t ctx,
+                                             float cx, float cy, float cz,
+                                             float ax, float ay, float az,
+                                             float radius, float height,
+                                             int segments);
+
+/* Create a sphere solid.
+ * cx, cy, cz: sphere center
+ * radius: sphere radius
+ * u_segments: longitudinal segments
+ * v_segments: latitudinal segments
+ * Returns solid entity handle on success, CAD_INVALID_ENTITY on failure. */
+EXPORT cad_entity_t     cad_create_sphere(cad_ctx_t ctx,
+                                           float cx, float cy, float cz,
+                                           float radius,
+                                           int u_segments, int v_segments);
+
+/* Validate a solid: check topology integrity.
+ * Returns true if solid passes Euler characteristic check. */
+EXPORT bool             cad_validate_solid(cad_ctx_t ctx, cad_entity_t solid);
+
+/* Get number of faces in a solid. */
+EXPORT int              cad_solid_get_face_count(cad_ctx_t ctx, cad_entity_t solid);
+
+/* Get number of edges in a solid. */
+EXPORT int              cad_solid_get_edge_count(cad_ctx_t ctx, cad_entity_t solid);
+
+/* Get number of vertices in a solid. */
+EXPORT int              cad_solid_get_vertex_count(cad_ctx_t ctx, cad_entity_t solid);
+
 #ifdef __cplusplus
 }
 #endif

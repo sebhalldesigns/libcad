@@ -183,9 +183,31 @@ Tracks progress against `docs/action-plan.md`.
   - Projection/intersection functions stubbed for future implementation
   - Test suite: test_geometry.c with 9 comprehensive tests (8 geometric types + large scale)
   - Build verified: All tests pass, library size 363KB (Release build)
-- [ ] **Phase 4B** (1-2 days): B-Rep entity types - vertex, edge, loop, face, shell, solid
-- [ ] **Phase 4C** (2-3 days): Primitive construction - box, cylinder, sphere
-- [ ] **Phase 4D** (1-2 days): Topological queries - navigation, adjacency
+- [x] **Phase 4B** (COMPLETED 2026-01-30): B-Rep entity types - vertex, edge, loop, face, shell, solid
+  - Extended lc_entity.h with B-Rep data structures (vertex, edge, edge_use, loop, face, shell)
+  - Edge data includes edge_uses[2] array for O(1) face adjacency lookup
+  - Edge-use pattern with forward/reverse orientation and next_in_loop chain
+  - Loop, face, and shell data structures with back-references
+  - Entity system handles creation/destruction of all B-Rep types
+- [x] **Phase 4C** (COMPLETED 2026-01-30): Primitive construction - box (cylinder/sphere stubbed)
+  - Created lc_brep.h (77 lines) - B-Rep construction API
+  - Created lc_brep.c (~590 lines) - Full box constructor implementation
+  - Box creates: 8 vertices, 12 shared edges, 24 edge uses, 6 loops, 6 faces, 1 shell, 1 solid
+  - Edge sharing via find_or_create_edge() - checks existing edges before creating new ones
+  - Edge uses registered in parent edge's edge_uses[] array for fast adjacency
+  - Solid destruction recursively collects and destroys all child entities
+  - Validation checks Euler characteristic and edge manifoldness
+  - Public API wired: cad_create_box, cad_validate_solid, face/edge/vertex counts
+- [x] **Phase 4D** (COMPLETED 2026-01-30): Topological queries - navigation, adjacency
+  - Created lc_topology.h (93 lines) - Topology query API
+  - Created lc_topology.c (~568 lines) - Full query implementation
+  - Hierarchy traversal: get_shells, get_faces, get_loops, get_edge_uses, get_edges
+  - Vertex access: get_edge_vertices, get_vertex_position
+  - Adjacency: get_edge_faces (O(1) via edge_uses[] array)
+  - Analysis: count_elements (with deduplication), check_euler (V-E+F=2)
+  - Bounding box: compute_bbox (walks all unique vertices)
+  - Test suite: test_brep.c with 7 tests (creation, traversal, bbox, validation, destroy, edge sharing, multiple boxes)
+  - All 7 tests pass: V=8, E=12, F=6, Euler=2, correct bbox, edge adjacency=2
 - [ ] **Phase 4E** (2-3 days): Tessellation - mesh generation for rendering
 - [ ] **Phase 4F** (1-2 days): Rendering integration - display B-Rep bodies
 - [ ] **Phase 4G** (2-3 days, optional): Euler operators - MVEF, MEV, MEF, etc.

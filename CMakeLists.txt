@@ -53,6 +53,14 @@ if (NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_LIST_DIR}/include
     )
 
+    # B-Rep construction and topology test
+    add_executable(test_brep test_brep.c)
+    target_link_libraries(test_brep PRIVATE libcad)
+    target_include_directories(test_brep PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
     # B-Rep entity system test executable
     add_executable(test_brep_entities test_brep_entities.c)
     target_link_libraries(test_brep_entities PRIVATE libcad)
@@ -72,6 +80,8 @@ if (NOT EMSCRIPTEN)
         lib/lc_undo.c
         lib/lc_constraint.c
         lib/lc_geometry.c
+        lib/lc_brep.c
+        lib/lc_topology.c
     )
 
     if (WIN32)
@@ -128,6 +138,8 @@ else()
         lib/lc_undo.c
         lib/lc_constraint.c
         lib/lc_geometry.c
+        lib/lc_brep.c
+        lib/lc_topology.c
     )
 
     set(PLATFORM_LIBS

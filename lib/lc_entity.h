@@ -202,8 +202,9 @@ typedef struct lc_edge_data_t
     float u_start;                    /* Curve parameter at start vertex */
     float u_end;                      /* Curve parameter at end vertex */
 
-    /* Topology links: edge usage records (one per adjacent face) */
-    /* Stored as children: LC_ENTITY_TYPE_EDGE_USE (see below) */
+    /* Topology links: edge usage records (max 2 for manifold edges) */
+    lc_entity_handle_t edge_uses[2]; /* Up to 2 edge uses (one per adjacent face) */
+    int edge_use_count;              /* Number of edge uses (0, 1, or 2) */
 
 } lc_edge_data_t;
 

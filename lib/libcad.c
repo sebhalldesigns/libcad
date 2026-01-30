@@ -35,6 +35,9 @@
 #include "lc_entity.h"
 #include "lc_constraint.h"
 #include "lc_undo.h"
+#include "lc_geometry.h"
+#include "lc_brep.h"
+#include "lc_topology.h"
 #include "libcad_internal.h"
 
 /***************************************************************
@@ -163,6 +166,10 @@ void cad_init_viewport()
 
     /* Initialize constraint system */
     lc_constraint_init();
+
+    /* Initialize geometry and B-Rep systems */
+    lc_geometry_init();
+    lc_brep_init();
 
     if (!lc_draw_init())
     {
@@ -665,6 +672,73 @@ int cad_sketch_get_constraint_count(cad_ctx_t ctx, cad_sketch_t sketch)
     }
 
     return count;
+}
+
+/* ---- B-Rep Solid Modeling (Phase 4) ---- */
+
+cad_entity_t cad_create_box(cad_ctx_t ctx,
+                             float ox, float oy, float oz,
+                             float dx, float dy, float dz)
+{
+    (void)ctx;
+    vec3 origin = {ox, oy, oz};
+    vec3 dimensions = {dx, dy, dz};
+    lc_entity_handle_t solid = lc_brep_create_box(origin, dimensions);
+    return (cad_entity_t)solid;
+}
+
+cad_entity_t cad_create_cylinder(cad_ctx_t ctx,
+                                  float cx, float cy, float cz,
+                                  float ax, float ay, float az,
+                                  float radius, float height,
+                                  int segments)
+{
+    (void)ctx;
+    vec3 center = {cx, cy, cz};
+    vec3 axis = {ax, ay, az};
+    lc_entity_handle_t solid = lc_brep_create_cylinder(center, axis, radius, height, segments);
+    return (cad_entity_t)solid;
+}
+
+cad_entity_t cad_create_sphere(cad_ctx_t ctx,
+                                float cx, float cy, float cz,
+                                float radius,
+                                int u_segments, int v_segments)
+{
+    (void)ctx;
+    vec3 center = {cx, cy, cz};
+    lc_entity_handle_t solid = lc_brep_create_sphere(center, radius, u_segments, v_segments);
+    return (cad_entity_t)solid;
+}
+
+bool cad_validate_solid(cad_ctx_t ctx, cad_entity_t solid)
+{
+    (void)ctx;
+    return lc_brep_validate_solid((lc_entity_handle_t)solid);
+}
+
+int cad_solid_get_face_count(cad_ctx_t ctx, cad_entity_t solid)
+{
+    (void)ctx;
+    size_t v, e, f;
+    lc_topology_count_elements((lc_entity_handle_t)solid, &v, &e, &f);
+    return (int)f;
+}
+
+int cad_solid_get_edge_count(cad_ctx_t ctx, cad_entity_t solid)
+{
+    (void)ctx;
+    size_t v, e, f;
+    lc_topology_count_elements((lc_entity_handle_t)solid, &v, &e, &f);
+    return (int)e;
+}
+
+int cad_solid_get_vertex_count(cad_ctx_t ctx, cad_entity_t solid)
+{
+    (void)ctx;
+    size_t v, e, f;
+    lc_topology_count_elements((lc_entity_handle_t)solid, &v, &e, &f);
+    return (int)v;
 }
 
 /***************************************************************
