@@ -88,15 +88,20 @@ static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset)
 
 int lc_draw_init()
 {
+    
     ig_context = igCreateContext(NULL);
     ig_io = igGetIO_Nil();
+    
 
-    #ifdef EMSCRIPTEN
+
+    #if EMSCRIPTEN || TARGET_OS_IPHONE
     const char* glsl_version = "#version 300 es";
     #else
     const char* glsl_version = "#version 330 core";
     #endif
     ImGui_ImplOpenGL3_Init(glsl_version);
+    
+    return true;
 
 #if __EMSCRIPTEN__
     

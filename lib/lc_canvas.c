@@ -329,7 +329,7 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     viewport_size[1] = viewport_height;
 
     
-#if 0
+
     glm_mat4_identity(viewport_transform);
     
     // First, translate to viewport center
@@ -343,8 +343,6 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     glm_mat4_inv(viewport_transform, viewport_transform_inv);
 
     glm_mat4_mulv(viewport_transform, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, world_origin);
-#endif
-    
 
     render_grid();
     render_axes();

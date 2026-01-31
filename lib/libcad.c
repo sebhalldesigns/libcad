@@ -23,6 +23,13 @@
 
 #ifdef EMSCRIPTEN
     #include <GLES3/gl3.h>
+#elif __APPLE__
+    #include <TargetConditionals.h>
+    #if TARGET_OS_IPHONE
+        #include <OpenGLES/ES3/gl.h>
+    #else
+        #include <glad/glad.h>
+    #endif
 #else
     #include <glad/glad.h>
 #endif
@@ -119,13 +126,13 @@ void cad_render_viewport()
 {
     //lc_scene_render((float)vp_width, (float)vp_height);
 
-    //lc_draw_begin(vp_width, vp_height);
+    lc_draw_begin(vp_width, vp_height);
 
-    //lc_canvas_render((float)vp_width, (float)vp_height);
+    lc_canvas_render((float)vp_width, (float)vp_height);
 
-    //lc_draw_end();
+    lc_draw_end();
 
-    lc_draw_render((float)vp_width, (float)vp_height);
+    //lc_draw_render((float)vp_width, (float)vp_height);
 
 }
 
@@ -133,7 +140,8 @@ void cad_init_viewport()
 {
     printf("cad_init_viewport called\n");
 
-    #ifndef EMSCRIPTEN
+    #if defined(EMSCRIPTEN) || defined(TARGET_OS_IPHONE)
+    #else
     if (!gladLoadGL() /*&& !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)*/)
     {
         printf("Failed to initialize GLAD\n");

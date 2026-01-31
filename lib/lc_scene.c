@@ -24,12 +24,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if __EMSCRIPTEN__
-#include <GLES3/gl3.h>
-#include <EGL/egl.h>
+#ifdef EMSCRIPTEN
+    #include <GLES3/gl3.h>
+#elif __APPLE__
+    #include <TargetConditionals.h>
+    #if TARGET_OS_IPHONE
+        #include <OpenGLES/ES3/gl.h>
+    #else
+        #include <glad/glad.h>
+    #endif
 #else
-#include <glad/glad.h>
-#endif 
+    #include <glad/glad.h>
+#endif
 
 #include <cglm/cglm.h>
 
@@ -57,7 +63,7 @@ typedef struct
 ** MARK: STATIC VARIABLES
 ***************************************************************/
 
-#if __EMSCRIPTEN__
+#if __EMSCRIPTEN__ || TARGET_OS_IPHONE
 
 extern uint8_t resources_shaders_basic_basic_es_vs_glsl[];
 extern uint32_t resources_shaders_basic_basic_es_vs_glsl_size;
@@ -149,7 +155,7 @@ void lc_scene_init()
 
     printf("LC SCENE INIT\n");
 
-#if __EMSCRIPTEN__
+#if __EMSCRIPTEN__ || TARGET_OS_IPHONE
     char* vs_src = (char*)malloc(resources_shaders_basic_basic_es_vs_glsl_size + 1);
     memcpy(vs_src, resources_shaders_basic_basic_es_vs_glsl, resources_shaders_basic_basic_es_vs_glsl_size);
     vs_src[resources_shaders_basic_basic_es_vs_glsl_size] = '\0';
@@ -303,7 +309,8 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glDrawElements(GL_TRIANGLES, sizeof(cube_indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
 
 
-#ifndef __EMSCRIPTEN__
+#if __EMSCRIPTEN__ || TARGET_OS_IPHONE
+#else
     glEnable(GL_POLYGON_OFFSET_LINE);
     glPolygonOffset(-1.0f, -1.0f);  // pull lines forward
     glLineWidth(2.0f);
@@ -314,7 +321,8 @@ void lc_scene_render(float viewport_width, float viewport_height)
     glUniform4f(glGetUniformLocation(program, "u_color"), 0.8f, 0.8f, 0.8f, 1.0f);
     glDrawElements(GL_LINES, sizeof(cube_wireframe_indices)/sizeof(unsigned int), GL_UNSIGNED_INT, 0);
 
-#ifndef __EMSCRIPTEN__
+#if __EMSCRIPTEN__ || TARGET_OS_IPHONE
+#else
     glDisable(GL_POLYGON_OFFSET_LINE);
 #endif
 

@@ -32,6 +32,10 @@ if (NOT EMSCRIPTEN)
         set(PLATFORM_LIBS 
             opengl32
         )
+    elseif (APPLE AND IOS)
+        set(PLATFORM_LIBS
+            "-framework OpenGLES"
+        )
     elseif (APPLE)
         set(PLATFORM_LIBS
             "-framework OpenGL"
@@ -128,7 +132,7 @@ function(embed_resources target)
     endforeach()
 endfunction()
 
-if (NOT EMSCRIPTEN)
+if (NOT EMSCRIPTEN AND NOT IOS)
     embed_resources(libcad
         resources/shaders/basic/basic_core_vs.glsl
         resources/shaders/basic/basic_core_fs.glsl
