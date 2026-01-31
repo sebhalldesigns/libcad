@@ -246,6 +246,17 @@ Tracks progress against `docs/action-plan.md`.
   - Test suite: test_euler.c with 8 tests (MVEF, MEV, MEF, KEV round-trip, KEF round-trip, triangle build, MEKL/KEML round-trip, invalid inputs)
   - All 8 tests pass
   - Build verified: zero errors, zero warnings from libcad code
+- [x] **Phase 4H** (COMPLETED 2026-01-31): Cylinder/Sphere curved geometry upgrade
+  - Added geometry query API: lc_geometry_get_surface_type(), lc_geometry_get_curve_type(), lc_geometry_get_plane_data/cylinder_data/sphere_data()
+  - Cylinder constructor: side faces now use shared cylinder surface instead of per-face planes; ring edges use circle arc curves instead of lines; caps remain planar; vertical edges remain lines
+  - Sphere constructor: all faces now use shared sphere surface; all edges use circle arc curves (latitude rings + longitude meridians)
+  - Added find_or_create_arc_edge() helper for creating/reusing circle-curve edges
+  - Tessellator: surface-type dispatch in lc_tessellate_face() for cylinder/sphere/plane
+  - tessellate_cylinder_face(): projects corners onto cylinder, identifies arc-spanning edges, subdivides with smooth per-vertex normals
+  - tessellate_sphere_face(): barycentric (triangles) and bilinear (quads) interpolation with sphere projection and outward normals
+  - 6 new tests: cylinder creation, cylinder surface types, sphere creation, sphere surface types, cylinder tessellation (smooth normals), sphere tessellation (outward normals)
+  - All 13 test_brep tests pass, all 6 test_tessellate tests pass
+  - Files modified: lc_geometry.h, lc_geometry.c, lc_brep.c, lc_tessellate.c, test_brep.c
 
 ## Phase 5-7
 Not started yet.
