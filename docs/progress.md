@@ -235,7 +235,17 @@ Tracks progress against `docs/action-plan.md`.
   - Updated CMakeLists.txt embed_resources() for both desktop and Emscripten to include mesh shaders
   - Updated lc_scene.h with includes for lc_entity.h, lc_topology.h, lc_tessellate.h
   - Build verified: zero errors, all tests pass
-- [ ] **Phase 4G** (2-3 days, optional): Euler operators - MVEF, MEV, MEF, etc.
+- [x] **Phase 4G** (COMPLETED 2026-01-31): Euler operators for topologically-safe B-Rep modification
+  - Created lc_euler.h (170 lines) - Public API for 7 Euler operators
+  - Created lc_euler.c (~1150 lines) - Full implementation with helper functions
+  - Operators: MVEF, MEV, MEF, KEV, KEF, MEKL, KEML
+  - Helper functions: vertex/edge/edge-use/loop/face creation, edge use chain manipulation
+  - Edge use chain splicing for loop manipulation (MEV spike, MEF split, KEF merge, MEKL/KEML)
+  - Proper entity cleanup via lc_entity_destroy (which frees data internally)
+  - Tessellation invalidation on all topology changes
+  - Test suite: test_euler.c with 8 tests (MVEF, MEV, MEF, KEV round-trip, KEF round-trip, triangle build, MEKL/KEML round-trip, invalid inputs)
+  - All 8 tests pass
+  - Build verified: zero errors, zero warnings from libcad code
 
 ## Phase 5-7
 Not started yet.

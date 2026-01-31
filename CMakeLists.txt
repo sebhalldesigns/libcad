@@ -85,6 +85,14 @@ if (NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_LIST_DIR}/include
     )
 
+    # Euler operators test executable
+    add_executable(test_euler test_euler.c)
+    target_link_libraries(test_euler PRIVATE libcad)
+    target_include_directories(test_euler PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/lib
+        ${CMAKE_CURRENT_LIST_DIR}/include
+    )
+
     add_library(libcad STATIC
         lib/libcad.c
         lib/lc_draw.c
@@ -99,6 +107,7 @@ if (NOT EMSCRIPTEN)
         lib/lc_brep.c
         lib/lc_topology.c
         lib/lc_tessellate.c
+        lib/lc_euler.c
     )
 
     if (WIN32)
@@ -158,6 +167,7 @@ else()
         lib/lc_brep.c
         lib/lc_topology.c
         lib/lc_tessellate.c
+        lib/lc_euler.c
     )
 
     set(PLATFORM_LIBS
