@@ -53,6 +53,7 @@ static lc_entity_handle_t create_shell(bool is_closed);
 static lc_entity_handle_t create_solid_entity(void);
 static void link_edge_uses_in_loop(lc_entity_handle_t *edge_uses, int count);
 static lc_entity_handle_t find_or_create_edge(lc_entity_handle_t v1, lc_entity_handle_t v2, lc_entity_handle_t *edges, int *edge_count, int max_edges, lc_entity_handle_t *vertices);
+static lc_entity_handle_t find_or_create_arc_edge(lc_entity_handle_t v1, lc_entity_handle_t v2, lc_entity_handle_t *edges, int *edge_count, int max_edges, vec3 center, vec3 x_axis, vec3 y_axis, float radius, float u_start, float u_end);
 
 /* MARK: PUBLIC FUNCTIONS */
 
@@ -380,6 +381,15 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
         vertex_count++;
     }
 
+    /* Create shared cylinder surface for all side faces */
+    lc_surface_handle_t cyl_surface = lc_geometry_create_cylinder(base_center, axis_normalized, u_axis, radius);
+    if (cyl_surface == LC_SURFACE_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create cylinder surface\n");
+        lc_entity_destroy(solid);
+        return LC_ENTITY_INVALID;
+    }
+
     /* Edge storage for sharing between faces */
     lc_entity_handle_t edges[MAX_EDGES];
     int edge_count = 0;
@@ -396,27 +406,8 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
         /* Face vertices in CCW order from outside: bottom[i], bottom[j], top[j], top[i] */
         int vidx[4] = {bottom_i, bottom_j, top_j, top_i};
 
-        /* Create plane surface for this face */
-        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
-        lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
-        lc_vertex_data_t *v3_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[3]]);
-
-        vec3 edge1, edge2;
-        glm_vec3_sub(v1_data->position, v0_data->position, edge1);
-        glm_vec3_normalize(edge1);
-        glm_vec3_sub(v3_data->position, v0_data->position, edge2);
-        glm_vec3_normalize(edge2);
-
-        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
-        if (surface == LC_SURFACE_INVALID)
-        {
-            printf("[lc_brep] ERROR: Failed to create plane surface for side face %d\n", seg);
-            lc_entity_destroy(solid);
-            return LC_ENTITY_INVALID;
-        }
-
-        /* Create face entity */
-        lc_entity_handle_t face = create_face(surface, true);
+        /* Create face entity using shared cylinder surface */
+        lc_entity_handle_t face = create_face(cyl_surface, true);
         if (face == LC_ENTITY_INVALID)
         {
             printf("[lc_brep] ERROR: Failed to create side face entity %d\n", seg);
@@ -441,7 +432,12 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
             face_data->outer_loop = loop;
         }
 
-        /* Create edge uses for this face (4 edges) */
+        /* Create edge uses for this face (4 edges):
+         * edge 0: bottom[i] -> bottom[j] (bottom ring arc)
+         * edge 1: bottom[j] -> top[j] (vertical line)
+         * edge 2: top[j] -> top[i] (top ring arc)
+         * edge 3: top[i] -> bottom[i] (vertical line)
+         */
         lc_entity_handle_t edge_uses[4];
         int edge_idx;
         for (edge_idx = 0; edge_idx < 4; edge_idx++)
@@ -451,7 +447,39 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
             lc_entity_handle_t v_start = vertices[v_start_idx];
             lc_entity_handle_t v_end = vertices[v_end_idx];
 
-            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            lc_entity_handle_t edge;
+            if (edge_idx == 0)
+            {
+                /* Bottom ring arc edge */
+                float theta_start = 2.0f * (float)M_PI * bottom_i / segments;
+                float theta_end = 2.0f * (float)M_PI * bottom_j / segments;
+                if (bottom_j == 0)
+                {
+                    theta_end = 2.0f * (float)M_PI;
+                }
+                edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                               base_center, u_axis, v_axis, radius, theta_start, theta_end);
+            }
+            else if (edge_idx == 2)
+            {
+                /* Top ring arc edge */
+                int top_seg_i = top_j - segments;
+                int top_seg_j = top_i - segments;
+                float theta_start = 2.0f * (float)M_PI * top_seg_i / segments;
+                float theta_end = 2.0f * (float)M_PI * top_seg_j / segments;
+                if (theta_end < theta_start)
+                {
+                    theta_end += 2.0f * (float)M_PI;
+                }
+                edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                               top_center, u_axis, v_axis, radius, theta_start, theta_end);
+            }
+            else
+            {
+                /* Vertical line edges */
+                edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            }
+
             if (edge == LC_ENTITY_INVALID)
             {
                 printf("[lc_brep] ERROR: Failed to find/create edge for side face %d edge %d\n", seg, edge_idx);
@@ -516,7 +544,7 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
             face_data->outer_loop = loop;
         }
 
-        /* Create edge uses for bottom cap (reversed order) */
+        /* Create edge uses for bottom cap (reversed order, reusing arc edges) */
         lc_entity_handle_t edge_uses[MAX_EDGES];
         for (i = 0; i < segments; i++)
         {
@@ -525,7 +553,16 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
             lc_entity_handle_t v_start = vertices[v_start_idx];
             lc_entity_handle_t v_end = vertices[v_end_idx];
 
-            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            /* These are the same bottom ring arc edges created by the side faces.
+             * find_or_create_arc_edge will find them since they share the same vertices. */
+            float theta_start = 2.0f * (float)M_PI * v_end_idx / segments;
+            float theta_end = 2.0f * (float)M_PI * v_start_idx / segments;
+            if (v_start_idx == 0)
+            {
+                theta_end = 2.0f * (float)M_PI;
+            }
+            lc_entity_handle_t edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                                               base_center, u_axis, v_axis, radius, theta_start, theta_end);
             if (edge == LC_ENTITY_INVALID)
             {
                 printf("[lc_brep] ERROR: Failed to find/create edge for bottom cap edge %d\n", i);
@@ -587,7 +624,7 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
             face_data->outer_loop = loop;
         }
 
-        /* Create edge uses for top cap */
+        /* Create edge uses for top cap (reusing top ring arc edges) */
         lc_entity_handle_t edge_uses[MAX_EDGES];
         for (i = 0; i < segments; i++)
         {
@@ -596,7 +633,14 @@ lc_entity_handle_t lc_brep_create_cylinder(vec3 base_center, vec3 axis, float ra
             lc_entity_handle_t v_start = vertices[v_start_idx];
             lc_entity_handle_t v_end = vertices[v_end_idx];
 
-            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            float theta_start = 2.0f * (float)M_PI * i / segments;
+            float theta_end = 2.0f * (float)M_PI * ((i + 1) % segments) / segments;
+            if ((i + 1) % segments == 0)
+            {
+                theta_end = 2.0f * (float)M_PI;
+            }
+            lc_entity_handle_t edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                                               top_center, u_axis, v_axis, radius, theta_start, theta_end);
             if (edge == LC_ENTITY_INVALID)
             {
                 printf("[lc_brep] ERROR: Failed to find/create edge for top cap edge %d\n", i);
@@ -759,9 +803,31 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
     int south_pole_idx = vertex_count;
     vertex_count++;
 
+    /* Create shared sphere surface for all faces */
+    vec3 sphere_x = {1.0f, 0.0f, 0.0f};
+    vec3 sphere_y = {0.0f, 1.0f, 0.0f};
+    vec3 sphere_z = {0.0f, 0.0f, 1.0f};
+    lc_surface_handle_t sph_surface = lc_geometry_create_sphere(center, sphere_x, sphere_y, sphere_z, radius);
+    if (sph_surface == LC_SURFACE_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create sphere surface\n");
+        lc_entity_destroy(solid);
+        return LC_ENTITY_INVALID;
+    }
+
     /* Edge storage for sharing between faces */
     lc_entity_handle_t edges[MAX_EDGES];
     int edge_count = 0;
+
+    /* Helper: create a latitude (horizontal ring) arc edge.
+     * Latitude ring at phi angle lives in a plane at height center[2] + radius * cos(phi).
+     * Circle center is at (center[0], center[1], center[2] + radius * cos(phi)),
+     * with ring_radius = radius * sin(phi), in the XY plane. */
+
+    /* Helper: create a longitude (meridian) arc edge.
+     * Meridian at theta angle lies in a plane containing the Z axis and the direction (cos(theta), sin(theta), 0).
+     * It's a great circle segment. The circle center is the sphere center, radius is sphere radius.
+     * x_axis = (cos(theta), sin(theta), 0) (points outward), y_axis = (0, 0, 1) (points up). */
 
     /* Create north pole triangle fan faces */
     for (i = 0; i < u_segments; i++)
@@ -772,26 +838,7 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
         /* Triangle: north_pole, ring0_i, ring0_j */
         int vidx[3] = {north_pole_idx, ring0_i, ring0_j};
 
-        /* Create plane surface */
-        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
-        lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
-        lc_vertex_data_t *v2_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[2]]);
-
-        vec3 edge1, edge2;
-        glm_vec3_sub(v1_data->position, v0_data->position, edge1);
-        glm_vec3_normalize(edge1);
-        glm_vec3_sub(v2_data->position, v0_data->position, edge2);
-        glm_vec3_normalize(edge2);
-
-        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
-        if (surface == LC_SURFACE_INVALID)
-        {
-            printf("[lc_brep] ERROR: Failed to create plane surface for north pole face %d\n", i);
-            lc_entity_destroy(solid);
-            return LC_ENTITY_INVALID;
-        }
-
-        lc_entity_handle_t face = create_face(surface, true);
+        lc_entity_handle_t face = create_face(sph_surface, true);
         if (face == LC_ENTITY_INVALID)
         {
             printf("[lc_brep] ERROR: Failed to create north pole face %d\n", i);
@@ -815,7 +862,9 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
             face_data->outer_loop = loop;
         }
 
-        /* Create edge uses (3 edges for triangle) */
+        /* Edge 0: north_pole -> ring0_i (longitude meridian arc) */
+        /* Edge 1: ring0_i -> ring0_j (latitude arc at first ring) */
+        /* Edge 2: ring0_j -> north_pole (longitude meridian arc) */
         lc_entity_handle_t edge_uses[3];
         int edge_idx;
         for (edge_idx = 0; edge_idx < 3; edge_idx++)
@@ -825,7 +874,61 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
             lc_entity_handle_t v_start = vertices[v_start_idx];
             lc_entity_handle_t v_end = vertices[v_end_idx];
 
-            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            lc_entity_handle_t edge;
+            if (edge_idx == 1)
+            {
+                /* Latitude arc at first ring (phi = M_PI / v_segments) */
+                float phi = (float)M_PI * 1.0f / v_segments;
+                float ring_radius = radius * sinf(phi);
+                float ring_z = radius * cosf(phi);
+                vec3 ring_center;
+                glm_vec3_copy(center, ring_center);
+                ring_center[2] += ring_z;
+
+                float theta_start = 2.0f * (float)M_PI * i / u_segments;
+                float theta_end = 2.0f * (float)M_PI * ((i + 1) % u_segments) / u_segments;
+                if ((i + 1) % u_segments == 0)
+                {
+                    theta_end = 2.0f * (float)M_PI;
+                }
+
+                vec3 rx = {1.0f, 0.0f, 0.0f};
+                vec3 ry = {0.0f, 1.0f, 0.0f};
+                edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                               ring_center, rx, ry, ring_radius, theta_start, theta_end);
+            }
+            else
+            {
+                /* Longitude meridian arc (great circle from pole to ring vertex) */
+                int ring_idx;
+                float theta;
+                if (edge_idx == 0)
+                {
+                    ring_idx = i;
+                }
+                else
+                {
+                    ring_idx = (i + 1) % u_segments;
+                }
+                theta = 2.0f * (float)M_PI * ring_idx / u_segments;
+
+                /* Meridian circle: center = sphere center, radius = sphere radius
+                 * x_axis points outward in XY plane, y_axis = Z up
+                 * phi goes from 0 (north pole) to M_PI (south pole)
+                 * For the curve parametrization: angle 0 = equator outward direction
+                 * We use: x_axis = outward direction, y_axis = up
+                 * Then angle pi/2 = north pole, angle -pi/2 = south pole
+                 * phi_start at north pole = pi/2, phi_end at first ring = pi/2 - M_PI/v_segments */
+                vec3 meridian_x = {cosf(theta), sinf(theta), 0.0f};
+                vec3 meridian_y = {0.0f, 0.0f, 1.0f};
+
+                float phi_start = (float)M_PI / 2.0f;  /* north pole */
+                float phi_end = (float)M_PI / 2.0f - (float)M_PI * 1.0f / v_segments;
+
+                edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                               center, meridian_x, meridian_y, radius, phi_start, phi_end);
+            }
+
             if (edge == LC_ENTITY_INVALID)
             {
                 printf("[lc_brep] ERROR: Failed to find/create edge for north pole face %d edge %d\n", i, edge_idx);
@@ -867,26 +970,7 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
             /* Quad: ring_i, ring_j, next_ring_j, next_ring_i */
             int vidx[4] = {ring_i, ring_j, next_ring_j, next_ring_i};
 
-            /* Create plane surface */
-            lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
-            lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
-            lc_vertex_data_t *v3_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[3]]);
-
-            vec3 edge1, edge2;
-            glm_vec3_sub(v1_data->position, v0_data->position, edge1);
-            glm_vec3_normalize(edge1);
-            glm_vec3_sub(v3_data->position, v0_data->position, edge2);
-            glm_vec3_normalize(edge2);
-
-            lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
-            if (surface == LC_SURFACE_INVALID)
-            {
-                printf("[lc_brep] ERROR: Failed to create plane surface for middle face (j=%d, i=%d)\n", j, i);
-                lc_entity_destroy(solid);
-                return LC_ENTITY_INVALID;
-            }
-
-            lc_entity_handle_t face = create_face(surface, true);
+            lc_entity_handle_t face = create_face(sph_surface, true);
             if (face == LC_ENTITY_INVALID)
             {
                 printf("[lc_brep] ERROR: Failed to create middle face (j=%d, i=%d)\n", j, i);
@@ -910,7 +994,10 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
                 face_data->outer_loop = loop;
             }
 
-            /* Create edge uses (4 edges for quad) */
+            /* Edge 0: ring_i -> ring_j (latitude arc at ring j)
+             * Edge 1: ring_j -> next_ring_j (longitude arc)
+             * Edge 2: next_ring_j -> next_ring_i (latitude arc at ring j+1)
+             * Edge 3: next_ring_i -> ring_i (longitude arc) */
             lc_entity_handle_t edge_uses[4];
             int edge_idx;
             for (edge_idx = 0; edge_idx < 4; edge_idx++)
@@ -920,7 +1007,65 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
                 lc_entity_handle_t v_start = vertices[v_start_idx];
                 lc_entity_handle_t v_end = vertices[v_end_idx];
 
-                lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+                lc_entity_handle_t edge;
+                if (edge_idx == 0 || edge_idx == 2)
+                {
+                    /* Latitude arc */
+                    int ring_row = (edge_idx == 0) ? j : j + 1;
+                    float phi = (float)M_PI * ring_row / v_segments;
+                    float ring_radius = radius * sinf(phi);
+                    float ring_z = radius * cosf(phi);
+                    vec3 ring_center;
+                    glm_vec3_copy(center, ring_center);
+                    ring_center[2] += ring_z;
+
+                    int seg_start, seg_end;
+                    if (edge_idx == 0)
+                    {
+                        seg_start = i;
+                        seg_end = (i + 1) % u_segments;
+                    }
+                    else
+                    {
+                        seg_start = (i + 1) % u_segments;
+                        seg_end = i;
+                    }
+
+                    float theta_start = 2.0f * (float)M_PI * seg_start / u_segments;
+                    float theta_end = 2.0f * (float)M_PI * seg_end / u_segments;
+                    if (theta_end < theta_start && edge_idx == 0)
+                    {
+                        theta_end += 2.0f * (float)M_PI;
+                    }
+                    if (theta_end < theta_start && edge_idx == 2)
+                    {
+                        theta_end += 2.0f * (float)M_PI;
+                    }
+
+                    vec3 rx = {1.0f, 0.0f, 0.0f};
+                    vec3 ry = {0.0f, 1.0f, 0.0f};
+                    edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                                   ring_center, rx, ry, ring_radius, theta_start, theta_end);
+                }
+                else
+                {
+                    /* Longitude meridian arc */
+                    int ring_idx = (edge_idx == 1) ? (i + 1) % u_segments : i;
+                    float theta = 2.0f * (float)M_PI * ring_idx / u_segments;
+
+                    int row_start = (edge_idx == 1) ? j : j + 1;
+                    int row_end = (edge_idx == 1) ? j + 1 : j;
+
+                    float phi_start = (float)M_PI / 2.0f - (float)M_PI * row_start / v_segments;
+                    float phi_end = (float)M_PI / 2.0f - (float)M_PI * row_end / v_segments;
+
+                    vec3 meridian_x = {cosf(theta), sinf(theta), 0.0f};
+                    vec3 meridian_y = {0.0f, 0.0f, 1.0f};
+
+                    edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                                   center, meridian_x, meridian_y, radius, phi_start, phi_end);
+                }
+
                 if (edge == LC_ENTITY_INVALID)
                 {
                     printf("[lc_brep] ERROR: Failed to find/create edge for middle face (j=%d, i=%d, edge=%d)\n", j, i, edge_idx);
@@ -954,29 +1099,10 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
         int ring_i = last_ring_base + i;
         int ring_j = last_ring_base + ((i + 1) % u_segments);
 
-        /* Triangle: ring_i, south_pole, ring_j (reversed winding for outward normal) */
+        /* Triangle: ring_i, south_pole, ring_j */
         int vidx[3] = {ring_i, south_pole_idx, ring_j};
 
-        /* Create plane surface */
-        lc_vertex_data_t *v0_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[0]]);
-        lc_vertex_data_t *v1_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[1]]);
-        lc_vertex_data_t *v2_data = (lc_vertex_data_t *)lc_entity_get_data(vertices[vidx[2]]);
-
-        vec3 edge1, edge2;
-        glm_vec3_sub(v1_data->position, v0_data->position, edge1);
-        glm_vec3_normalize(edge1);
-        glm_vec3_sub(v2_data->position, v0_data->position, edge2);
-        glm_vec3_normalize(edge2);
-
-        lc_surface_handle_t surface = lc_geometry_create_plane(v0_data->position, edge1, edge2);
-        if (surface == LC_SURFACE_INVALID)
-        {
-            printf("[lc_brep] ERROR: Failed to create plane surface for south pole face %d\n", i);
-            lc_entity_destroy(solid);
-            return LC_ENTITY_INVALID;
-        }
-
-        lc_entity_handle_t face = create_face(surface, true);
+        lc_entity_handle_t face = create_face(sph_surface, true);
         if (face == LC_ENTITY_INVALID)
         {
             printf("[lc_brep] ERROR: Failed to create south pole face %d\n", i);
@@ -1000,7 +1126,9 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
             face_data->outer_loop = loop;
         }
 
-        /* Create edge uses (3 edges for triangle) */
+        /* Edge 0: ring_i -> south_pole (longitude meridian arc)
+         * Edge 1: south_pole -> ring_j (longitude meridian arc)
+         * Edge 2: ring_j -> ring_i (latitude arc at last ring) */
         lc_entity_handle_t edge_uses[3];
         int edge_idx;
         for (edge_idx = 0; edge_idx < 3; edge_idx++)
@@ -1010,7 +1138,59 @@ lc_entity_handle_t lc_brep_create_sphere(vec3 center, float radius, int u_segmen
             lc_entity_handle_t v_start = vertices[v_start_idx];
             lc_entity_handle_t v_end = vertices[v_end_idx];
 
-            lc_entity_handle_t edge = find_or_create_edge(v_start, v_end, edges, &edge_count, MAX_EDGES, vertices);
+            lc_entity_handle_t edge;
+            if (edge_idx == 2)
+            {
+                /* Latitude arc at last ring */
+                int ring_row = v_segments - 1;
+                float phi = (float)M_PI * ring_row / v_segments;
+                float ring_radius = radius * sinf(phi);
+                float ring_z = radius * cosf(phi);
+                vec3 ring_center;
+                glm_vec3_copy(center, ring_center);
+                ring_center[2] += ring_z;
+
+                int seg_start = (i + 1) % u_segments;
+                int seg_end = i;
+                float theta_start = 2.0f * (float)M_PI * seg_start / u_segments;
+                float theta_end = 2.0f * (float)M_PI * seg_end / u_segments;
+                if (theta_end < theta_start)
+                {
+                    theta_end += 2.0f * (float)M_PI;
+                }
+
+                vec3 rx = {1.0f, 0.0f, 0.0f};
+                vec3 ry = {0.0f, 1.0f, 0.0f};
+                edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                               ring_center, rx, ry, ring_radius, theta_start, theta_end);
+            }
+            else
+            {
+                /* Longitude meridian arc */
+                int ring_idx = (edge_idx == 0) ? i : (i + 1) % u_segments;
+                float theta = 2.0f * (float)M_PI * ring_idx / u_segments;
+
+                vec3 meridian_x = {cosf(theta), sinf(theta), 0.0f};
+                vec3 meridian_y = {0.0f, 0.0f, 1.0f};
+
+                float phi_start, phi_end;
+                if (edge_idx == 0)
+                {
+                    /* ring_i -> south_pole: going down */
+                    phi_start = (float)M_PI / 2.0f - (float)M_PI * (v_segments - 1) / v_segments;
+                    phi_end = -(float)M_PI / 2.0f;  /* south pole */
+                }
+                else
+                {
+                    /* south_pole -> ring_j: going up */
+                    phi_start = -(float)M_PI / 2.0f;  /* south pole */
+                    phi_end = (float)M_PI / 2.0f - (float)M_PI * (v_segments - 1) / v_segments;
+                }
+
+                edge = find_or_create_arc_edge(v_start, v_end, edges, &edge_count, MAX_EDGES,
+                                               center, meridian_x, meridian_y, radius, phi_start, phi_end);
+            }
+
             if (edge == LC_ENTITY_INVALID)
             {
                 printf("[lc_brep] ERROR: Failed to find/create edge for south pole face %d edge %d\n", i, edge_idx);
@@ -1318,6 +1498,53 @@ static void link_edge_uses_in_loop(lc_entity_handle_t *edge_uses, int count)
             data->prev_in_loop = edge_uses[(i - 1 + count) % count];
         }
     }
+}
+
+static lc_entity_handle_t find_or_create_arc_edge(lc_entity_handle_t v1, lc_entity_handle_t v2, lc_entity_handle_t *edges, int *edge_count, int max_edges, vec3 arc_center, vec3 x_axis, vec3 y_axis, float arc_radius, float u_start, float u_end)
+{
+    /* Check if edge already exists between v1 and v2 (or v2 and v1) */
+    int i;
+    for (i = 0; i < *edge_count; i++)
+    {
+        lc_edge_data_t *edge_data = (lc_edge_data_t *)lc_entity_get_data(edges[i]);
+        if (edge_data)
+        {
+            if ((edge_data->vertex_start == v1 && edge_data->vertex_end == v2) ||
+                (edge_data->vertex_start == v2 && edge_data->vertex_end == v1))
+            {
+                return edges[i];
+            }
+        }
+    }
+
+    /* Edge not found, create new arc edge */
+    if (*edge_count >= max_edges)
+    {
+        printf("[lc_brep] ERROR: Maximum edge count exceeded\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Create circle curve */
+    lc_curve_handle_t curve = lc_geometry_create_circle(arc_center, x_axis, y_axis, arc_radius, u_start, u_end);
+    if (curve == LC_CURVE_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create circle curve\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Create edge */
+    lc_entity_handle_t edge = create_edge(v1, v2, curve, u_start, u_end);
+    if (edge == LC_ENTITY_INVALID)
+    {
+        printf("[lc_brep] ERROR: Failed to create arc edge\n");
+        return LC_ENTITY_INVALID;
+    }
+
+    /* Add to edges array */
+    edges[*edge_count] = edge;
+    (*edge_count)++;
+
+    return edge;
 }
 
 static lc_entity_handle_t find_or_create_edge(lc_entity_handle_t v1, lc_entity_handle_t v2, lc_entity_handle_t *edges, int *edge_count, int max_edges, lc_entity_handle_t *vertices)

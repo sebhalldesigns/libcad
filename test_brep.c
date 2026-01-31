@@ -22,6 +22,7 @@
 #include "lib/lc_geometry.h"
 #include "lib/lc_brep.h"
 #include "lib/lc_topology.h"
+#include "lib/lc_tessellate.h"
 #include "lib/lc_undo.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -279,6 +280,271 @@ static void test_multiple_boxes(void)
     printf("  PASS\n\n");
 }
 
+static void test_cylinder_creation(void)
+{
+    printf("TEST: Cylinder Creation\n");
+
+    vec3 base = {0.0f, 0.0f, 0.0f};
+    vec3 axis = {0.0f, 0.0f, 1.0f};
+    int segments = 8;
+    lc_entity_handle_t solid = lc_brep_create_cylinder(base, axis, 1.0f, 2.0f, segments);
+    TEST_ASSERT(lc_entity_is_valid(solid));
+
+    /* Verify topology counts */
+    size_t vertex_count = 0;
+    size_t edge_count = 0;
+    size_t face_count = 0;
+    lc_topology_count_elements(solid, &vertex_count, &edge_count, &face_count);
+
+    printf("  Topology: V=%zu, E=%zu, F=%zu\n", vertex_count, edge_count, face_count);
+    TEST_ASSERT(vertex_count == (size_t)(segments * 2));
+    TEST_ASSERT(edge_count == (size_t)(segments * 3));
+    TEST_ASSERT(face_count == (size_t)(segments + 2));
+
+    /* Verify Euler characteristic */
+    bool euler_valid = lc_topology_check_euler(solid);
+    TEST_ASSERT(euler_valid);
+    printf("  Euler: V - E + F = %d (valid)\n",
+           (int)vertex_count - (int)edge_count + (int)face_count);
+
+    lc_brep_destroy_solid(solid);
+    printf("  PASS\n\n");
+}
+
+static void test_cylinder_surface_types(void)
+{
+    printf("TEST: Cylinder Surface Types\n");
+
+    vec3 base = {0.0f, 0.0f, 0.0f};
+    vec3 axis = {0.0f, 0.0f, 1.0f};
+    int segments = 6;
+    lc_entity_handle_t solid = lc_brep_create_cylinder(base, axis, 1.0f, 2.0f, segments);
+    TEST_ASSERT(lc_entity_is_valid(solid));
+
+    /* Get all faces */
+    lc_entity_handle_t shells[8];
+    size_t shell_count = lc_topology_get_shells(solid, shells, 8);
+    TEST_ASSERT(shell_count == 1);
+
+    lc_entity_handle_t faces[64];
+    size_t face_count = lc_topology_get_faces(shells[0], faces, 64);
+    TEST_ASSERT(face_count == (size_t)(segments + 2));
+
+    /* Count surface types: side faces should be cylinder, caps should be plane */
+    int cylinder_count = 0;
+    int plane_count = 0;
+    size_t fi;
+    for (fi = 0; fi < face_count; fi++)
+    {
+        lc_face_data_t *fd = (lc_face_data_t *)lc_entity_get_data(faces[fi]);
+        TEST_ASSERT(fd != NULL);
+        lc_surface_type_t st = lc_geometry_get_surface_type(fd->surface);
+        if (st == LC_SURFACE_CYLINDER)
+        {
+            cylinder_count++;
+        }
+        else if (st == LC_SURFACE_PLANE)
+        {
+            plane_count++;
+        }
+    }
+
+    printf("  Cylinder faces: %d, Plane faces: %d\n", cylinder_count, plane_count);
+    TEST_ASSERT(cylinder_count == segments);
+    TEST_ASSERT(plane_count == 2);
+
+    lc_brep_destroy_solid(solid);
+    printf("  PASS\n\n");
+}
+
+static void test_sphere_creation(void)
+{
+    printf("TEST: Sphere Creation\n");
+
+    vec3 center = {0.0f, 0.0f, 0.0f};
+    int u_seg = 6;
+    int v_seg = 4;
+    lc_entity_handle_t solid = lc_brep_create_sphere(center, 1.0f, u_seg, v_seg);
+    TEST_ASSERT(lc_entity_is_valid(solid));
+
+    /* Verify topology counts */
+    size_t vertex_count = 0;
+    size_t edge_count = 0;
+    size_t face_count = 0;
+    lc_topology_count_elements(solid, &vertex_count, &edge_count, &face_count);
+
+    printf("  Topology: V=%zu, E=%zu, F=%zu\n", vertex_count, edge_count, face_count);
+
+    /* Expected: 2 poles + (v_seg-1)*u_seg ring vertices */
+    size_t expected_verts = 2 + (size_t)(v_seg - 1) * u_seg;
+    /* Expected faces: 2*u_seg pole triangles + (v_seg-2)*u_seg quads */
+    size_t expected_faces = (size_t)(2 * u_seg + (v_seg - 2) * u_seg);
+    printf("  Expected V=%zu, F=%zu\n", expected_verts, expected_faces);
+    TEST_ASSERT(vertex_count == expected_verts);
+    TEST_ASSERT(face_count == expected_faces);
+
+    /* Verify Euler characteristic */
+    bool euler_valid = lc_topology_check_euler(solid);
+    TEST_ASSERT(euler_valid);
+    printf("  Euler: V - E + F = %d (valid)\n",
+           (int)vertex_count - (int)edge_count + (int)face_count);
+
+    lc_brep_destroy_solid(solid);
+    printf("  PASS\n\n");
+}
+
+static void test_sphere_surface_types(void)
+{
+    printf("TEST: Sphere Surface Types\n");
+
+    vec3 center = {0.0f, 0.0f, 0.0f};
+    int u_seg = 4;
+    int v_seg = 3;
+    lc_entity_handle_t solid = lc_brep_create_sphere(center, 1.0f, u_seg, v_seg);
+    TEST_ASSERT(lc_entity_is_valid(solid));
+
+    /* Get all faces */
+    lc_entity_handle_t shells[8];
+    size_t shell_count = lc_topology_get_shells(solid, shells, 8);
+    TEST_ASSERT(shell_count == 1);
+
+    lc_entity_handle_t faces[64];
+    size_t face_count = lc_topology_get_faces(shells[0], faces, 64);
+
+    /* All sphere faces should have sphere surface type */
+    int sphere_count = 0;
+    size_t fi;
+    for (fi = 0; fi < face_count; fi++)
+    {
+        lc_face_data_t *fd = (lc_face_data_t *)lc_entity_get_data(faces[fi]);
+        TEST_ASSERT(fd != NULL);
+        lc_surface_type_t st = lc_geometry_get_surface_type(fd->surface);
+        if (st == LC_SURFACE_SPHERE)
+        {
+            sphere_count++;
+        }
+    }
+
+    printf("  Sphere faces: %d / %zu\n", sphere_count, face_count);
+    TEST_ASSERT(sphere_count == (int)face_count);
+
+    lc_brep_destroy_solid(solid);
+    printf("  PASS\n\n");
+}
+
+static void test_cylinder_tessellation(void)
+{
+    printf("TEST: Cylinder Tessellation\n");
+
+    vec3 base = {0.0f, 0.0f, 0.0f};
+    vec3 axis = {0.0f, 0.0f, 1.0f};
+    int segments = 8;
+    lc_entity_handle_t solid = lc_brep_create_cylinder(base, axis, 1.0f, 2.0f, segments);
+    TEST_ASSERT(lc_entity_is_valid(solid));
+
+    /* Tessellate all faces */
+    bool tess_ok = lc_tessellate_solid(solid);
+    TEST_ASSERT(tess_ok);
+
+    /* Check that side faces have smooth normals (not all the same) */
+    lc_entity_handle_t shells[8];
+    lc_topology_get_shells(solid, shells, 8);
+    lc_entity_handle_t faces[64];
+    size_t face_count = lc_topology_get_faces(shells[0], faces, 64);
+
+    int side_faces_with_varying_normals = 0;
+    size_t fi;
+    for (fi = 0; fi < face_count; fi++)
+    {
+        lc_face_data_t *fd = (lc_face_data_t *)lc_entity_get_data(faces[fi]);
+        if (lc_geometry_get_surface_type(fd->surface) != LC_SURFACE_CYLINDER)
+        {
+            continue;
+        }
+
+        const lc_mesh_t *mesh = lc_tessellate_get_mesh(faces[fi]);
+        TEST_ASSERT(mesh != NULL);
+        TEST_ASSERT(mesh->vertex_count > 0);
+        TEST_ASSERT(mesh->index_count > 0);
+
+        /* Check that normals vary across the face (smooth shading) */
+        if (mesh->vertex_count > 1)
+        {
+            float n0x = mesh->vertices[0].normal[0];
+            float n0y = mesh->vertices[0].normal[1];
+            float n0z = mesh->vertices[0].normal[2];
+            uint32_t vi;
+            for (vi = 1; vi < mesh->vertex_count; vi++)
+            {
+                float dx = mesh->vertices[vi].normal[0] - n0x;
+                float dy = mesh->vertices[vi].normal[1] - n0y;
+                float dz = mesh->vertices[vi].normal[2] - n0z;
+                if (dx * dx + dy * dy + dz * dz > 0.001f)
+                {
+                    side_faces_with_varying_normals++;
+                    break;
+                }
+            }
+        }
+    }
+
+    printf("  Side faces with smooth normals: %d / %d\n", side_faces_with_varying_normals, segments);
+    TEST_ASSERT(side_faces_with_varying_normals == segments);
+
+    lc_brep_destroy_solid(solid);
+    printf("  PASS\n\n");
+}
+
+static void test_sphere_tessellation(void)
+{
+    printf("TEST: Sphere Tessellation\n");
+
+    vec3 center = {0.0f, 0.0f, 0.0f};
+    int u_seg = 4;
+    int v_seg = 3;
+    lc_entity_handle_t solid = lc_brep_create_sphere(center, 1.0f, u_seg, v_seg);
+    TEST_ASSERT(lc_entity_is_valid(solid));
+
+    /* Tessellate all faces */
+    bool tess_ok = lc_tessellate_solid(solid);
+    TEST_ASSERT(tess_ok);
+
+    /* Verify all faces have meshes and normals point outward */
+    lc_entity_handle_t shells[8];
+    lc_topology_get_shells(solid, shells, 8);
+    lc_entity_handle_t faces[64];
+    size_t face_count = lc_topology_get_faces(shells[0], faces, 64);
+
+    size_t fi;
+    for (fi = 0; fi < face_count; fi++)
+    {
+        const lc_mesh_t *mesh = lc_tessellate_get_mesh(faces[fi]);
+        TEST_ASSERT(mesh != NULL);
+        TEST_ASSERT(mesh->vertex_count > 0);
+        TEST_ASSERT(mesh->index_count > 0);
+
+        /* All normals on a sphere should point outward from center.
+         * dot(normal, position - center) should be > 0 */
+        uint32_t vi;
+        for (vi = 0; vi < mesh->vertex_count; vi++)
+        {
+            float px = mesh->vertices[vi].position[0] - center[0];
+            float py = mesh->vertices[vi].position[1] - center[1];
+            float pz = mesh->vertices[vi].position[2] - center[2];
+            float nx = mesh->vertices[vi].normal[0];
+            float ny = mesh->vertices[vi].normal[1];
+            float nz = mesh->vertices[vi].normal[2];
+            float dot_val = px * nx + py * ny + pz * nz;
+            TEST_ASSERT(dot_val > -0.01f);
+        }
+    }
+
+    printf("  All sphere face normals point outward\n");
+
+    lc_brep_destroy_solid(solid);
+    printf("  PASS\n\n");
+}
+
 /***************************************************************
 ** MARK: MAIN
 ***************************************************************/
@@ -305,6 +571,12 @@ int main(void)
     test_box_destroy();
     test_edge_sharing();
     test_multiple_boxes();
+    test_cylinder_creation();
+    test_cylinder_surface_types();
+    test_sphere_creation();
+    test_sphere_surface_types();
+    test_cylinder_tessellation();
+    test_sphere_tessellation();
 
     lc_brep_shutdown();
     lc_geometry_shutdown();

@@ -623,6 +623,77 @@ void lc_geometry_eval_surface_normal(lc_surface_handle_t surface, float u, float
     }
 }
 
+lc_surface_type_t lc_geometry_get_surface_type(lc_surface_handle_t surface)
+{
+    if (!is_valid_surface(surface))
+    {
+        return LC_SURFACE_INVALID;
+    }
+
+    return g_registry.surfaces[surface].type;
+}
+
+lc_curve_type_t lc_geometry_get_curve_type(lc_curve_handle_t curve)
+{
+    if (!is_valid_curve(curve))
+    {
+        return LC_CURVE_INVALID;
+    }
+
+    return g_registry.curves[curve].type;
+}
+
+bool lc_geometry_get_plane_data(lc_surface_handle_t surface, lc_surface_plane_t *out_data)
+{
+    if (!is_valid_surface(surface))
+    {
+        return false;
+    }
+
+    lc_surface_entry_t *entry = &g_registry.surfaces[surface];
+    if (entry->type != LC_SURFACE_PLANE)
+    {
+        return false;
+    }
+
+    *out_data = entry->data.plane;
+    return true;
+}
+
+bool lc_geometry_get_cylinder_data(lc_surface_handle_t surface, lc_surface_cylinder_t *out_data)
+{
+    if (!is_valid_surface(surface))
+    {
+        return false;
+    }
+
+    lc_surface_entry_t *entry = &g_registry.surfaces[surface];
+    if (entry->type != LC_SURFACE_CYLINDER)
+    {
+        return false;
+    }
+
+    *out_data = entry->data.cylinder;
+    return true;
+}
+
+bool lc_geometry_get_sphere_data(lc_surface_handle_t surface, lc_surface_sphere_t *out_data)
+{
+    if (!is_valid_surface(surface))
+    {
+        return false;
+    }
+
+    lc_surface_entry_t *entry = &g_registry.surfaces[surface];
+    if (entry->type != LC_SURFACE_SPHERE)
+    {
+        return false;
+    }
+
+    *out_data = entry->data.sphere;
+    return true;
+}
+
 float lc_geometry_curve_length(lc_curve_handle_t curve)
 {
     if (!is_valid_curve(curve))

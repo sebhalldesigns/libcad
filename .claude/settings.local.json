@@ -21,7 +21,13 @@
       "Bash(echo:*)",
       "Bash(timeout:*)",
       "Bash(cl:*)",
-      "Bash(\"C:/Users/sebam/libcad/build/Debug/test_brep.exe\")"
+      "Bash(\"C:/Users/sebam/libcad/build/Debug/test_brep.exe\")",
+      "Bash(git submodule update:*)",
+      "Bash(./build/test_brep:*)",
+      "Bash(/Users/seb/libcad/build/test_brep:*)",
+      "Bash(cc -std=c99 -I. -Iextern/cglm/include:*)",
+      "Bash(/tmp/debug_tess:*)",
+      "Bash(/Users/seb/libcad/build/test_tessellate:*)"
     ]
   }
 }

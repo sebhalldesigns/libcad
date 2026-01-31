@@ -263,6 +263,26 @@ void lc_geometry_eval_surface(lc_surface_handle_t surface, float u, float v, vec
  * out_normal: Output normal vector (normalized) */
 void lc_geometry_eval_surface_normal(lc_surface_handle_t surface, float u, float v, vec3 out_normal);
 
+/* Get the type of a surface.
+ * Returns LC_SURFACE_INVALID if handle is invalid. */
+lc_surface_type_t lc_geometry_get_surface_type(lc_surface_handle_t surface);
+
+/* Get the type of a curve.
+ * Returns LC_CURVE_INVALID if handle is invalid. */
+lc_curve_type_t lc_geometry_get_curve_type(lc_curve_handle_t curve);
+
+/* Get surface data for a plane surface.
+ * Returns true if surface is valid and is a plane, false otherwise. */
+bool lc_geometry_get_plane_data(lc_surface_handle_t surface, lc_surface_plane_t *out_data);
+
+/* Get surface data for a cylindrical surface.
+ * Returns true if surface is valid and is a cylinder, false otherwise. */
+bool lc_geometry_get_cylinder_data(lc_surface_handle_t surface, lc_surface_cylinder_t *out_data);
+
+/* Get surface data for a spherical surface.
+ * Returns true if surface is valid and is a sphere, false otherwise. */
+bool lc_geometry_get_sphere_data(lc_surface_handle_t surface, lc_surface_sphere_t *out_data);
+
 /* Compute curve length (exact for lines/arcs, approximate for splines).
  * Returns length or 0.0 if curve handle is invalid. */
 float lc_geometry_curve_length(lc_curve_handle_t curve);
