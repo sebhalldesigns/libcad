@@ -134,7 +134,7 @@ void cad_init_viewport()
     printf("cad_init_viewport called\n");
 
     #ifndef EMSCRIPTEN
-    if (!gladLoadGL() && !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
+    if (!gladLoadGL() /*&& !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)*/)
     {
         printf("Failed to initialize GLAD\n");
         return;

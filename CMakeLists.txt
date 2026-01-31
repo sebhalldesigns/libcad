@@ -19,7 +19,7 @@ endif()
 if (NOT EMSCRIPTEN)
 
     add_subdirectory(extern)
-    add_subdirectory(democad)
+    #add_subdirectory(democad)
 
     add_library(libcad STATIC
         lib/libcad.c
@@ -45,7 +45,7 @@ if (NOT EMSCRIPTEN)
     target_link_libraries(libcad PUBLIC
         ${PLATFORM_LIBS}
         cglm
-        SDL3-static
+        #SDL3-static
         cimgui
         imgui_backends
         glad

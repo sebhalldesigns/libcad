@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 
 add_subdirectory(cglm)
-add_subdirectory(json)
+#add_subdirectory(json)
 
 set(JANSSON_EXAMPLES OFF CACHE BOOL "Don't build Jansson examples" FORCE)
 set(JANSSON_WITHOUT_TESTS ON CACHE BOOL "Don't build Jannson tests" FORCE)
@@ -33,7 +33,7 @@ set(SDL_STATIC ON CACHE BOOL "Enable static lib" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "Disable test lib" FORCE)
 set(SDL_X11_XTEST OFF CACHE BOOL "Disable X11 test" FORCE)
 
-add_subdirectory(SDL)
+#add_subdirectory(SDL)
 
 
 add_compile_definitions(CIMGUI_USE_OPENGL3 CIMGUI_USE_SDL3)
