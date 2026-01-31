@@ -17,6 +17,7 @@
 
 #include "lc_draw.h"
 
+#include <string.h>
 
 #ifdef EMSCRIPTEN
     #include <GLES3/gl3.h>
