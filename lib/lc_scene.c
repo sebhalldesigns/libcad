@@ -19,6 +19,9 @@
 
 #include "lc_canvas.h"
 #include "lc_draw.h"
+#include "lc_entity.h"
+#include "lc_topology.h"
+#include "lc_tessellate.h"
 #include "libcad_internal.h"
 
 #include <stdio.h>
@@ -66,6 +69,12 @@ extern uint32_t resources_shaders_basic_basic_es_vs_glsl_size;
 extern uint8_t resources_shaders_basic_basic_es_fs_glsl[];
 extern uint32_t resources_shaders_basic_basic_es_fs_glsl_size;
 
+extern uint8_t resources_shaders_mesh_mesh_es_vs_glsl[];
+extern uint32_t resources_shaders_mesh_mesh_es_vs_glsl_size;
+
+extern uint8_t resources_shaders_mesh_mesh_es_fs_glsl[];
+extern uint32_t resources_shaders_mesh_mesh_es_fs_glsl_size;
+
 #else
 
 extern uint8_t resources_shaders_basic_basic_core_vs_glsl[];
@@ -74,12 +83,30 @@ extern uint32_t resources_shaders_basic_basic_core_vs_glsl_size;
 extern uint8_t resources_shaders_basic_basic_core_fs_glsl[];
 extern uint32_t resources_shaders_basic_basic_core_fs_glsl_size;
 
+extern uint8_t resources_shaders_mesh_mesh_core_vs_glsl[];
+extern uint32_t resources_shaders_mesh_mesh_core_vs_glsl_size;
+
+extern uint8_t resources_shaders_mesh_mesh_core_fs_glsl[];
+extern uint32_t resources_shaders_mesh_mesh_core_fs_glsl_size;
+
 #endif
 
 static GLuint program = 0;
 static GLuint VAO = 0;
 static GLuint cubeEBO = 0;
 static GLuint wireEBO = 0;
+
+/* mesh shader program and uniform locations */
+static GLuint mesh_program = 0;
+static GLint mesh_loc_model = -1;
+static GLint mesh_loc_view = -1;
+static GLint mesh_loc_projection = -1;
+static GLint mesh_loc_color = -1;
+
+/* shared mesh rendering resources */
+static GLuint mesh_VAO = 0;
+static GLuint mesh_VBO = 0;
+static GLuint mesh_EBO = 0;
 
 static mat4 modelMatrix;
 static mat4 viewMatrix;
@@ -158,6 +185,9 @@ static void camera_right(gm_camera_t* camera, vec3 right);
 static void camera_forward(gm_camera_t* camera, vec3 forward);
 static void camera_view_matrix(gm_camera_t* camera, mat4 view);
 
+static void render_solid(lc_entity_handle_t solid, mat4 view_mat, mat4 proj_mat);
+static void render_all_solids(mat4 view_mat, mat4 proj_mat);
+
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
 ***************************************************************/
@@ -225,7 +255,71 @@ void lc_scene_init()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glBindVertexArray(0); 
+    glBindVertexArray(0);
+
+    /* compile mesh shader program */
+#if __EMSCRIPTEN__
+    char* mesh_vs_src = (char*)malloc(resources_shaders_mesh_mesh_es_vs_glsl_size + 1);
+    memcpy(mesh_vs_src, resources_shaders_mesh_mesh_es_vs_glsl, resources_shaders_mesh_mesh_es_vs_glsl_size);
+    mesh_vs_src[resources_shaders_mesh_mesh_es_vs_glsl_size] = '\0';
+
+    char* mesh_fs_src = (char*)malloc(resources_shaders_mesh_mesh_es_fs_glsl_size + 1);
+    memcpy(mesh_fs_src, resources_shaders_mesh_mesh_es_fs_glsl, resources_shaders_mesh_mesh_es_fs_glsl_size);
+    mesh_fs_src[resources_shaders_mesh_mesh_es_fs_glsl_size] = '\0';
+#else
+    char* mesh_vs_src = (char*)malloc(resources_shaders_mesh_mesh_core_vs_glsl_size + 1);
+    memcpy(mesh_vs_src, resources_shaders_mesh_mesh_core_vs_glsl, resources_shaders_mesh_mesh_core_vs_glsl_size);
+    mesh_vs_src[resources_shaders_mesh_mesh_core_vs_glsl_size] = '\0';
+
+    char* mesh_fs_src = (char*)malloc(resources_shaders_mesh_mesh_core_fs_glsl_size + 1);
+    memcpy(mesh_fs_src, resources_shaders_mesh_mesh_core_fs_glsl, resources_shaders_mesh_mesh_core_fs_glsl_size);
+    mesh_fs_src[resources_shaders_mesh_mesh_core_fs_glsl_size] = '\0';
+#endif
+
+    GLuint mesh_vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(mesh_vs, 1, (const GLchar**)&mesh_vs_src, NULL);
+    glCompileShader(mesh_vs);
+
+    GLuint mesh_fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(mesh_fs, 1, (const GLchar**)&mesh_fs_src, NULL);
+    glCompileShader(mesh_fs);
+
+    mesh_program = glCreateProgram();
+    glAttachShader(mesh_program, mesh_vs);
+    glAttachShader(mesh_program, mesh_fs);
+    glLinkProgram(mesh_program);
+
+    free(mesh_vs_src);
+    free(mesh_fs_src);
+    glDeleteShader(mesh_vs);
+    glDeleteShader(mesh_fs);
+
+    mesh_loc_model = glGetUniformLocation(mesh_program, "model");
+    mesh_loc_view = glGetUniformLocation(mesh_program, "view");
+    mesh_loc_projection = glGetUniformLocation(mesh_program, "projection");
+    mesh_loc_color = glGetUniformLocation(mesh_program, "u_color");
+
+    /* create shared mesh VAO/VBO/EBO */
+    glGenVertexArrays(1, &mesh_VAO);
+    glGenBuffers(1, &mesh_VBO);
+    glGenBuffers(1, &mesh_EBO);
+
+    glBindVertexArray(mesh_VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, mesh_VBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_EBO);
+
+    /* position attribute (location 0): 3 floats at offset 0 */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)0);
+    glEnableVertexAttribArray(0);
+
+    /* normal attribute (location 1): 3 floats at offset 12 */
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 6, (void*)(sizeof(float) * 3));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+
+    printf("Mesh shader compiled and linked\n");
 }
 
 void lc_scene_compute_context(lc_render_context_t *ctx, float viewport_width, float viewport_height)
@@ -366,6 +460,9 @@ void lc_scene_render(float viewport_width, float viewport_height)
         glDisable(GL_POLYGON_OFFSET_LINE);
 #endif
     }
+
+    /* render B-Rep solids */
+    render_all_solids(viewMatrix, projectionMatrix);
 
 }
 
@@ -533,4 +630,151 @@ static void camera_forward(gm_camera_t* camera, vec3 forward)
 static void camera_view_matrix(gm_camera_t* camera, mat4 view)
 {
     glm_lookat(camera->position, camera->target, camera->up, view);
+}
+
+static void render_solid(lc_entity_handle_t solid, mat4 view_mat, mat4 proj_mat)
+{
+    /* tessellate the solid if needed */
+    lc_tessellate_solid(solid);
+
+    /* collect all faces via topology traversal */
+    lc_entity_handle_t shells[8];
+    size_t shell_count = lc_topology_get_shells(solid, shells, 8);
+
+    mat4 model;
+    glm_mat4_identity(model);
+
+    /* pass 1: draw shaded faces with mesh shader */
+    glUseProgram(mesh_program);
+    glUniformMatrix4fv(mesh_loc_model, 1, GL_FALSE, (float*)model);
+    glUniformMatrix4fv(mesh_loc_view, 1, GL_FALSE, (float*)view_mat);
+    glUniformMatrix4fv(mesh_loc_projection, 1, GL_FALSE, (float*)proj_mat);
+    glUniform4f(mesh_loc_color, 0.4f, 0.5f, 0.6f, 1.0f);
+
+    glBindVertexArray(mesh_VAO);
+
+    size_t si;
+    for (si = 0; si < shell_count; si++)
+    {
+        lc_entity_handle_t faces[64];
+        size_t face_count = lc_topology_get_faces(shells[si], faces, 64);
+
+        size_t fi;
+        for (fi = 0; fi < face_count; fi++)
+        {
+            const lc_mesh_t *mesh = lc_tessellate_get_mesh(faces[fi]);
+            if (!mesh || mesh->vertex_count == 0 || mesh->index_count == 0)
+            {
+                continue;
+            }
+
+            /* upload mesh data to shared VBO/EBO */
+            glBindBuffer(GL_ARRAY_BUFFER, mesh_VBO);
+            glBufferData(GL_ARRAY_BUFFER,
+                         (GLsizeiptr)(mesh->vertex_count * sizeof(lc_mesh_vertex_t)),
+                         mesh->vertices, GL_DYNAMIC_DRAW);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                         (GLsizeiptr)(mesh->index_count * sizeof(uint32_t)),
+                         mesh->indices, GL_DYNAMIC_DRAW);
+
+            glDrawElements(GL_TRIANGLES, (GLsizei)mesh->index_count, GL_UNSIGNED_INT, 0);
+        }
+    }
+
+    glBindVertexArray(0);
+
+    /* pass 2: draw wireframe edges with basic shader */
+    glUseProgram(program);
+    glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, GL_FALSE, (float*)model);
+    glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE, (float*)view_mat);
+    glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, (float*)proj_mat);
+    glUniform4f(glGetUniformLocation(program, "u_color"), 0.9f, 0.9f, 0.9f, 1.0f);
+
+#ifndef __EMSCRIPTEN__
+    glEnable(GL_POLYGON_OFFSET_LINE);
+    glPolygonOffset(-1.0f, -1.0f);
+    glLineWidth(1.5f);
+#endif
+
+    /* collect unique edges and draw as GL_LINES */
+    for (si = 0; si < shell_count; si++)
+    {
+        lc_entity_handle_t faces[64];
+        size_t face_count = lc_topology_get_faces(shells[si], faces, 64);
+
+        size_t fi;
+        for (fi = 0; fi < face_count; fi++)
+        {
+            lc_entity_handle_t loops[4];
+            size_t loop_count = lc_topology_get_loops(faces[fi], loops, 4);
+
+            size_t li;
+            for (li = 0; li < loop_count; li++)
+            {
+                lc_entity_handle_t edges[32];
+                size_t edge_count = lc_topology_get_edges(loops[li], edges, 32);
+
+                /* build line vertex data from edge endpoints */
+                float line_verts[32 * 2 * 3]; /* max 32 edges * 2 endpoints * 3 floats */
+                size_t vert_idx = 0;
+
+                size_t ei;
+                for (ei = 0; ei < edge_count; ei++)
+                {
+                    lc_entity_handle_t v_start, v_end;
+                    if (lc_topology_get_edge_vertices(edges[ei], &v_start, &v_end))
+                    {
+                        vec3 p0, p1;
+                        lc_topology_get_vertex_position(v_start, p0);
+                        lc_topology_get_vertex_position(v_end, p1);
+
+                        line_verts[vert_idx++] = p0[0];
+                        line_verts[vert_idx++] = p0[1];
+                        line_verts[vert_idx++] = p0[2];
+                        line_verts[vert_idx++] = p1[0];
+                        line_verts[vert_idx++] = p1[1];
+                        line_verts[vert_idx++] = p1[2];
+                    }
+                }
+
+                if (vert_idx > 0)
+                {
+                    /* reuse the cube VAO layout (position only, stride=3 floats) */
+                    glBindVertexArray(VAO);
+                    GLuint wire_vbo;
+                    glGenBuffers(1, &wire_vbo);
+                    glBindBuffer(GL_ARRAY_BUFFER, wire_vbo);
+                    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(vert_idx * sizeof(float)),
+                                 line_verts, GL_DYNAMIC_DRAW);
+                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+                    glEnableVertexAttribArray(0);
+                    glDrawArrays(GL_LINES, 0, (GLsizei)(vert_idx / 3));
+                    glDeleteBuffers(1, &wire_vbo);
+                    glBindVertexArray(0);
+                }
+            }
+        }
+    }
+
+#ifndef __EMSCRIPTEN__
+    glDisable(GL_POLYGON_OFFSET_LINE);
+#endif
+}
+
+static void render_all_solids(mat4 view_mat, mat4 proj_mat)
+{
+    lc_entity_handle_t solids[64];
+    size_t count = lc_entity_enumerate_type(LC_ENTITY_TYPE_SOLID, solids, 64);
+
+    size_t i;
+    for (i = 0; i < count; i++)
+    {
+        uint32_t flags = lc_entity_get_flags(solids[i]);
+        if (flags & LC_ENTITY_FLAG_VISIBLE)
+        {
+            render_solid(solids[i], view_mat, proj_mat);
+        }
+    }
 }

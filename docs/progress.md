@@ -226,7 +226,15 @@ Tracks progress against `docs/action-plan.md`.
   - Vertex positions verified within bounding box
   - Added to CMakeLists.txt for both native and Emscripten builds
   - Build verified: libcad.lib now 425KB, all existing tests still pass
-- [ ] **Phase 4F** (1-2 days): Rendering integration - display B-Rep bodies
+- [x] **Phase 4F** (COMPLETED 2026-01-31): Rendering integration - display B-Rep bodies
+  - Created 4 mesh shader files with Lambertian lighting: mesh_core_vs.glsl, mesh_core_fs.glsl, mesh_es_vs.glsl, mesh_es_fs.glsl
+  - Added shader compilation and linking in lc_scene_init() with error handling
+  - Implemented render_solid() function that tessellates solids and renders shaded faces + wireframe edges
+  - Implemented render_all_solids() that enumerates all SOLID entities and renders visible ones
+  - Wired rendering into lc_scene_render() after demo cube rendering (visible when SHOW_SOLIDS defined)
+  - Updated CMakeLists.txt embed_resources() for both desktop and Emscripten to include mesh shaders
+  - Updated lc_scene.h with includes for lc_entity.h, lc_topology.h, lc_tessellate.h
+  - Build verified: zero errors, all tests pass
 - [ ] **Phase 4G** (2-3 days, optional): Euler operators - MVEF, MEV, MEF, etc.
 
 ## Phase 5-7

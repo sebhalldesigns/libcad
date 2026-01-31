@@ -32,6 +32,9 @@ extern "C" {
 
 #include <stdbool.h>
 #include "libcad_internal.h"
+#include "lc_entity.h"
+#include "lc_topology.h"
+#include "lc_tessellate.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS

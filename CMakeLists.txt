@@ -217,10 +217,14 @@ if (NOT EMSCRIPTEN)
         resources/shaders/vector/vector_core_vs.glsl
         resources/shaders/vector/vector_core_fs.glsl
         resources/shaders/vector/vector_pick_fs.glsl
+        resources/shaders/mesh/mesh_core_vs.glsl
+        resources/shaders/mesh/mesh_core_fs.glsl
     )
 else()
     embed_resources(libcad
         resources/shaders/basic/basic_es_vs.glsl
         resources/shaders/basic/basic_es_fs.glsl
+        resources/shaders/mesh/mesh_es_vs.glsl
+        resources/shaders/mesh/mesh_es_fs.glsl
     )
 endif()
