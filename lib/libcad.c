@@ -140,7 +140,7 @@ void cad_init_viewport()
 {
     printf("cad_init_viewport called\n");
 
-    #if defined(EMSCRIPTEN) || defined(TARGET_OS_IPHONE)
+    #if defined(EMSCRIPTEN) || TARGET_OS_IPHONE
     #else
     if (!gladLoadGL() /*&& !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)*/)
     {
@@ -172,7 +172,6 @@ int cad_get_cursor_type()
 {
     return lc_canvas_get_cursor_type();
 }
-
 
 void cad_start_modal_tool(int tool_id)
 {

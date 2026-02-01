@@ -329,7 +329,6 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     viewport_size[1] = viewport_height;
 
     
-
     glm_mat4_identity(viewport_transform);
     
     // First, translate to viewport center
@@ -351,6 +350,7 @@ void lc_canvas_render(float viewport_width, float viewport_height)
     {
         glm_mat4_mul(viewport_transform, items[i]->bounds, items[i]->frame);
 
+        /*
         for (int j = 0; j < 4; j++)
         {
             float w = 1.0/items[i]->frame[j][3];
@@ -360,7 +360,7 @@ void lc_canvas_render(float viewport_width, float viewport_height)
             items[i]->frame[j][0] = (ndc_x + 1.0f) * 0.5f * viewport_width;
             items[i]->frame[j][1] = (ndc_y + 1.0f) * 0.5f * viewport_height;
         }
-
+*/
         items[i]->draw_func(items[i]);
     }
 
@@ -647,12 +647,14 @@ void lc_canvas_set_modal_tool(int tool_id)
 
 void lc_canvas_set_view_matrix(mat4 matrix)
 {
+    /*
     glm_mat4_copy(matrix, viewport_transform);
     
     //glm_translate_x(viewport_transform, viewport_size[0] / 2.0f);
     //glm_translate_y(viewport_transform, viewport_size[1] / 2.0f);
 
     glm_mat4_inv(viewport_transform, viewport_transform_inv);
+    */
     
 }
 
