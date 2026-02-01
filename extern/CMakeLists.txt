@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
-
+set(CGLM_SHARED OFF CACHE BOOL "Don't build CGLM shared" FORCE)
+set(CGLM_STATIC ON CACHE BOOL "Build CGLM static" FORCE)
 add_subdirectory(cglm)
 #add_subdirectory(json)
 
