@@ -7,6 +7,7 @@ add_subdirectory(cglm)
 
 set(JANSSON_EXAMPLES OFF CACHE BOOL "Don't build Jansson examples" FORCE)
 set(JANSSON_WITHOUT_TESTS ON CACHE BOOL "Don't build Jannson tests" FORCE)
+set(JANSSON_BUILD_DOCS OFF CACHE BOOL "Don't build Jannson docs" FORCE)
 add_subdirectory(jansson)
 
 if (EMSCRIPTEN)

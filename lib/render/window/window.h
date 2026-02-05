@@ -2,19 +2,17 @@
 **
 ** libcad Header File
 **
-** File         :  lc_gpu.h
-** Module       :  lc_gpu
+** File         :  window.h
+** Module       :  render/window
 ** Author       :  SH
-** Created      :  2026-01-26 (YYYY-MM-DD)
+** Created      :  2026-02-05 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  libcad GPU API
-**
-**  Functions for managing GPU resources and state.
+** Description  :  libcad Window API
 **
 ***************************************************************/
 
-#ifndef LC_GPU_H
-#define LC_GPU_H
+#ifndef LIBCAD_WINDOW_H
+#define LIBCAD_WINDOW_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +24,8 @@ extern "C" {
 
 #include <stdbool.h>
 
+#include <cglm/cglm.h>
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -34,13 +34,22 @@ extern "C" {
 ** MARK: TYPEDEFS
 ***************************************************************/
 
+typedef uintptr_t window_t;
+
 /***************************************************************
 ** MARK: FUNCTION DEFS
 ***************************************************************/
 
 
+window_t window_create(const char *title, int width, int height);
+
+/* return false if should quit */
+bool window_update();
+
+void window_swap_buffers();
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* LC_GPU_H */
+#endif /* LIBCAD_WINDOW_H */

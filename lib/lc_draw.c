@@ -89,17 +89,7 @@ static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset)
 int lc_draw_init()
 {
     
-    ig_context = igCreateContext(NULL);
-    ig_io = igGetIO_Nil();
-    
 
-
-    #if EMSCRIPTEN || TARGET_OS_IPHONE
-    const char* glsl_version = "#version 300 es";
-    #else
-    const char* glsl_version = "#version 330 core";
-    #endif
-    ImGui_ImplOpenGL3_Init(glsl_version);
     
     return true;
 
@@ -196,162 +186,62 @@ int lc_draw_init()
 
 void lc_draw_begin(int w, int h)
 {
-    ig_io->DisplaySize = (ImVec2_c){(float)w, (float)h};
-    ig_io->DeltaTime = 1.0f;
-
-    ImGui_ImplOpenGL3_NewFrame();
-    igNewFrame();
-
-    ig_drawlist = igGetForegroundDrawList_ViewportPtr(igGetMainViewport());
     
 
 }
 
 void lc_draw_end()
 {
-    igRender();
-    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
-
-    ig_drawlist = NULL;
+   
 }
 
 void lc_draw_line(vec2 start, vec2 end, uint32_t color)
 {
-    ImDrawList_AddLine(ig_drawlist, (ImVec2_c){start[0], start[1]}, (ImVec2_c){end[0], end[1]}, color, 1.0f);
+   
 }
 
 void lc_draw_circle(vec2 center, float radius)
 {
-    ImDrawList_AddCircle(ig_drawlist, (ImVec2_c){center[0], center[1]}, radius, IM_COL32(200, 200, 200, 255), 0, 1.0f);
+    
 }
 
 
 void lc_draw_grid(vec2 start, vec2 end, float spacing, uint32_t color)
 {
 
-    for (float x = start[0]; x <= end[0]; x += spacing)
-    {
-        ImDrawList_AddLine(ig_drawlist, (ImVec2_c){x, start[1]}, (ImVec2_c){x, end[1]}, color, 1.0f);
-    }
-
-    for (float y = start[1]; y <= end[1]; y += spacing)
-    {
-        ImDrawList_AddLine(ig_drawlist, (ImVec2_c){start[0], y}, (ImVec2_c){end[0], y}, color, 1.0f);
-
-    }
+    
 }
 
 void lc_draw_rect(vec2 start, vec2 end, uint32_t color)
 {
-    ImDrawList_AddRect(ig_drawlist, 
-        (ImVec2_c){start[0], start[1]}, 
-        (ImVec2_c){end[0], end[1]},
-        color,
-        0.0f, 0, 1.0f
-    );
+    
 }
 
 void lc_draw_rect_filled(vec2 start, vec2 end, uint32_t color)
 {
 
-    ImDrawList_AddRectFilled(ig_drawlist, 
-        (ImVec2_c){start[0], start[1]}, 
-        (ImVec2_c){end[0], end[1]},
-        color,
-        0.0f, 0
-    );
-
+   
 }
 
 
 void lc_draw_ellipse(vec2 center, vec2 size, uint32_t color)
 {
-    ImDrawList_AddEllipse(ig_drawlist, 
-        (ImVec2_c){center[0], center[1]}, 
-        (ImVec2_c){size[0] / 2.0f, size[1] / 2.0f},
-        color, 
-        0.0f, 0, 2.0f /* setting num_segments to 0 requests that imgui decide */
-    );
+    
 }
 
 void lc_draw_handle(vec2 pos, bool active)
 {
-    const float HANDLE_SIZE = 5.0f;
-
-    ImDrawList_AddCircleFilled(ig_drawlist, 
-        (ImVec2_c){pos[0], pos[1]}, 
-        HANDLE_SIZE, 
-        active ? IM_COL32(100, 100, 255, 255) : IM_COL32(100, 255, 100, 255),
-        0
-    );
-    
-    ImDrawList_AddCircle(ig_drawlist, (ImVec2_c){pos[0], pos[1]}, HANDLE_SIZE, IM_COL32(255, 255, 255, 255), 0, 1.0f);
+   
 }
 
 void lc_draw_text(vec2 pos, const char *text, float size, uint32_t color)
 {
-    ImDrawList_AddText_Vec2(ig_drawlist, 
-        (ImVec2_c){pos[0], pos[1]},
-        color, 
-        text, 
-        NULL
-    );
+   
 }
 
 void lc_draw_render(float viewport_width, float viewport_height)
 {
-    glUseProgram(program);
-
-    glUniformMatrix4fv(u_view_projection, 1, GL_FALSE, (const GLfloat*)view_projection);
-
-    /* if test? */
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_instance);
-
-    vector_instance_t instances[2];
-    // Circle
-    glm_vec3_copy((vec3){0.0f, 0.0f, 0.0f}, instances[0].center);
-    instances[0].type = 0.0f;                 // MUST be 0 for circle in your shader
-
-    float r = 0.5f;
-
-    glm_vec3_copy((vec3){r, 0.0f, 0.0f}, instances[0].axis_x);
-    glm_vec3_copy((vec3){0.0f, r, 0.0f}, instances[0].axis_y);
-
-    instances[0].radius = r;
-    instances[0].half_size[0] = r;            // REQUIRED (drives v_plane)
-    instances[0].half_size[1] = r;            // REQUIRED
-    instances[0].corner_radius = 0.0f;
-
-    instances[0].thickness = 2.0f;
-    instances[0].filled = 0.0f;
-    glm_vec4_copy((vec4){1.0f, 0.0f, 0.0f, 1.0f}, instances[0].color);
-
-    // Rectangle
-    glm_vec3_zero(instances[1].center);
-    instances[1].type = 1.0f; // rectangle
-    glm_vec3_zero(instances[1].axis_x);
-    instances[1].axis_x[0] = 1.0f;
-    glm_vec3_zero(instances[1].axis_y);
-    instances[1].axis_y[1] = 1.0f;
-    instances[1].half_size[0] = 40.0f;
-    instances[1].half_size[1] = 30.0f;
-    instances[1].thickness = 3.0f;
-    instances[1].filled = 1.0f;
-    glm_vec4_copy((vec4){0.0f, 0.0f, 1.0f, 0.5f}, instances[1].color);
-
-    glBufferData(GL_ARRAY_BUFFER, sizeof(instances), NULL, GL_STREAM_DRAW); /* orphan */
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(instances), instances);
-
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, sizeof(instances) / sizeof(vector_instance_t));
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glUseProgram(0);
+   
 
 }
 
@@ -367,7 +257,5 @@ void lc_draw_set_view_matrix(mat4 matrix)
 
 static void enable_attribute(GLuint loc, GLint n, GLsizei stride, size_t offset)
 {
-    glEnableVertexAttribArray(loc);
-    glVertexAttribPointer(loc, n, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-    glVertexAttribDivisor(loc, 1);
+
 }
