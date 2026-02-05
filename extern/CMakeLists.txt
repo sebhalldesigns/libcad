@@ -43,7 +43,7 @@ set(IMGUI_STATIC ON CACHE BOOL "Enable imgui build" FORCE)
 add_subdirectory(cimgui)
 
 add_library(imgui_backends STATIC
-    cimgui/imgui/backends/imgui_impl_sdl3.cpp
+    #cimgui/imgui/backends/imgui_impl_sdl3.cpp
     cimgui/imgui/backends/imgui_impl_opengl3.cpp
 )
 

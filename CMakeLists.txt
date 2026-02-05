@@ -21,7 +21,7 @@ if (NOT EMSCRIPTEN)
     add_subdirectory(extern)
     #add_subdirectory(democad)
 
-    add_library(libcad STATIC
+    add_library(cad SHARED
         lib/libcad.c
         lib/lc_draw.c
         lib/lc_canvas.c
@@ -46,7 +46,7 @@ if (NOT EMSCRIPTEN)
         )
     endif()
 
-    target_link_libraries(libcad PUBLIC
+    target_link_libraries(cad PUBLIC
         ${PLATFORM_LIBS}
         cglm
         #SDL3-static
@@ -56,7 +56,7 @@ if (NOT EMSCRIPTEN)
         jansson
     )
 
-    set_target_properties(libcad PROPERTIES
+    set_target_properties(cad PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}
@@ -64,7 +64,7 @@ if (NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}
     )
 
-    target_include_directories(libcad PUBLIC
+    target_include_directories(cad PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/lib
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/extern
@@ -75,7 +75,7 @@ else()
     add_subdirectory(extern)
     #add_subdirectory(democad)
 
-    add_library(libcad STATIC
+    add_library(cad STATIC
         lib/libcad.c
         lib/lc_draw.c
         lib/lc_canvas.c
@@ -90,7 +90,7 @@ else()
         "-s USE_ZLIB=1"
     )
 
-    target_link_libraries(libcad PUBLIC
+    target_link_libraries(cad PUBLIC
         ${PLATFORM_LIBS}
         cglm
         SDL3-static
@@ -100,7 +100,7 @@ else()
         jansson
     )
 
-    set_target_properties(libcad PROPERTIES
+    set_target_properties(cad PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}
         RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}
@@ -108,7 +108,7 @@ else()
         RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}
     )
 
-    target_include_directories(libcad PUBLIC
+    target_include_directories(cad PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/lib
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/extern
@@ -133,14 +133,14 @@ function(embed_resources target)
 endfunction()
 
 if (NOT EMSCRIPTEN AND NOT IOS)
-    embed_resources(libcad
+    embed_resources(cad
         resources/shaders/basic/basic_core_vs.glsl
         resources/shaders/basic/basic_core_fs.glsl
         resources/shaders/vector/vector_core_vs.glsl
         resources/shaders/vector/vector_core_fs.glsl
     )
 else()
-    embed_resources(libcad
+    embed_resources(cad
         resources/shaders/basic/basic_es_vs.glsl
         resources/shaders/basic/basic_es_fs.glsl
     )

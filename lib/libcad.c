@@ -18,7 +18,6 @@
 #include <libcad/libcad.h>
 #include <stdio.h>
 
-#include <SDL3/SDL.h>
 #include <cglm/cglm.h>
 
 #ifdef EMSCRIPTEN
@@ -124,6 +123,10 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 
 void cad_render_viewport()
 {
+
+    glClearColor(0.1f, 0.15f, 0.2f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     //lc_scene_render((float)vp_width, (float)vp_height);
 
     lc_draw_begin(vp_width, vp_height);
