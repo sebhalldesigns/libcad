@@ -59,6 +59,15 @@ typedef HGLRC WINAPI wgl_create_context_attribs_arb_t(HDC hdc, HGLRC hglrc,
 typedef BOOL WINAPI wgl_choose_pixel_format_arb_t(HDC hdc, const int *attribs,
         const FLOAT *attribs_float, UINT max_formts, int *formats, UINT *num_formats);
 
+typedef struct
+{
+    HWND window;
+    HDC gl_dc;
+    HGLRC gl_rc;
+    int width;
+    int height;
+} window_win32_t;
+
 /***************************************************************
 ** MARK: STATIC VARIABLES
 ***************************************************************/
@@ -70,11 +79,11 @@ static HINSTANCE instance_handle = NULL;
 static WNDCLASSW window_class = {0};
 static WNDCLASSW gl_window_class = {0};
 
-static HDC gl_dc = NULL;
-
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
+
+static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -89,7 +98,7 @@ window_t window_create(const char *title, int width, int height)
         instance_handle = GetModuleHandle(NULL);
 
         window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-        window_class.lpfnWndProc = DefWindowProcW;
+        window_class.lpfnWndProc = window_proc;
         window_class.hInstance = instance_handle; 
         window_class.hCursor = LoadCursorW(NULL, IDC_ARROW);
         window_class.hbrBackground = NULL;
@@ -117,6 +126,15 @@ window_t window_create(const char *title, int width, int height)
         }
     }
 
+    window_win32_t *window_win32 = malloc(sizeof(window_win32_t));
+    if (!window_win32)
+    {
+        #ifdef DEBUG
+            log_error("Failed to allocate win32 window.");
+        #endif
+        return 0;
+    }
+
     HWND window  = CreateWindowExW(
         0,
         window_class.lpszClassName,
@@ -129,7 +147,7 @@ window_t window_create(const char *title, int width, int height)
         0,
         0,
         instance_handle,
-        0
+        (void*)window_win32
     );
 
     if (!window)
@@ -137,10 +155,11 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to create Win32 window");
         #endif
+        free(window_win32);
         return 0;
     }
 
-    gl_dc = GetDC(window);
+    HDC gl_dc = GetDC(window);
 
     /*
     ** The standard procedure for enabling a "modern" OpenGL context
@@ -181,6 +200,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to find a suitable pixel format.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -189,6 +209,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to set the pixel format.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -198,6 +219,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to create a dummy OpenGL rendering context.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -206,6 +228,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to activate dummy OpenGL rendering context.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -240,6 +263,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to set the OpenGL 3.3 pixel format.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -250,6 +274,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to set the OpenGL 3.3 pixel format.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -267,6 +292,7 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to create OpenGL 3.3 context.");
         #endif
+        free(window_win32);
         return 0;
     }
 
@@ -275,33 +301,40 @@ window_t window_create(const char *title, int width, int height)
         #ifdef DEBUG
             log_error("Failed to activate OpenGL 3.3 rendering context.");
         #endif
+        free(window_win32);
         return 0;
     }
+
+  
+    window_win32->gl_dc = gl_dc;
+    window_win32->gl_rc = gl33_context;
+    window_win32->width = width;
+    window_win32->height = height;
 
     UpdateWindow(window);
     ShowWindow(window, SW_SHOW);
 
-    return window;
+    return (uintptr_t)window_win32;
+}
+
+void window_destroy(window_t window)
+{
+    DestroyWindow(((window_win32_t*)window)->window);
+    free((window_win32_t*)window);
 }
 
 bool window_update()
 {
     static MSG msg;
-    while (PeekMessageW(&msg, 0, 0, 0, PM_REMOVE)) 
+    while (PeekMessageW(&msg, 0, 0, 0, PM_REMOVE))
     {
-        if (
-                (msg.message == WM_QUIT)
-            ||  (msg.message == WM_CLOSE)
-            ||  (msg.message == WM_DESTROY)
-        )
+        if (msg.message == WM_QUIT)
         {
             return false;
         }
-        else 
-        {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
+
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
     }
 
     Sleep(0);
@@ -310,9 +343,15 @@ bool window_update()
     return true;
 }
 
-void window_swap_buffers()
+void window_get_size(window_t window, vec2 *size)
 {
-    SwapBuffers(gl_dc);
+    (*size)[0] = (float)((window_win32_t*)window)->width;
+    (*size)[1] = (float)((window_win32_t*)window)->height;
+}
+
+void window_swap_buffers(window_t window)
+{
+    SwapBuffers(((window_win32_t*)window)->gl_dc);
 }
 
 
@@ -320,3 +359,56 @@ void window_swap_buffers()
 ** MARK: STATIC FUNCTIONS
 ***************************************************************/
 
+static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    window_win32_t *window_data = NULL;
+
+    if (msg == WM_NCCREATE)
+    {
+        CREATESTRUCT *create_struct = (CREATESTRUCT*)lparam;
+        window_data = (window_win32_t*)create_struct->lpCreateParams;
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)window_data);
+        if (window_data) window_data->window = hwnd;
+    }
+    else
+    {
+        window_data = (window_win32_t*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    }
+
+    switch (msg)
+    {
+        case WM_PAINT:
+        {
+            ValidateRect(hwnd, NULL);
+            return 0;
+        }
+
+        case WM_SIZE:
+        {
+            UINT width = LOWORD(lparam);
+            UINT height = HIWORD(lparam);
+
+            if (window_data)
+            {
+                window_data->width = width;
+                window_data->height = height;
+            }
+
+            // Trigger a repaint to update during resize
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+
+        case WM_CLOSE:
+        case WM_DESTROY:
+        {
+            PostQuitMessage(0);
+            return 0;
+        }
+            
+        default:
+        {
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
+        } break;
+    }
+}

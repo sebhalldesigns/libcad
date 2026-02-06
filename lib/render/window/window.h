@@ -42,11 +42,14 @@ typedef uintptr_t window_t;
 
 
 window_t window_create(const char *title, int width, int height);
+void window_destroy(window_t window);
 
 /* return false if should quit */
 bool window_update();
 
-void window_swap_buffers();
+void window_get_size(window_t window, vec2 *size);
+
+void window_swap_buffers(window_t window);
 
 #ifdef __cplusplus
 }

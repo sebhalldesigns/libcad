@@ -46,11 +46,7 @@
 int main()
 {
 
-    printf("test...\n");
-
     cad_create_context();
-
-    log_info("123");
 
     window_t window = window_create("123", 500, 500);
 
@@ -58,6 +54,9 @@ int main()
 
     while (window_update())
     {
+        vec2 size;
+        window_get_size(window, &size);
+
         vec4 color;
         color[0] = 1.0f;
         color[1] = 0.0f;
@@ -65,7 +64,7 @@ int main()
         color[3] = 1.0f;
         gpu_clear_color_buffer(color);
         
-        window_swap_buffers();
+        window_swap_buffers(window);
     }
 
     return 0;
