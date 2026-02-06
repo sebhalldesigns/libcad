@@ -99,11 +99,12 @@ else()
 endif()
 
 set(CAD_SRC
-    lib/libcad.c
-    lib/lc_draw.c
-    lib/lc_canvas.c
-    lib/lc_scene.c
+    #lib/libcad.c
+    #lib/lc_draw.c
+    #lib/lc_canvas.c
+    #lib/lc_scene.c
     lib/render/gpu/gpu.c
+    lib/render/vector/vector.c
     lib/util/log/log.c
     ${PLATFORM_SRC}
 )

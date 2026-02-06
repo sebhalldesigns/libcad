@@ -18,8 +18,11 @@
 #include <stdio.h>
 
 #include <libcad/libcad.h>
-#include <render/window/window.h>
+
+
 #include <render/gpu/gpu.h>
+#include <render/vector/vector.h>
+#include <render/window/window.h>
 
 #include <util/log/log.h>
 
@@ -46,11 +49,12 @@
 int main()
 {
 
-    cad_create_context();
+    //cad_create_context();
 
     window_t window = window_create("123", 500, 500);
 
     gpu_init();
+    vector_init();
 
     while (window_update())
     {
@@ -63,7 +67,9 @@ int main()
         color[2] = 0.0f;
         color[3] = 1.0f;
         gpu_clear_color_buffer(color);
-        
+
+        vector_render((int)size[0], (int)size[1]);
+
         window_swap_buffers(window);
     }
 

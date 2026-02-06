@@ -394,7 +394,6 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
                 window_data->height = height;
             }
 
-            // Trigger a repaint to update during resize
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
         }
