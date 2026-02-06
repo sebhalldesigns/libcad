@@ -41,16 +41,17 @@ typedef struct
 
 typedef struct
 {
-    vec2 start;
-    vec2 end;
+    vec3 start;
+    vec3 end;
     vec4 color;
     float stroke_width;
     float dash; /* encode into single float somehow */
-} line_instance_t;
+} line_instance_t; /* 12 floats */
 
 typedef struct
 {
-    vec2 center;
+    vec3 center;
+    vec3 normal;
     vec2 size;
     vec4 color;
     float rotation;
@@ -61,15 +62,17 @@ typedef struct
     float stroke_width;
     float corner_radius;
     float dash;  /* encode into single float */
-} shape_instance_t;
+} shape_instance_t; /* 20 floats */
 
 typedef struct
 {
-    vec2 p0, p1, p2, p3;
+    vec3 p0, p1, p2, p3;
     vec4 color;
+    float fill;
+    float fill_param;
     float stroke_width;
     float dash; /* encode into single float */
-} bezier_instance_t;
+} bezier_instance_t; /* 20 floats */
 
 typedef struct
 {
@@ -78,8 +81,20 @@ typedef struct
     vec2 uv_min;
     vec2 uv_max;
     vec4 color;
-} glyph_instance_t;
+} glyph_instance_t; /* 12 floats */
 
+typedef struct
+{
+    void *data; /* raw data pointer */
+    size_t used; /* number of bytes used of raw data */
+    size_t capacity; /* allocated size of raw data */
+
+    size_t instance_size; /* size of each instance in bytes */
+    
+    uint32_t *indices;
+    uint32_t *reverse_indices;
+    size_t max_handles; /* number of max_handles allocated */
+} instance_arena_t;
 
 /***************************************************************
 ** MARK: STATIC VARIABLES
@@ -110,9 +125,21 @@ static vertex_array_t vector_vertex_array;
 static buffer_t quad_buffer;
 static buffer_t instance_buffer;
 
+static instance_arena_t line_arena;
+static instance_arena_t shape_arena;
+static instance_arena_t bezier_arena;
+static instance_arena_t glyph_arena;
+
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
+
+static void instance_arena_init(instance_arena_t *arena, size_t capacity);
+static void instance_arena_destroy(instance_arena_t *arena);
+static void instance_arena_clear(instance_arena_t *arena);
+static uint32_t instance_arena_add(instance_arena_t *arena, const void *instance);
+static void instance_arena_remove(instance_arena_t *arena, uint32_t handle);
+static size_t instance_arena_count(instance_arena_t *arena);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -202,8 +229,159 @@ void vector_render(int width, int height)
 ** MARK: STATIC FUNCTIONS
 ***************************************************************/
 
+static void instance_arena_init(instance_arena_t *arena, size_t instance_size, size_t initial_count)
+{
+   size_t initial_capacity = initial_count * instance_size;
+    
+    arena->data = malloc(initial_capacity);
+    arena->indices = malloc(initial_count * sizeof(uint32_t));
+    arena->reverse_indices = malloc(initial_count * sizeof(uint32_t));
+    
+    if (arena->data && arena->indices && arena->reverse_indices)
+    {
+        arena->capacity = initial_capacity;
+        arena->instance_size = instance_size;
+        arena->used = 0;
+        arena->max_handles = initial_count;
+    }
+    else
+    {
+        #ifdef DEBUG
+            log_error("Failed to allocate instance arena.");
+        #endif
+        
+        /* clean up partial allocation */
+        free(arena->data);
+        free(arena->indices);
+        free(arena->reverse_indices);
+        arena->data = NULL;
+        arena->indices = NULL;
+        arena->reverse_indices = NULL;
+    }
+}
 
+static void instance_arena_destroy(instance_arena_t *arena)
+{
+    free(arena->data);
+    free(arena->indices);
+    free(arena->reverse_indices);
+    
+    arena->data = NULL;
+    arena->indices = NULL;
+    arena->reverse_indices = NULL;
+    arena->used = 0;
+    arena->capacity = 0;
+    arena->max_handles = 0;
+}
 
+static void instance_arena_clear(instance_arena_t *arena)
+{
+    arena->used = 0;
+}
 
+static uint32_t instance_arena_add(instance_arena_t *arena, const void *instance)
+{
+    /* check if we need to grow the data array */
+    if (arena->used + arena->instance_size > arena->capacity)
+    {
+        size_t new_capacity = arena->capacity * 2;
+        void *new_data = realloc(arena->data, new_capacity);
+        
+        if (!new_data)
+        {
+            #ifdef DEBUG
+                log_error("Failed to reallocate instance arena data.");
+            #endif
+            return UINT32_MAX;
+        }
+        
+        arena->data = new_data;
+        arena->capacity = new_capacity;
+    }
+    
+    /* check if we need to grow the index arrays */
+    if ((arena->capacity / arena->instance_size) >= arena->max_handles)
+    {
+        size_t new_max = arena->max_handles * 2;
+        
+        uint32_t *new_indices = realloc(arena->indices, new_max * sizeof(uint32_t));
+        uint32_t *new_reverse = realloc(arena->reverse_indices, new_max * sizeof(uint32_t));
+        
+        if (!new_indices || !new_reverse)
+        {
+            #ifdef DEBUG
+                log_error("Failed to reallocate instance arena indices.");
+            #endif
+            free(new_indices);
+            free(new_reverse);
+            return UINT32_MAX;
+        }
+        
+        arena->indices = new_indices;
+        arena->reverse_indices = new_reverse;
+        arena->max_handles = new_max;
+    }
+    
+    /* Add instance to dense array */
+    uint32_t handle = arena->used / arena->instance_size; 
+    uint32_t data_index = handle;  /* Same value initially */
+    
+    void *dst = (uint8_t *)arena->data + arena->used;
+    memcpy(dst, instance, arena->instance_size);
+    
+    arena->indices[handle] = data_index;
+    arena->reverse_indices[data_index] = handle;
+    
+    arena->used += arena->instance_size;
+    
+    return handle;
+}
+
+static void instance_arena_remove(instance_arena_t *arena, uint32_t handle)
+{
+    if (handle >= arena->max_handles)
+    {
+        #ifdef DEBUG
+            log_warning("Call to remove invalid instance handle");
+        #endif
+        return;
+    }
+        
+    
+    uint32_t data_index = arena->indices[handle];
+    size_t active_count = arena->used / arena->instance_size;
+    
+    if (data_index == UINT32_MAX || data_index >= active_count)
+    {
+        #ifdef DEBUG
+            log_warning("Call to remove invalid instance handle");
+        #endif
+        return;
+    }
+       
+    
+    uint32_t last_data_index = active_count - 1;
+    
+    if (data_index != last_data_index)
+    {
+        void *dst = (uint8_t *)arena->data + (data_index * arena->instance_size);
+        void *src = (uint8_t *)arena->data + (last_data_index * arena->instance_size);
+        memcpy(dst, src, arena->instance_size);
+        
+        uint32_t swapped_handle = arena->reverse_indices[last_data_index];
+        arena->indices[swapped_handle] = data_index;
+        arena->reverse_indices[data_index] = swapped_handle;
+    }
+    
+    arena->indices[handle] = UINT32_MAX;
+    arena->used -= arena->instance_size;
+    
+    return true;
+}
+
+static size_t instance_arena_count(instance_arena_t *arena)
+{
+    return arena->used / arena->instance_size;
+}
 
 
