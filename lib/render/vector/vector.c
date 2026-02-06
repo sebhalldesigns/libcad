@@ -39,6 +39,48 @@ typedef struct
     vec4 color;
 } vector_instance_t;
 
+typedef struct
+{
+    vec2 start;
+    vec2 end;
+    vec4 color;
+    float stroke_width;
+    float dash; /* encode into single float somehow */
+} line_instance_t;
+
+typedef struct
+{
+    vec2 center;
+    vec2 size;
+    vec4 color;
+    float rotation;
+    float sides; /* 1 for ellipse, 2 invalid, 3 triangle etc. */
+    float start_angle; /* for arcs, 0 for ellipse */
+    float end_angle; /* for arcs, 0 for circle */
+    float fill; /* normalise fill, -1 to 1. -ve fill from center, +ve fill from outside*/
+    float stroke_width;
+    float corner_radius;
+    float dash;  /* encode into single float */
+} shape_instance_t;
+
+typedef struct
+{
+    vec2 p0, p1, p2, p3;
+    vec4 color;
+    float stroke_width;
+    float dash; /* encode into single float */
+} bezier_instance_t;
+
+typedef struct
+{
+    vec2 position;
+    vec2 size;
+    vec2 uv_min;
+    vec2 uv_max;
+    vec4 color;
+} glyph_instance_t;
+
+
 /***************************************************************
 ** MARK: STATIC VARIABLES
 ***************************************************************/
