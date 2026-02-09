@@ -96,26 +96,33 @@ typedef struct
 ** MARK: FUNCTION DEFS
 ***************************************************************/
 
-/*
-**
-** Notes on API:
-** - lots of parameters
-** - could make more state machine
-** - especially for e.g drawing lots of 2D rectangles needing normals
-** - easier to make them without normals, then batch set normal?
-** - do we actually need normal? possibly not
-*/
-
+/* initialization and rendering */
 bool vector_init(void);
-
 void vector_render(int width, int height);
 
+/* helper functions for encoding parameters */
 float vector_build_dash(float period, float ratio);
 float vector_build_fill(vector_fill_type_t fill_type, float proportion);
 
+/* line primitives */
 bool vector_create_line(const vector_line_instance_t *data, vector_instance_t *out_handle);
 void vector_update_line(vector_instance_t instance, const vector_line_instance_t *data);
 void vector_destroy_line(vector_instance_t instance);
+
+/* shape primitives (circles, ellipses, rectangles, polygons, arcs) */
+bool vector_create_shape(const vector_shape_instance_t *data, vector_instance_t *out_handle);
+void vector_update_shape(vector_instance_t instance, const vector_shape_instance_t *data);
+void vector_destroy_shape(vector_instance_t instance);
+
+/* bezier curve primitives */
+bool vector_create_bezier(const vector_bezier_instance_t *data, vector_instance_t *out_handle);
+void vector_update_bezier(vector_instance_t instance, const vector_bezier_instance_t *data);
+void vector_destroy_bezier(vector_instance_t instance);
+
+/* glyph/text primitives */
+bool vector_create_glyph(const vector_glyph_instance_t *data, vector_instance_t *out_handle);
+void vector_update_glyph(vector_instance_t instance, const vector_glyph_instance_t *data);
+void vector_destroy_glyph(vector_instance_t instance);
 
 #ifdef __cplusplus
 }

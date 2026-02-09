@@ -90,6 +90,8 @@ void gpu_draw_instances(
 );
 
 void gpu_set_blending(bool blending);
+void gpu_set_depth_test(bool depth_test);
+void gpu_set_depth_write(bool depth_write);
 
 #ifdef __cplusplus
 }

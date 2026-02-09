@@ -106,6 +106,7 @@ static void draw_callback()
     color[2] = 1.0f;
     color[3] = 1.0f;
     gpu_clear_color_buffer(color);
+    gpu_clear_depth_buffer();
 
     vector_render((int)size[0], (int)size[1]);
 

@@ -21,6 +21,9 @@
 
 #include <cglm/cglm.h>
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+
 #include <render/gpu/gpu.h>
 #include <util/log/log.h>
 
@@ -173,6 +176,10 @@ void vector_render(int width, int height)
 {
     gpu_set_blending(true);
     gpu_set_viewport(width, height);
+
+    /* enable depth testing for 3D */
+    gpu_set_depth_test(true);
+    gpu_set_depth_write(true);
 
     /* render lines */
     size_t line_count = instance_arena_count(&line_arena);

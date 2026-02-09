@@ -272,6 +272,23 @@ void gpu_set_blending(bool blending)
     }
 }
 
+void gpu_set_depth_test(bool depth_test)
+{
+    if (depth_test)
+    {
+        glEnable(GL_DEPTH_TEST);
+    }
+    else
+    {
+        glDisable(GL_DEPTH_TEST);
+    }
+}
+
+void gpu_set_depth_write(bool depth_write)
+{
+    glDepthMask(depth_write);
+}
+
 
 /***************************************************************
 ** MARK: STATIC FUNCTIONS
