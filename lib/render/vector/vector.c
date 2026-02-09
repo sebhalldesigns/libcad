@@ -176,16 +176,6 @@ void vector_render(int width, int height)
 
     /* render lines */
     size_t line_count = instance_arena_count(&line_arena);
-
-    #ifdef DEBUG
-        static int frame_count = 0;
-        if (frame_count < 5) {
-            log_info("vector_render: line_count=%zu, width=%d, height=%d", line_count, width, height);
-            log_info("  arena.used=%zu, arena.capacity=%zu", line_arena.used, line_arena.capacity);
-            frame_count++;
-        }
-    #endif
-
     if (line_count > 0)
     {
         gpu_use_shader(line_shader);
@@ -212,15 +202,6 @@ void vector_render(int width, int height)
         /* unbind vertex array */
         gpu_bind_vertex_array(0);
     }
-    #ifdef DEBUG
-        else {
-            static int warn_count = 0;
-            if (warn_count < 3) {
-                log_warning("vector_render: No lines to render!");
-                warn_count++;
-            }
-        }
-    #endif
 
     /* TODO: render shapes, beziers, glyphs */
 }
@@ -228,53 +209,19 @@ void vector_render(int width, int height)
 bool vector_create_line(const vector_line_instance_t *data, vector_instance_t *out_handle)
 {
     if (!data || !out_handle)
-    {
-        #ifdef DEBUG
-            log_error("vector_create_line: NULL parameter");
-        #endif
         return false;
-    }
 
     uint32_t handle = instance_arena_add(&line_arena, data);
     if (handle == UINT32_MAX)
-    {
-        #ifdef DEBUG
-            log_error("vector_create_line: Failed to allocate handle");
-        #endif
         return false;
-    }
 
     *out_handle = handle;
-
-    #ifdef DEBUG
-        log_info("vector_create_line: Created line with handle %u", handle);
-        log_info("  start=(%.1f, %.1f, %.1f), end=(%.1f, %.1f, %.1f)",
-                 data->start[0], data->start[1], data->start[2],
-                 data->end[0], data->end[1], data->end[2]);
-        log_info("  color=(%.2f, %.2f, %.2f, %.2f), width=%.1f",
-                 data->color[0], data->color[1], data->color[2], data->color[3],
-                 data->stroke_width);
-    #endif
-
     return true;
 }
 
 void vector_update_line(vector_instance_t instance, const vector_line_instance_t *data)
 {
-    if (!data)
-    {
-        #ifdef DEBUG
-            log_warning("vector_update_line: NULL data parameter");
-        #endif
-        return;
-    }
-
-    if (!instance_arena_update(&line_arena, instance, data))
-    {
-        #ifdef DEBUG
-            log_warning("vector_update_line: Failed to update instance %u", instance);
-        #endif
-    }
+    instance_arena_update(&line_arena, instance, data);
 }
 
 void vector_destroy_line(vector_instance_t instance)

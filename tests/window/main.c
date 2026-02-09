@@ -60,9 +60,9 @@ int main()
     gpu_init();
     vector_init();
 
-    for (int x = 0; x < 3000; x += 2)
+    for (int x = 0; x < 3440; x += 2)
     {
-        for (int y = 0; y < 1000; y += 2)
+        for (int y = 0; y < 1400; y += 2)
         {
             /* create a line */
             vector_line_instance_t line_data = {
