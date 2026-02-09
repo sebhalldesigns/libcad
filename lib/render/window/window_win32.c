@@ -66,6 +66,7 @@ typedef struct
     HGLRC gl_rc;
     int width;
     int height;
+    window_draw_callback_t draw_callback;
 } window_win32_t;
 
 /***************************************************************
@@ -310,6 +311,7 @@ window_t window_create(const char *title, int width, int height)
     window_win32->gl_rc = gl33_context;
     window_win32->width = width;
     window_win32->height = height;
+    window_win32->draw_callback = NULL;
 
     UpdateWindow(window);
     ShowWindow(window, SW_SHOW);
@@ -341,6 +343,11 @@ bool window_update()
     YieldProcessor();
 
     return true;
+}
+
+void window_set_draw_callback(window_t window, window_draw_callback_t draw_callback)
+{
+    ((window_win32_t*)window)->draw_callback = draw_callback;
 }
 
 void window_get_size(window_t window, vec2 *size)
@@ -379,6 +386,15 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     {
         case WM_PAINT:
         {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+
+            if (window_data->draw_callback)
+            {
+                (window_data->draw_callback)();
+            }
+
+            EndPaint(hwnd, &ps);
             ValidateRect(hwnd, NULL);
             return 0;
         }

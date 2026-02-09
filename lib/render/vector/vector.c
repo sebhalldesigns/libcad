@@ -37,51 +37,6 @@
 ** MARK: TYPEDEFS
 ***************************************************************/
 
-
-typedef struct
-{
-    vec3 start;
-    vec3 end;
-    vec4 color;
-    float stroke_width;
-    float dash; /* encode into single float somehow */
-} line_instance_t; /* 12 floats */
-
-typedef struct
-{
-    vec3 center;
-    vec3 normal;
-    vec2 size;
-    vec4 color;
-    float rotation;
-    float sides; /* 1 for ellipse, 2 invalid, 3 triangle etc. */
-    float start_angle; /* for arcs, 0 for ellipse */
-    float end_angle; /* for arcs, 0 for circle */
-    float fill; /* normalise fill, -1 to 1. -ve fill from center, +ve fill from outside*/
-    float stroke_width;
-    float corner_radius;
-    float dash;  /* encode into single float */
-} shape_instance_t; /* 20 floats */
-
-typedef struct
-{
-    vec3 p0, p1, p2, p3;
-    vec4 color;
-    float fill;
-    float fill_param;
-    float stroke_width;
-    float dash; /* encode into single float */
-} bezier_instance_t; /* 20 floats */
-
-typedef struct
-{
-    vec2 position;
-    vec2 size;
-    vec2 uv_min;
-    vec2 uv_max;
-    vec4 color;
-} glyph_instance_t; /* 12 floats */
-
 typedef struct
 {
     void *data; /* raw data pointer */
@@ -159,7 +114,7 @@ bool vector_init()
 {
 
     /* create arenas */
-    instance_arena_init(&line_arena, sizeof(line_instance_t), INITIAL_ARENA_SIZE);
+    instance_arena_init(&line_arena, sizeof(vector_line_instance_t), INITIAL_ARENA_SIZE);
 
     if (!gpu_compile_shader(
         (const char*)resources_shaders_vector_line_core_vs_glsl,
@@ -191,35 +146,21 @@ bool vector_init()
     line_vertex_array = gpu_create_vertex_array();
     gpu_bind_vertex_array(line_vertex_array);
 
+    /* set up quad buffer (per-vertex data) */
     line_quad_buffer = gpu_create_buffer();
     gpu_upload_array_buffer_data(line_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
-
     gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
 
-
-    line_instance_t instances[1];
-    instances[0].start[0] = 100.0f;
-    instances[0].start[1] = 100.0f;
-    instances[0].start[2] = 0.0f;
-    instances[0].end[0] = 500.0f;
-    instances[0].end[1] = 300.0f;
-    instances[0].end[2] = 0.0f;
-    instances[0].color[0] = 1.0f;
-    instances[0].color[1] = 1.0f;
-    instances[0].color[2] = 1.0f;
-    instances[0].color[3] = 1.0f;
-    instances[0].stroke_width = 5.0f;
-    instances[0].dash = 0.0f;
-
-    int num_instances = 1;
+    /* create and bind instance buffer (per-instance data) */
     line_instance_buffer = gpu_create_buffer();
-    gpu_upload_array_buffer_data(line_instance_buffer, instances, sizeof(instances), true);
+    gpu_upload_array_buffer_data(line_instance_buffer, NULL, 0, true); /* bind the buffer */
 
-    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, start), 1);
-    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, end), 1);
-    gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, color), 1);
-    gpu_enable_vertex_attribute(4, 1, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, stroke_width), 1);
-    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, dash), 1);
+    /* set up per-instance vertex attributes */
+    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, start), 1);
+    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, end), 1);
+    gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, color), 1);
+    gpu_enable_vertex_attribute(4, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, stroke_width), 1);
+    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, dash), 1);
 
     gpu_bind_vertex_array(0);
 
@@ -231,49 +172,114 @@ bool vector_init()
 void vector_render(int width, int height)
 {
     gpu_set_blending(true);
-    
     gpu_set_viewport(width, height);
-    gpu_use_shader(line_shader);
 
-    
-    mat4 projection;
-    glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
-    gpu_set_uniform_mat4(line_shader_uniform_projection, projection);
+    /* render lines */
+    size_t line_count = instance_arena_count(&line_arena);
 
-    vec2 viewport;
-    viewport[0] = (float)width;
-    viewport[1] = (float)height;
-    gpu_set_uniform_vec2(line_shader_uniform_viewport, viewport);
+    #ifdef DEBUG
+        static int frame_count = 0;
+        if (frame_count < 5) {
+            log_info("vector_render: line_count=%zu, width=%d, height=%d", line_count, width, height);
+            log_info("  arena.used=%zu, arena.capacity=%zu", line_arena.used, line_arena.capacity);
+            frame_count++;
+        }
+    #endif
 
-    gpu_draw_instances(line_vertex_array, 0, 4, 1);
-    
+    if (line_count > 0)
+    {
+        gpu_use_shader(line_shader);
+
+        mat4 projection;
+        glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
+        gpu_set_uniform_mat4(line_shader_uniform_projection, projection);
+
+        vec2 viewport;
+        viewport[0] = (float)width;
+        viewport[1] = (float)height;
+        gpu_set_uniform_vec2(line_shader_uniform_viewport, viewport);
+
+        /* bind vertex array and upload instance data */
+        gpu_bind_vertex_array(line_vertex_array);
+        gpu_upload_array_buffer_data(line_instance_buffer,
+                                     instance_arena_data(&line_arena),
+                                     line_arena.used,
+                                     true);
+
+        /* draw all line instances */
+        gpu_draw_instances(line_vertex_array, 0, 4, line_count);
+
+        /* unbind vertex array */
+        gpu_bind_vertex_array(0);
+    }
+    #ifdef DEBUG
+        else {
+            static int warn_count = 0;
+            if (warn_count < 3) {
+                log_warning("vector_render: No lines to render!");
+                warn_count++;
+            }
+        }
+    #endif
+
+    /* TODO: render shapes, beziers, glyphs */
 }
 
-vector_instance_t vector_create_line()
+bool vector_create_line(const vector_line_instance_t *data, vector_instance_t *out_handle)
 {
-    line_instance_t line;
-    return (uintptr_t)instance_arena_add(&line_arena, &line);
+    if (!data || !out_handle)
+    {
+        #ifdef DEBUG
+            log_error("vector_create_line: NULL parameter");
+        #endif
+        return false;
+    }
+
+    uint32_t handle = instance_arena_add(&line_arena, data);
+    if (handle == UINT32_MAX)
+    {
+        #ifdef DEBUG
+            log_error("vector_create_line: Failed to allocate handle");
+        #endif
+        return false;
+    }
+
+    *out_handle = handle;
+
+    #ifdef DEBUG
+        log_info("vector_create_line: Created line with handle %u", handle);
+        log_info("  start=(%.1f, %.1f, %.1f), end=(%.1f, %.1f, %.1f)",
+                 data->start[0], data->start[1], data->start[2],
+                 data->end[0], data->end[1], data->end[2]);
+        log_info("  color=(%.2f, %.2f, %.2f, %.2f), width=%.1f",
+                 data->color[0], data->color[1], data->color[2], data->color[3],
+                 data->stroke_width);
+    #endif
+
+    return true;
 }
 
-void vector_build_line(vector_instance_t instance, vec3 start, vec3 end, vec4 color, float stroke_width, vector_dash_t dash)
+void vector_update_line(vector_instance_t instance, const vector_line_instance_t *data)
 {
-    line_instance_t *line = (line_instance_t*)instance_arena_get(&line_arena, instance);
+    if (!data)
+    {
+        #ifdef DEBUG
+            log_warning("vector_update_line: NULL data parameter");
+        #endif
+        return;
+    }
 
-    line->color[0] = color[0];
-    line->color[1] = color[1];
-    line->color[2] = color[2];
-    line->color[3] = color[3];
+    if (!instance_arena_update(&line_arena, instance, data))
+    {
+        #ifdef DEBUG
+            log_warning("vector_update_line: Failed to update instance %u", instance);
+        #endif
+    }
+}
 
-    line->start[0] = start[0];
-    line->start[1] = start[1];
-    line->start[2] = start[2];
-
-    line->end[0] = end[0];
-    line->end[1] = end[1];
-    line->end[2] = end[2];
-
-    line->stroke_width = stroke_width;
-    line->dash = dash;
+void vector_destroy_line(vector_instance_t instance)
+{
+    instance_arena_remove(&line_arena, instance);
 }
 
 

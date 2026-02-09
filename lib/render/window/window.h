@@ -35,6 +35,7 @@ extern "C" {
 ***************************************************************/
 
 typedef uintptr_t window_t;
+typedef void (*window_draw_callback_t)();
 
 /***************************************************************
 ** MARK: FUNCTION DEFS
@@ -46,6 +47,7 @@ void window_destroy(window_t window);
 
 /* return false if should quit */
 bool window_update();
+void window_set_draw_callback(window_t window, window_draw_callback_t draw_callback);
 
 void window_get_size(window_t window, vec2 *size);
 

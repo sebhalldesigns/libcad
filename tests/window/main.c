@@ -38,9 +38,13 @@
 ** MARK: STATIC VARIABLES
 ***************************************************************/
 
+static window_t window;
+
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
+
+static void draw_callback();
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -51,26 +55,37 @@ int main()
 
     //cad_create_context();
 
-    window_t window = window_create("123", 500, 500);
+    window = window_create("123", 500, 500);
 
     gpu_init();
     vector_init();
 
-    while (window_update())
+    for (int x = 0; x < 3000; x += 2)
     {
-        vec2 size;
-        window_get_size(window, &size);
+        for (int y = 0; y < 1000; y += 2)
+        {
+            /* create a line */
+            vector_line_instance_t line_data = {
+                .start = {(float)x, (float)y, 0.0f},
+                .end = {(float)x, (float)y + 1.0f, 0.0f},
+                .color = {0.0f, 0.0f, 0.0f, 1.0f},  // red
+                .stroke_width = 1.0f,
+                .dash = 0.0f  // solid line
+            };
 
-        vec4 color;
-        color[0] = 1.0f;
-        color[1] = 0.0f;
-        color[2] = 0.0f;
-        color[3] = 1.0f;
-        gpu_clear_color_buffer(color);
+            vector_instance_t line_handle;
+            vector_create_line(&line_data, &line_handle);
 
-        vector_render((int)size[0], (int)size[1]);
+        }
+    }
+   
 
-        window_swap_buffers(window);
+    
+    window_set_draw_callback(window, draw_callback);
+
+    while (window_update())
+    {   
+        
     }
 
     return 0;
@@ -80,8 +95,22 @@ int main()
 ** MARK: STATIC FUNCTIONS
 ***************************************************************/
 
+static void draw_callback()
+{
+    vec2 size;
+    window_get_size(window, &size);
 
+    vec4 color;
+    color[0] = 1.0f;
+    color[1] = 1.0f;
+    color[2] = 1.0f;
+    color[3] = 1.0f;
+    gpu_clear_color_buffer(color);
 
+    vector_render((int)size[0], (int)size[1]);
+
+    window_swap_buffers(window);
+}
 
 
 
