@@ -24,20 +24,19 @@
 #include <render/gpu/gpu.h>
 #include <util/log/log.h>
 
+#include "vector.h"
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
+
+#define INITIAL_ARENA_SIZE  (1024U)
+#define INSTANCE_TYPE_OFFSET (32U)
 
 /***************************************************************
 ** MARK: TYPEDEFS
 ***************************************************************/
 
-typedef struct
-{
-    vec2 pos;
-    float radius;
-    vec4 color;
-} vector_instance_t;
 
 typedef struct
 {
@@ -103,11 +102,11 @@ typedef struct
 #ifdef USE_GLES
 
 #else
-extern uint8_t resources_shaders_vector_vector_core_vs_glsl[];
-extern uint32_t resources_shaders_vector_vector_core_vs_glsl_size;
+extern uint8_t resources_shaders_vector_line_core_vs_glsl[];
+extern uint32_t resources_shaders_vector_line_core_vs_glsl_size;
 
-extern uint8_t resources_shaders_vector_vector_core_fs_glsl[];
-extern uint32_t resources_shaders_vector_vector_core_fs_glsl_size;
+extern uint8_t resources_shaders_vector_line_core_fs_glsl[];
+extern uint32_t resources_shaders_vector_line_core_fs_glsl_size;
 #endif
 
 static shader_t vector_shader = 0;
@@ -130,16 +129,27 @@ static instance_arena_t shape_arena;
 static instance_arena_t bezier_arena;
 static instance_arena_t glyph_arena;
 
+static shader_t line_shader;
+static uniform_t line_shader_uniform_projection;
+static uniform_t line_shader_uniform_viewport;
+static vertex_array_t line_vertex_array;
+static buffer_t line_quad_buffer;
+static buffer_t line_instance_buffer;
+
+
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
 
-static void instance_arena_init(instance_arena_t *arena, size_t capacity);
+static void instance_arena_init(instance_arena_t *arena, size_t instance_size, size_t initial_count);
 static void instance_arena_destroy(instance_arena_t *arena);
 static void instance_arena_clear(instance_arena_t *arena);
 static uint32_t instance_arena_add(instance_arena_t *arena, const void *instance);
 static void instance_arena_remove(instance_arena_t *arena, uint32_t handle);
 static size_t instance_arena_count(instance_arena_t *arena);
+static bool instance_arena_update(instance_arena_t *arena, uint32_t handle, const void *instance);
+static void *instance_arena_get(instance_arena_t *arena, uint32_t handle);
+static void *instance_arena_data(instance_arena_t *arena);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -147,61 +157,69 @@ static size_t instance_arena_count(instance_arena_t *arena);
 
 bool vector_init()
 {
+
+    /* create arenas */
+    instance_arena_init(&line_arena, sizeof(line_instance_t), INITIAL_ARENA_SIZE);
+
     if (!gpu_compile_shader(
-        (const char*)resources_shaders_vector_vector_core_vs_glsl,
-        resources_shaders_vector_vector_core_vs_glsl_size,
-        (const char*)resources_shaders_vector_vector_core_fs_glsl,
-        resources_shaders_vector_vector_core_fs_glsl_size,
-        &vector_shader
+        (const char*)resources_shaders_vector_line_core_vs_glsl,
+        resources_shaders_vector_line_core_vs_glsl_size,
+        (const char*)resources_shaders_vector_line_core_fs_glsl,
+        resources_shaders_vector_line_core_fs_glsl_size,
+        &line_shader
     ))
     {
         #ifdef DEBUG
-            log_error("Failed to compile vector shader.");
+            log_error("Failed to compile line shader.");
         #endif
         return false;
     }
 
-    log_info("compiled vector shader");
+    log_info("compiled line shader");
 
-    if (!gpu_get_shader_uniform(vector_shader, "projection", &projection_uniform))
+    if (
+        !gpu_get_shader_uniform(line_shader, "projection", &line_shader_uniform_projection)
+    ||  !gpu_get_shader_uniform(line_shader, "viewport", &line_shader_uniform_viewport)
+    )
     {
         #ifdef DEBUG
-            log_error("Failed to get projection uniform.");
+            log_error("Failed to get line shader uniform.");
         #endif
         return false;
     }
 
-    vector_vertex_array = gpu_create_vertex_array();
-    gpu_bind_vertex_array(vector_vertex_array);
+    line_vertex_array = gpu_create_vertex_array();
+    gpu_bind_vertex_array(line_vertex_array);
 
-    quad_buffer = gpu_create_buffer();
-    gpu_upload_array_buffer_data(quad_buffer, quad_vertices, sizeof(quad_vertices), false);
+    line_quad_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(line_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
 
     gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
 
-    vector_instance_t instances[2];
-    instances[0].pos[0] = 100.0f;
-    instances[0].pos[1] = 200.0f;
-    instances[0].radius = 50.0f;
-    instances[0].color[0] = 0.0f;
+
+    line_instance_t instances[1];
+    instances[0].start[0] = 100.0f;
+    instances[0].start[1] = 100.0f;
+    instances[0].start[2] = 0.0f;
+    instances[0].end[0] = 500.0f;
+    instances[0].end[1] = 300.0f;
+    instances[0].end[2] = 0.0f;
+    instances[0].color[0] = 1.0f;
     instances[0].color[1] = 1.0f;
     instances[0].color[2] = 1.0f;
     instances[0].color[3] = 1.0f;
-    instances[1].pos[0] = 300.0f;
-    instances[1].pos[1] = 100.0f;
-    instances[1].radius = 25.0f;
-    instances[1].color[0] = 0.0f;
-    instances[1].color[1] = 0.0f;
-    instances[1].color[2] = 1.0f;
-    instances[1].color[3] = 1.0f;
+    instances[0].stroke_width = 5.0f;
+    instances[0].dash = 0.0f;
 
-    int num_instances = 2;
-    instance_buffer = gpu_create_buffer();
-    gpu_upload_array_buffer_data(instance_buffer, instances, sizeof(instances), true);
+    int num_instances = 1;
+    line_instance_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(line_instance_buffer, instances, sizeof(instances), true);
 
-    gpu_enable_vertex_attribute(1, 2, GPU_TYPE_FLOAT, false, sizeof(vector_instance_t), offsetof(vector_instance_t, pos), 1);
-    gpu_enable_vertex_attribute(2, 1, GPU_TYPE_FLOAT, false, sizeof(vector_instance_t), offsetof(vector_instance_t, radius), 1);
-    gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(vector_instance_t), offsetof(vector_instance_t, color), 1);
+    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, start), 1);
+    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, end), 1);
+    gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, color), 1);
+    gpu_enable_vertex_attribute(4, 1, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, stroke_width), 1);
+    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(line_instance_t), offsetof(line_instance_t, dash), 1);
 
     gpu_bind_vertex_array(0);
 
@@ -215,13 +233,47 @@ void vector_render(int width, int height)
     gpu_set_blending(true);
     
     gpu_set_viewport(width, height);
-    gpu_use_shader(vector_shader);
+    gpu_use_shader(line_shader);
 
+    
     mat4 projection;
     glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
-    gpu_set_uniform_mat4(projection_uniform, projection);
+    gpu_set_uniform_mat4(line_shader_uniform_projection, projection);
 
-    gpu_draw_instances(vector_vertex_array, 0, 4, 2);
+    vec2 viewport;
+    viewport[0] = (float)width;
+    viewport[1] = (float)height;
+    gpu_set_uniform_vec2(line_shader_uniform_viewport, viewport);
+
+    gpu_draw_instances(line_vertex_array, 0, 4, 1);
+    
+}
+
+vector_instance_t vector_create_line()
+{
+    line_instance_t line;
+    return (uintptr_t)instance_arena_add(&line_arena, &line);
+}
+
+void vector_build_line(vector_instance_t instance, vec3 start, vec3 end, vec4 color, float stroke_width, vector_dash_t dash)
+{
+    line_instance_t *line = (line_instance_t*)instance_arena_get(&line_arena, instance);
+
+    line->color[0] = color[0];
+    line->color[1] = color[1];
+    line->color[2] = color[2];
+    line->color[3] = color[3];
+
+    line->start[0] = start[0];
+    line->start[1] = start[1];
+    line->start[2] = start[2];
+
+    line->end[0] = end[0];
+    line->end[1] = end[1];
+    line->end[2] = end[2];
+
+    line->stroke_width = stroke_width;
+    line->dash = dash;
 }
 
 
@@ -376,7 +428,6 @@ static void instance_arena_remove(instance_arena_t *arena, uint32_t handle)
     arena->indices[handle] = UINT32_MAX;
     arena->used -= arena->instance_size;
     
-    return true;
 }
 
 static size_t instance_arena_count(instance_arena_t *arena)
@@ -384,4 +435,38 @@ static size_t instance_arena_count(instance_arena_t *arena)
     return arena->used / arena->instance_size;
 }
 
+static bool instance_arena_update(instance_arena_t *arena, uint32_t handle, const void *instance)
+{
+    if (handle >= arena->max_handles)
+        return false;
+    
+    uint32_t data_index = arena->indices[handle];
+    size_t active_count = arena->used / arena->instance_size;
+    
+    if (data_index == UINT32_MAX || data_index >= active_count)
+        return false;
+    
+    void *dst = (uint8_t *)arena->data + (data_index * arena->instance_size);
+    memcpy(dst, instance, arena->instance_size);
+    
+    return true;
+}
 
+static void *instance_arena_get(instance_arena_t *arena, uint32_t handle)
+{
+    if (handle >= arena->max_handles)
+        return NULL;
+    
+    uint32_t data_index = arena->indices[handle];
+    size_t active_count = arena->used / arena->instance_size;
+    
+    if (data_index == UINT32_MAX || data_index >= active_count)
+        return NULL;
+    
+    return (uint8_t *)arena->data + (data_index * arena->instance_size);
+}
+
+static void *instance_arena_data(instance_arena_t *arena)
+{
+    return arena->data;
+}

@@ -125,8 +125,8 @@ set(CAD_INCLUDE_DIRS
 set(GL_SHADERS
     resources/shaders/basic/basic_core_vs.glsl
     resources/shaders/basic/basic_core_fs.glsl
-    resources/shaders/vector/vector_core_vs.glsl
-    resources/shaders/vector/vector_core_fs.glsl
+    resources/shaders/vector/line_core_vs.glsl
+    resources/shaders/vector/line_core_fs.glsl
 )
 
 set(GLES_SHADERS

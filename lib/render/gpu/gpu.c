@@ -179,6 +179,11 @@ bool gpu_get_shader_uniform(shader_t shader_handle, const char *uniform, uniform
     return true;
 }
 
+void gpu_set_uniform_vec2(uniform_t uniform_handle, vec2 value)
+{
+    glUniform2f(uniform_handle, value[0], value[1]);
+}
+
 void gpu_set_uniform_vec4(uniform_t uniform_handle, vec4 value)
 {
     glUniform4f(uniform_handle, value[0], value[1], value[2], value[3]);

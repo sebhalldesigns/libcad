@@ -36,7 +36,7 @@ extern "C" {
 ***************************************************************/
 
 
-typedef uintptr_t vector_instance_t;
+typedef uint32_t vector_instance_t;
 
 typedef float vector_dash_t;
 typedef float vector_fill_t;

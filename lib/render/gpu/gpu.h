@@ -66,6 +66,7 @@ void gpu_use_shader(shader_t shader_handle);
 
 bool gpu_get_shader_uniform(shader_t shader_handle, const char *uniform, uniform_t *uniform_handle);
 
+void gpu_set_uniform_vec2(uniform_t uniform_handle, vec2 value);
 void gpu_set_uniform_vec4(uniform_t uniform_handle, vec4 value);
 void gpu_set_uniform_mat4(uniform_t uniform_handle, mat4 value);
 
