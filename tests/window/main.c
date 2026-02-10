@@ -60,23 +60,21 @@ int main()
     gpu_init();
     vector_init();
 
-    for (int x = 0; x < 3440; x += 2)
+    for (int x = 0; x < 3440; x += 20)
     {
-        for (int y = 0; y < 1400; y += 2)
-        {
-            /* create a line */
-            vector_line_instance_t line_data = {
-                .start = {(float)x, (float)y, 0.0f},
-                .end = {(float)x, (float)y + 1.0f, 0.0f},
-                .color = {0.0f, 0.0f, 0.0f, 1.0f},  // red
-                .stroke_width = 1.0f,
-                .dash = 0.0f  // solid line
-            };
+        float dash = vector_build_dash(100.0f, 0.5f);
+        /* create a line */
+        vector_line_instance_t line_data = {
+            .start = {(float)x, (float)0.0f, 0.0f},
+            .end = {(float)x, (float)1000.0f + 1.0f, 0.0f},
+            .color = {0.0f, 0.0f, 0.0f, 1.0f},  // red
+            .stroke_width = 10.0f,
+            .dash = dash
+        };
 
-            vector_instance_t line_handle;
-            vector_create_line(&line_data, &line_handle);
+        vector_instance_t line_handle;
+        vector_create_line(&line_data, &line_handle);
 
-        }
     }
    
 

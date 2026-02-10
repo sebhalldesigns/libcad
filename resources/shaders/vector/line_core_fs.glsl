@@ -45,37 +45,26 @@ void main()
         discard;
     }
 
-    /* dash pattern (if enabled) */
-    if (vertex_dash > 0.0)
+    /* dash pattern: unpack from float mantissa (12-bit period | 11-bit duty) */
+    uint dash_bits = floatBitsToUint(vertex_dash);
+    uint mantissa = dash_bits & 0x7FFFFFu;  /* extract 23-bit mantissa */
+    float dash_period = float(mantissa >> 11);  /* upper 12 bits: 0-4095 */
+    float dash_duty = float(mantissa & 0x7FFu) / 2047.0;  /* lower 11 bits: 0-1 */
+
+    /* apply dashing to line body only */
+    if (dash_period > 0.0 && pos_along_line >= 0.0 && pos_along_line <= vertex_line_length)
     {
-        /* only apply dashing to the line body, not the caps */
-        if (pos_along_line >= 0.0 && pos_along_line <= vertex_line_length)
+        float dash_phase = mod(pos_along_line, dash_period) / dash_period;
+        if (dash_phase > dash_duty)
         {
-            /* decode dash parameter */
-            /* for now: vertex_dash is the dash period in pixels */
-            /* you could encode dash pattern more sophisticatedly later */
-            float dash_period = vertex_dash;
-            float dash_ratio = 0.5; /* 50% on, 50% off */
-
-            /* calculate position within current dash cycle */
-            float dash_phase = mod(pos_along_line, dash_period) / dash_period;
-
-            /* discard if we're in the "off" part of the dash */
-            if (dash_phase > dash_ratio)
-            {
-                discard;
-            }
-
-            /* optional: smooth dash transitions (uncomment for soft dashes) */
-            /*
-            float dash_aa = 2.0 / dash_period;
-            float dash_alpha = smoothstep(dash_ratio - dash_aa, dash_ratio, dash_phase);
-            dash_alpha = min(dash_alpha, smoothstep(1.0, 1.0 - dash_aa, dash_phase));
-            alpha *= dash_alpha;
-            */
+            discard;
         }
     }
 
     /* output final color with anti-aliased edges */
     frag_color = vec4(vertex_color.rgb, vertex_color.a * alpha);
+
+
+    
+
 }

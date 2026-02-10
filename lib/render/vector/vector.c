@@ -213,6 +213,23 @@ void vector_render(int width, int height)
     /* TODO: render shapes, beziers, glyphs */
 }
 
+float vector_build_dash(float period, float ratio)
+{
+    /* Pack into 23-bit mantissa: 12 bits period + 11 bits duty */
+    uint32_t period_packed = (uint32_t)(fminf(period, 4095.0f));    /* 12 bits: 0-4095 */
+    uint32_t ratio_packed = (uint32_t)(ratio * 2047.0f);            /* 11 bits: 0-2047 */
+
+    union {
+        uint32_t u;
+        float f;
+    } converter;
+
+    /* Create normal float: exponent=127 (2^0), pack data in mantissa */
+    converter.u = (127 << 23) | ((period_packed & 0xFFFu) << 11) | (ratio_packed & 0x7FFu);
+
+    return converter.f;
+}
+
 bool vector_create_line(const vector_line_instance_t *data, vector_instance_t *out_handle)
 {
     if (!data || !out_handle)
