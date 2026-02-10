@@ -308,7 +308,7 @@ bool vector_init()
     return true;
 }
 
-void vector_render(int width, int height)
+void vector_render(int width, int height, mat4 projection)
 {
     gpu_set_blending(true);
     gpu_set_viewport(width, height);
@@ -323,8 +323,6 @@ void vector_render(int width, int height)
     {
         gpu_use_shader(line_shader);
 
-        mat4 projection;
-        glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
         gpu_set_uniform_mat4(line_shader_uniform_projection, projection);
 
         vec2 viewport;
@@ -353,8 +351,6 @@ void vector_render(int width, int height)
     {
         gpu_use_shader(shape_shader);
 
-        mat4 projection;
-        glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
         gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
 
         vec2 viewport;

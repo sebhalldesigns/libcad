@@ -23,8 +23,8 @@ uniform vec2 viewport;
 
 /* outputs to fragment shader */
 out vec2 vertex_pos;             /* quad position (-1 to 1) */
+out vec2 vertex_world_size;      /* shape size in world units */
 out vec2 vertex_screen_size;     /* shape size in screen pixels */
-out vec2 vertex_quad_size;       /* actual quad size in screen pixels (expanded) */
 out vec4 vertex_color;
 out float vertex_sides;
 out float vertex_start_angle;
@@ -37,60 +37,95 @@ out float vertex_rotation;
 
 void main()
 {
-    /* transform center to clip space */
+    /* Create tangent/bitangent basis from normal for proper 3D orientation */
+    vec3 normal = normalize(instance_normal);
+
+    /* Create tangent (right) and bitangent (up) vectors perpendicular to normal */
+    vec3 tangent, bitangent;
+    if (abs(normal.z) > 0.999) {
+        /* Normal points along Z axis - use X and Y as tangent/bitangent */
+        tangent = vec3(1.0, 0.0, 0.0);
+        bitangent = vec3(0.0, 1.0, 0.0);
+    } else {
+        /* General case - create perpendicular vectors */
+        tangent = normalize(cross(vec3(0.0, 1.0, 0.0), normal));
+        bitangent = normalize(cross(normal, tangent));
+    }
+
+    /* Apply rotation to tangent/bitangent basis (rotation in the plane) */
+    if (instance_rotation != 0.0) {
+        float c = cos(instance_rotation);
+        float s = sin(instance_rotation);
+        vec3 rotated_tangent = c * tangent + s * bitangent;
+        vec3 rotated_bitangent = -s * tangent + c * bitangent;
+        tangent = rotated_tangent;
+        bitangent = rotated_bitangent;
+    }
+
+    /* Project center to screen space to calculate screen-space sizes for strokes */
     vec4 clip_center = projection * vec4(instance_center, 1.0);
-
-    /* perspective divide to get NDC */
     vec3 ndc_center = clip_center.xyz / clip_center.w;
-
-    /* convert to screen space (pixels) */
     vec2 screen_center = (ndc_center.xy * 0.5 + 0.5) * viewport;
 
-    /* calculate world-space size at the center's depth */
-    /* project a point offset by instance_size to see how big it is in screen space */
-    vec4 clip_offset_x = projection * vec4(instance_center + vec3(instance_size.x, 0.0, 0.0), 1.0);
-    vec4 clip_offset_y = projection * vec4(instance_center + vec3(0.0, instance_size.y, 0.0), 1.0);
+    /* Project size vectors to screen space to determine pixel scale */
+    vec4 clip_offset_x = projection * vec4(instance_center + tangent * instance_size.x, 1.0);
+    vec4 clip_offset_y = projection * vec4(instance_center + bitangent * instance_size.y, 1.0);
 
     vec2 screen_offset_x = (clip_offset_x.xy / clip_offset_x.w * 0.5 + 0.5) * viewport;
     vec2 screen_offset_y = (clip_offset_y.xy / clip_offset_y.w * 0.5 + 0.5) * viewport;
 
-    /* calculate screen-space size */
+    /* Calculate screen-space size in pixels for stroke/antialiasing */
     float screen_width = length(screen_offset_x - screen_center);
     float screen_height = length(screen_offset_y - screen_center);
     vec2 screen_size = vec2(screen_width, screen_height);
 
-    /* expand for stroke width and extra margin for polygons */
-    /* for polygons, vertices extend to circumradius which may exceed size */
-    float margin = instance_stroke_width * 2.0 + 2.0;  /* stroke + 2px antialiasing */
+    /* Handle degenerate cases - if shape is too thin in screen space, skip rendering */
+    if (screen_width < 1.0 || screen_height < 1.0) {
+        gl_Position = vec4(0.0, 0.0, 0.0, 0.0);  /* degenerate position */
+        return;
+    }
 
-    /* for polygons (sides >= 3), add extra margin since circumradius > half-size */
-    if (instance_sides >= 3.0 && instance_sides != 4.0)
-        margin += max(screen_size.x, screen_size.y) * 0.5;
+    /* Calculate world-space margin for stroke (convert pixels to world units) */
+    /* Use min instead of average to prevent extreme values at edge-on views */
+    float pixel_to_world_x = instance_size.x / max(screen_width, 1.0);
+    float pixel_to_world_y = instance_size.y / max(screen_height, 1.0);
+    float pixel_to_world = min(pixel_to_world_x, pixel_to_world_y);
 
-    vec2 expanded_size = screen_size + vec2(margin);
+    /* Account for stroke width, antialiasing, and corner radius */
+    float margin = (instance_stroke_width * 2.0 + 2.0) * pixel_to_world;
+    margin = max(margin, instance_corner_radius * 0.5);  /* Extra margin for rounded corners */
 
-    /* for rotated shapes, expand to fit the rotated bounding box */
+    /* For polygons, we need extra margin since vertices can extend beyond */
+    /* the nominal size when calculating from bounding box */
+    if (instance_sides >= 3.0 && instance_sides != 4.0) {
+        margin += max(instance_size.x, instance_size.y) * 0.25;
+    }
+
+    /* Start with instance size plus margin */
+    vec2 expanded_size = instance_size + vec2(margin * 2.0);
+
+    /* For rotated shapes, expand to fit rotated bounding box */
+    /* (rotation is in the plane, so axis-aligned bounds grow) */
     if (instance_rotation != 0.0) {
         float cos_r = abs(cos(instance_rotation));
         float sin_r = abs(sin(instance_rotation));
-        float new_width = screen_size.x * cos_r + screen_size.y * sin_r;
-        float new_height = screen_size.x * sin_r + screen_size.y * cos_r;
-        expanded_size = vec2(new_width, new_height) + vec2(margin);
+        float rotated_width = instance_size.x * cos_r + instance_size.y * sin_r;
+        float rotated_height = instance_size.x * sin_r + instance_size.y * cos_r;
+        expanded_size = vec2(rotated_width, rotated_height) + vec2(margin * 2.0);
     }
 
-    /* create screen-space quad */
-    vec2 screen_pos = screen_center + quad_pos * expanded_size * 0.5;
+    /* Calculate world-space corner position on the plane */
+    vec3 offset = tangent * quad_pos.x * expanded_size.x * 0.5 +
+                  bitangent * quad_pos.y * expanded_size.y * 0.5;
+    vec3 world_pos = instance_center + offset;
 
-    /* convert back to NDC */
-    vec2 ndc = (screen_pos / viewport) * 2.0 - 1.0;
-
-    /* output final position with preserved depth */
-    gl_Position = vec4(ndc * clip_center.w, ndc_center.z * clip_center.w, clip_center.w);
+    /* Project to clip space */
+    gl_Position = projection * vec4(world_pos, 1.0);
 
     /* pass through to fragment shader */
     vertex_pos = quad_pos;
-    vertex_screen_size = screen_size;
-    vertex_quad_size = expanded_size;
+    vertex_world_size = instance_size;     /* actual shape size in world units */
+    vertex_screen_size = screen_size;      /* screen-space size for stroke calculations */
     vertex_color = instance_color;
     vertex_sides = instance_sides;
     vertex_start_angle = instance_start_angle;

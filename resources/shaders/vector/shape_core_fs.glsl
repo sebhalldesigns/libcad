@@ -4,8 +4,8 @@
 
 /* input from vertex shader */
 in vec2 vertex_pos;             /* quad position (-1 to 1) */
+in vec2 vertex_world_size;      /* shape size in world units */
 in vec2 vertex_screen_size;     /* shape size in screen pixels */
-in vec2 vertex_quad_size;       /* actual quad size (expanded for stroke/margins) */
 in vec4 vertex_color;
 in float vertex_sides;
 in float vertex_start_angle;
@@ -107,64 +107,50 @@ bool angle_in_range(float angle, float start, float end)
 
 void main()
 {
-    /* convert quad position to pixel space relative to shape center */
-    vec2 p = vertex_pos * vertex_quad_size * 0.5;
+    /* Map from quad space to world-space for SDF calculations */
+    /* Rotation is already applied in vertex shader via tangent/bitangent basis */
+    vec2 p = vertex_pos * vertex_world_size * 0.5;
 
-    /* apply rotation */
-    if (vertex_rotation != 0.0)
-        p = rotate(p, -vertex_rotation);
+    /* Calculate scale factor: pixels per world unit (for stroke width conversion) */
+    /* Clamp to prevent extreme values at edge-on views */
+    vec2 scale = vertex_screen_size / max(vertex_world_size, vec2(0.001));
+    scale = max(scale, vec2(0.1));  /* prevent division issues */
+    float avg_scale = (scale.x + scale.y) * 0.5;
 
     /* local color for debug modifications */
     vec4 color = vertex_color;
 
-    /* calculate SDF distance based on shape type */
+    /* calculate SDF distance based on shape type (in world units) */
     float dist;
 
     if (vertex_sides == 1.0)
     {
-        /* circle/ellipse */
-        if (abs(vertex_screen_size.x - vertex_screen_size.y) < 0.01)
-            dist = sdf_circle(p, vertex_screen_size.x * 0.5);
+        /* circle/ellipse - use world-space size */
+        if (abs(vertex_world_size.x - vertex_world_size.y) < 0.01)
+            dist = sdf_circle(p, vertex_world_size.x * 0.5);
         else
-            dist = sdf_ellipse(p, vertex_screen_size * 0.5);
+            dist = sdf_ellipse(p, vertex_world_size * 0.5);
     }
     else if (vertex_sides == 4.0)
     {
-        /* rectangle (with optional rounded corners) */
-        dist = sdf_rounded_box(p, vertex_screen_size * 0.5, vertex_corner_radius);
+        /* rectangle (with optional rounded corners) - use world-space size */
+        dist = sdf_rounded_box(p, vertex_world_size * 0.5, vertex_corner_radius);
     }
     else if (vertex_sides >= 3.0)
     {
         /* regular polygon (triangle, pentagon, hexagon, etc.) */
         int n = int(vertex_sides);
 
-        /* calculate bounding box for unit polygon (r=1) to find scale factor */
-        float min_x = 1e10, max_x = -1e10;
-        float min_y = 1e10, max_y = -1e10;
-
-        for (int i = 0; i < n; i++)
-        {
-            float angle = 2.0 * PI * float(i) / float(n) - PI * 0.5 + PI;
-            float vx = cos(angle);
-            float vy = sin(angle);
-            min_x = min(min_x, vx);
-            max_x = max(max_x, vx);
-            min_y = min(min_y, vy);
-            max_y = max(max_y, vy);
-        }
-
-        float bbox_width = max_x - min_x;
-        float bbox_height = max_y - min_y;
-
-        /* scale radius so polygon fits in desired size */
-        float r = min(vertex_screen_size.x / bbox_width, vertex_screen_size.y / bbox_height);
+        /* Use average size as the diameter (circumradius = size/2) */
+        /* This makes polygons sized consistently with circles */
+        float r = (vertex_world_size.x + vertex_world_size.y) * 0.25;
 
         dist = sdf_polygon(p, r, n);
     }
     else
     {
         /* default: rectangle */
-        dist = sdf_rounded_box(p, vertex_screen_size * 0.5, 0.0);
+        dist = sdf_rounded_box(p, vertex_world_size * 0.5, 0.0);
     }
 
     /* handle arcs - cut out sections outside arc range */
@@ -177,13 +163,13 @@ void main()
 
     /* calculate alpha based on stroke/fill */
     float alpha = 0.0;
-    float edge_aa = 1.0;  /* 1 pixel antialiasing */
+    float edge_aa = 1.0 / avg_scale;  /* 1 pixel antialiasing in world units */
 
     if (vertex_stroke_width > 0.0)
     {
-        /* stroke mode - distance from edge */
-        float half_stroke = vertex_stroke_width * 0.5;
-        float stroke_dist = abs(dist) - half_stroke;
+        /* stroke mode - distance from edge (stroke width is in pixels, convert to world units) */
+        float half_stroke_world = vertex_stroke_width * 0.5 / avg_scale;
+        float stroke_dist = abs(dist) - half_stroke_world;
         alpha = 1.0 - smoothstep(-edge_aa, edge_aa, stroke_dist);
     }
     else
@@ -207,13 +193,15 @@ void main()
 
         if (dash_period > 0.0)
         {
-            /* calculate position along perimeter */
+            /* calculate position along perimeter (in world units) */
             float angle = atan(p.y, p.x);
-            float r = (vertex_screen_size.x + vertex_screen_size.y) * 0.25;
+            float r = (vertex_world_size.x + vertex_world_size.y) * 0.25;
             float perimeter = 2.0 * PI * r;
             float pos_along = (angle / (2.0 * PI) + 0.5) * perimeter;
 
-            float dash_phase = mod(pos_along, dash_period) / dash_period;
+            /* dash_period is in pixels, convert to world units */
+            float dash_period_world = dash_period / avg_scale;
+            float dash_phase = mod(pos_along, dash_period_world) / dash_period_world;
             if (dash_phase > dash_duty)
                 discard;
         }

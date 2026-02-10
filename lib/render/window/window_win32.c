@@ -395,7 +395,9 @@ static LRESULT CALLBACK window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
             }
 
             EndPaint(hwnd, &ps);
-            ValidateRect(hwnd, NULL);
+
+            /*ValidateRect(hwnd, NULL);*/
+            InvalidateRect(hwnd, NULL, true);
             return 0;
         }
 
