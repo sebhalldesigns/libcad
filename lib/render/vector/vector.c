@@ -36,6 +36,8 @@
 #define INITIAL_ARENA_SIZE  (1024U)
 #define INSTANCE_TYPE_OFFSET (32U)
 
+#define DEBUG 1
+
 /***************************************************************
 ** MARK: TYPEDEFS
 ***************************************************************/
@@ -65,10 +67,19 @@ extern uint32_t resources_shaders_vector_line_core_vs_glsl_size;
 
 extern uint8_t resources_shaders_vector_line_core_fs_glsl[];
 extern uint32_t resources_shaders_vector_line_core_fs_glsl_size;
-#endif
 
-static shader_t vector_shader = 0;
-static uniform_t projection_uniform = -1;
+extern uint8_t resources_shaders_vector_shape_core_vs_glsl[];
+extern uint32_t resources_shaders_vector_shape_core_vs_glsl_size;
+
+extern uint8_t resources_shaders_vector_shape_core_fs_glsl[];
+extern uint32_t resources_shaders_vector_shape_core_fs_glsl_size;
+
+extern uint8_t resources_shaders_vector_glyph_core_vs_glsl[];
+extern uint32_t resources_shaders_vector_glyph_core_vs_glsl_size;
+
+extern uint8_t resources_shaders_vector_glyph_core_fs_glsl[];
+extern uint32_t resources_shaders_vector_glyph_core_fs_glsl_size;
+#endif
 
 static const float quad_vertices[] =
 {
@@ -78,21 +89,35 @@ static const float quad_vertices[] =
      1.0f,  1.0f
 };
 
-static vertex_array_t vector_vertex_array;
-static buffer_t quad_buffer;
-static buffer_t instance_buffer;
-
 static instance_arena_t line_arena;
 static instance_arena_t shape_arena;
 static instance_arena_t bezier_arena;
 static instance_arena_t glyph_arena;
 
+/* LINE SHADER */
 static shader_t line_shader;
 static uniform_t line_shader_uniform_projection;
 static uniform_t line_shader_uniform_viewport;
 static vertex_array_t line_vertex_array;
 static buffer_t line_quad_buffer;
 static buffer_t line_instance_buffer;
+
+/* SHAPE SHADER */
+static shader_t shape_shader;
+static uniform_t shape_shader_uniform_projection;
+static uniform_t shape_shader_uniform_viewport;
+static vertex_array_t shape_vertex_array;
+static buffer_t shape_quad_buffer;
+static buffer_t shape_instance_buffer;
+
+/* GLYPH SHADER */
+static shader_t glyph_shader;
+static uniform_t glyph_shader_uniform_projection;
+static uniform_t glyph_shader_uniform_atlas;
+static vertex_array_t glyph_vertex_array;
+static buffer_t glyph_quad_buffer;
+static buffer_t glyph_instance_buffer;
+static texture_t glyph_atlas_texture;  /* TODO: texture_t typedef needed in gpu.h */
 
 
 /***************************************************************
@@ -118,6 +143,10 @@ bool vector_init()
 
     /* create arenas */
     instance_arena_init(&line_arena, sizeof(vector_line_instance_t), INITIAL_ARENA_SIZE);
+    instance_arena_init(&shape_arena, sizeof(vector_shape_instance_t), INITIAL_ARENA_SIZE);
+    instance_arena_init(&glyph_arena, sizeof(vector_glyph_instance_t), INITIAL_ARENA_SIZE);
+
+    /* LINE RENDERER SETUP */
 
     if (!gpu_compile_shader(
         (const char*)resources_shaders_vector_line_core_vs_glsl,
@@ -167,6 +196,113 @@ bool vector_init()
 
     gpu_bind_vertex_array(0);
 
+    /* SHAPE RENDERER SETUP */
+
+    if (!gpu_compile_shader(
+        (const char*)resources_shaders_vector_shape_core_vs_glsl,
+        resources_shaders_vector_shape_core_vs_glsl_size,
+        (const char*)resources_shaders_vector_shape_core_fs_glsl,
+        resources_shaders_vector_shape_core_fs_glsl_size,
+        &shape_shader
+    ))
+    {
+        #ifdef DEBUG
+            log_error("Failed to compile shape shader.");
+        #endif
+        return false;
+    }
+
+    log_info("compiled shape shader (shader id: %u)", shape_shader);
+
+    if (
+        !gpu_get_shader_uniform(shape_shader, "projection", &shape_shader_uniform_projection)
+    ||  !gpu_get_shader_uniform(shape_shader, "viewport", &shape_shader_uniform_viewport)
+    )
+    {
+        #ifdef DEBUG
+            log_error("Failed to get shape shader uniform.");
+        #endif
+        return false;
+    }
+
+    shape_vertex_array = gpu_create_vertex_array();
+    gpu_bind_vertex_array(shape_vertex_array);
+
+    /* set up quad buffer (per-vertex data) */
+    shape_quad_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(shape_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
+    gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
+
+    /* create and bind instance buffer (per-instance data) */
+    shape_instance_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(shape_instance_buffer, NULL, 0, true);
+
+    /* set up per-instance vertex attributes for shapes */
+    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, center), 1);
+    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, normal), 1);
+    gpu_enable_vertex_attribute(3, 2, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, size), 1);
+    gpu_enable_vertex_attribute(4, 4, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, color), 1);
+    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, rotation), 1);
+    gpu_enable_vertex_attribute(6, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, sides), 1);
+    gpu_enable_vertex_attribute(7, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, start_angle), 1);
+    gpu_enable_vertex_attribute(8, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, end_angle), 1);
+    gpu_enable_vertex_attribute(9, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, fill), 1);
+    gpu_enable_vertex_attribute(10, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, stroke_width), 1);
+    gpu_enable_vertex_attribute(11, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, corner_radius), 1);
+    gpu_enable_vertex_attribute(12, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_instance_t), offsetof(vector_shape_instance_t, dash), 1);
+
+    gpu_bind_vertex_array(0);
+
+    /* GLYPH RENDERER SETUP */
+
+    if (!gpu_compile_shader(
+        (const char*)resources_shaders_vector_glyph_core_vs_glsl,
+        resources_shaders_vector_glyph_core_vs_glsl_size,
+        (const char*)resources_shaders_vector_glyph_core_fs_glsl,
+        resources_shaders_vector_glyph_core_fs_glsl_size,
+        &glyph_shader
+    ))
+    {
+        #ifdef DEBUG
+            log_error("Failed to compile glyph shader.");
+        #endif
+        return false;
+    }
+
+    log_info("compiled glyph shader (shader id: %u)", glyph_shader);
+
+    if (
+        !gpu_get_shader_uniform(glyph_shader, "projection", &glyph_shader_uniform_projection)
+    ||  !gpu_get_shader_uniform(glyph_shader, "atlas_texture", &glyph_shader_uniform_atlas)
+    )
+    {
+        #ifdef DEBUG
+            log_error("Failed to get glyph shader uniform.");
+        #endif
+        return false;
+    }
+
+    glyph_vertex_array = gpu_create_vertex_array();
+    gpu_bind_vertex_array(glyph_vertex_array);
+
+    /* set up quad buffer (per-vertex data) */
+    glyph_quad_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(glyph_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
+    gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
+
+    /* create and bind instance buffer (per-instance data) */
+    glyph_instance_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(glyph_instance_buffer, NULL, 0, true);
+
+    /* set up per-instance vertex attributes for glyphs */
+    gpu_enable_vertex_attribute(1, 2, GPU_TYPE_FLOAT, false, sizeof(vector_glyph_instance_t), offsetof(vector_glyph_instance_t, position), 1);
+    gpu_enable_vertex_attribute(2, 2, GPU_TYPE_FLOAT, false, sizeof(vector_glyph_instance_t), offsetof(vector_glyph_instance_t, size), 1);
+    gpu_enable_vertex_attribute(3, 2, GPU_TYPE_FLOAT, false, sizeof(vector_glyph_instance_t), offsetof(vector_glyph_instance_t, uv_min), 1);
+    gpu_enable_vertex_attribute(4, 2, GPU_TYPE_FLOAT, false, sizeof(vector_glyph_instance_t), offsetof(vector_glyph_instance_t, uv_max), 1);
+    gpu_enable_vertex_attribute(5, 4, GPU_TYPE_FLOAT, false, sizeof(vector_glyph_instance_t), offsetof(vector_glyph_instance_t, color), 1);
+
+    gpu_bind_vertex_array(0);
+
     log_info("buffer creation complete");
 
     return true;
@@ -210,7 +346,66 @@ void vector_render(int width, int height)
         gpu_bind_vertex_array(0);
     }
 
-    /* TODO: render shapes, beziers, glyphs */
+    /* render shapes */
+    size_t shape_count = instance_arena_count(&shape_arena);
+    log_info("Rendering %zu shapes", shape_count);
+    if (shape_count > 0)
+    {
+        gpu_use_shader(shape_shader);
+
+        mat4 projection;
+        glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
+        gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
+
+        vec2 viewport;
+        viewport[0] = (float)width;
+        viewport[1] = (float)height;
+        gpu_set_uniform_vec2(shape_shader_uniform_viewport, viewport);
+
+        /* bind vertex array and upload instance data */
+        gpu_bind_vertex_array(shape_vertex_array);
+        gpu_upload_array_buffer_data(shape_instance_buffer,
+                                     instance_arena_data(&shape_arena),
+                                     shape_arena.used,
+                                     true);
+
+        /* draw all shape instances */
+        gpu_draw_instances(shape_vertex_array, 0, 4, shape_count);
+
+        /* unbind vertex array */
+        gpu_bind_vertex_array(0);
+    }
+
+    /* render glyphs */
+    size_t glyph_count = instance_arena_count(&glyph_arena);
+    if (glyph_count > 0)
+    {
+        gpu_use_shader(glyph_shader);
+
+        mat4 projection;
+        glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, projection);
+        gpu_set_uniform_mat4(glyph_shader_uniform_projection, projection);
+
+        /* bind atlas texture to texture unit 0 */
+        /* TODO: Need to implement gpu_bind_texture() and gpu_set_uniform_int() in gpu.h */
+        //gpu_bind_texture(glyph_atlas_texture, 0);
+        //gpu_set_uniform_int(glyph_shader_uniform_atlas, 0);
+
+        /* bind vertex array and upload instance data */
+        gpu_bind_vertex_array(glyph_vertex_array);
+        gpu_upload_array_buffer_data(glyph_instance_buffer,
+                                     instance_arena_data(&glyph_arena),
+                                     glyph_arena.used,
+                                     true);
+
+        /* draw all glyph instances */
+        gpu_draw_instances(glyph_vertex_array, 0, 4, glyph_count);
+
+        /* unbind vertex array */
+        gpu_bind_vertex_array(0);
+    }
+
+    /* TODO: render beziers */
 }
 
 float vector_build_dash(float period, float ratio)
@@ -251,6 +446,52 @@ void vector_update_line(vector_instance_t instance, const vector_line_instance_t
 void vector_destroy_line(vector_instance_t instance)
 {
     instance_arena_remove(&line_arena, instance);
+}
+
+bool vector_create_shape(const vector_shape_instance_t *data, vector_instance_t *out_handle)
+{
+    if (!data || !out_handle)
+        return false;
+
+    uint32_t handle = instance_arena_add(&shape_arena, data);
+    if (handle == UINT32_MAX)
+        return false;
+
+    *out_handle = handle;
+    return true;
+}
+
+void vector_update_shape(vector_instance_t instance, const vector_shape_instance_t *data)
+{
+    instance_arena_update(&shape_arena, instance, data);
+}
+
+void vector_destroy_shape(vector_instance_t instance)
+{
+    instance_arena_remove(&shape_arena, instance);
+}
+
+bool vector_create_glyph(const vector_glyph_instance_t *data, vector_instance_t *out_handle)
+{
+    if (!data || !out_handle)
+        return false;
+
+    uint32_t handle = instance_arena_add(&glyph_arena, data);
+    if (handle == UINT32_MAX)
+        return false;
+
+    *out_handle = handle;
+    return true;
+}
+
+void vector_update_glyph(vector_instance_t instance, const vector_glyph_instance_t *data)
+{
+    instance_arena_update(&glyph_arena, instance, data);
+}
+
+void vector_destroy_glyph(vector_instance_t instance)
+{
+    instance_arena_remove(&glyph_arena, instance);
 }
 
 

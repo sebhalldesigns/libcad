@@ -39,6 +39,7 @@ typedef uint32_t shader_t;
 typedef int32_t uniform_t;
 typedef uint32_t vertex_array_t;
 typedef uint32_t buffer_t;
+typedef uint32_t texture_t;
 
 typedef enum
 {

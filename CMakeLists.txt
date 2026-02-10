@@ -123,15 +123,16 @@ set(CAD_INCLUDE_DIRS
 )
 
 set(GL_SHADERS
-    resources/shaders/basic/basic_core_vs.glsl
-    resources/shaders/basic/basic_core_fs.glsl
     resources/shaders/vector/line_core_vs.glsl
     resources/shaders/vector/line_core_fs.glsl
+    resources/shaders/vector/shape_core_vs.glsl
+    resources/shaders/vector/shape_core_fs.glsl
+    resources/shaders/vector/glyph_core_vs.glsl
+    resources/shaders/vector/glyph_core_fs.glsl
 )
 
 set(GLES_SHADERS
-    resources/shaders/basic/basic_es_vs.glsl
-    resources/shaders/basic/basic_es_fs.glsl
+    
 )
 
 if(LIBCAD_BUILD_SHARED)
