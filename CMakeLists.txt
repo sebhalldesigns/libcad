@@ -106,6 +106,7 @@ set(CAD_SRC
     lib/render/gpu/gpu.c
     lib/render/vector/vector.c
     lib/util/log/log.c
+    lib/model/type/type.c
     ${PLATFORM_SRC}
 )
 
