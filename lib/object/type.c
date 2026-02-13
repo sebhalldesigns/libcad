@@ -2,12 +2,12 @@
 **
 ** libcad Source File
 **
-** File         :  object.c
-** Module       :  object
+** File         :  type.c
+** Module       :  type
 ** Author       :  SH
 ** Created      :  2026-02-13 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  libcad Object API
+** Description  :  libcad Type System API
 **
 ***************************************************************/
 
@@ -21,7 +21,7 @@
 
 #include <util/log/log.h>
 
-#include "object.h"
+#include "type.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -36,18 +36,18 @@
 ** MARK: TYPEDEFS
 ***************************************************************/
 
-struct object_t;
+struct type_instance_t;
 
 typedef struct
 {
     /* name of the method */
     char* name;
 
-    /* function pointer, self is an object_t */
-    void (*function)(struct object_t *self, void *args, void *result);
+    /* function pointer, self is a type_instance_t */
+    void (*function)(struct type_instance_t *self, void *args, void *result);
 } method_t;
 
-typedef struct 
+typedef struct
 {
     /* name of the property */
     char* name;
@@ -56,20 +56,20 @@ typedef struct
     size_t offset;
     size_t size;
 } property_t;
- 
+
 typedef struct type_t
 {
     /* name of the type */
-    char* name; 
+    char* name;
 
     /* parent for inheritance */
     struct type_t *parent; /* can be NULL */
-    
+
     size_t local_data_size; /* data size just for this type */
     size_t total_data_size; /* combined data size of this and all parent types */
 
     /* properties should always be defined with global layout
-    ** i.e offset by total_data_size - local_data_size 
+    ** i.e offset by total_data_size - local_data_size
     ** this is so that each instance's data can be contiguous
     */
     property_t *properties;
@@ -81,11 +81,11 @@ typedef struct type_t
     size_t methods_capacity;
 } type_t;
 
-typedef struct
+typedef struct type_instance_t
 {
-    type_t *type; /* pointer to the type of this object */
-    void *data; /* pointer to the raw data */
-} object_t;
+    type_t *type; /* pointer to the type of this instance */
+    void *data;   /* pointer to the raw instance data */
+} type_instance_t;
 
 /***************************************************************
 ** MARK: STATIC VARIABLES
@@ -107,7 +107,7 @@ static void type_registry_add(type_t* type);
 ** MARK: PUBLIC FUNCTIONS
 ***************************************************************/
 
-type_handle_t object_register_type(
+type_handle_t type_register(
     const char* name,
     type_handle_t parent_handle,
     size_t local_data_size
@@ -119,7 +119,7 @@ type_handle_t object_register_type(
     type_t* existing = type_registry_find_by_name(name);
     if (existing)
     {
-        log_warning("object_register_type: type '%s' already registered", name);
+        log_warning("type_register: type '%s' already registered", name);
         return (type_handle_t)existing;
     }
 
@@ -127,8 +127,8 @@ type_handle_t object_register_type(
     type_t* type = (type_t*)calloc(1, sizeof(type_t));
     if (!type)
     {
-        log_error("object_register_type: failed to allocate type");
-        return OBJECT_INVALID_HANDLE;
+        log_error("type_register: failed to allocate type");
+        return TYPE_INVALID_HANDLE;
     }
 
     /* Set parent */
@@ -149,9 +149,9 @@ type_handle_t object_register_type(
     type->name = strdup(name);
     if (!type->name)
     {
-        log_error("object_register_type: failed to allocate name");
+        log_error("type_register: failed to allocate name");
         free(type);
-        return OBJECT_INVALID_HANDLE;
+        return TYPE_INVALID_HANDLE;
     }
 
     /* Allocate property and method arrays */
@@ -165,12 +165,12 @@ type_handle_t object_register_type(
 
     if (!type->properties || !type->methods)
     {
-        log_error("object_register_type: failed to allocate property/method arrays");
+        log_error("type_register: failed to allocate property/method arrays");
         free(type->name);
         free(type->properties);
         free(type->methods);
         free(type);
-        return OBJECT_INVALID_HANDLE;
+        return TYPE_INVALID_HANDLE;
     }
 
     /* Add to registry */
@@ -183,7 +183,7 @@ type_handle_t object_register_type(
     return (type_handle_t)type;
 }
 
-type_handle_t object_get_type(const char* name)
+type_handle_t type_get(const char* name)
 {
     assert(name && "name cannot be NULL");
 
@@ -191,7 +191,7 @@ type_handle_t object_get_type(const char* name)
     return (type_handle_t)type;
 }
 
-property_handle_t object_register_property(
+property_handle_t type_register_property(
     type_handle_t type_handle,
     const char* name,
     size_t offset,
@@ -199,7 +199,7 @@ property_handle_t object_register_property(
 {
     assert(name && "name cannot be NULL");
     assert(type_handle && "type_handle cannot be NULL");
-    
+
     type_t* type = (type_t*)type_handle;
 
     /* Check if property already exists on this type */
@@ -207,13 +207,13 @@ property_handle_t object_register_property(
     {
         if (strcmp(type->properties[i].name, name) == 0)
         {
-            log_warning("object_register_property: property '%s' already exists on type '%s'",
+            log_warning("type_register_property: property '%s' already exists on type '%s'",
                        name, type->name);
             return (property_handle_t)&type->properties[i];
         }
     }
 
-    /* Grow array if needed - note: capacity is tracked implicitly */
+    /* Grow array if needed */
     if (type->properties_count >= type->properties_capacity)
     {
         size_t new_capacity = type->properties_capacity * 2;
@@ -221,8 +221,8 @@ property_handle_t object_register_property(
                                                       new_capacity * sizeof(property_t));
         if (!new_props)
         {
-            log_error("object_register_property: failed to grow property array");
-            return OBJECT_INVALID_HANDLE;
+            log_error("type_register_property: failed to grow property array");
+            return TYPE_INVALID_HANDLE;
         }
 
         /* Zero out new region */
@@ -241,8 +241,8 @@ property_handle_t object_register_property(
 
     if (!prop->name)
     {
-        log_error("object_register_property: failed to allocate property name");
-        return OBJECT_INVALID_HANDLE;
+        log_error("type_register_property: failed to allocate property name");
+        return TYPE_INVALID_HANDLE;
     }
 
     type->properties_count++;
@@ -253,7 +253,7 @@ property_handle_t object_register_property(
     return (property_handle_t)prop;
 }
 
-property_handle_t object_get_property(const char* name, type_handle_t type_handle)
+property_handle_t type_get_property(const char* name, type_handle_t type_handle)
 {
     assert(name && "name cannot be NULL");
     assert(type_handle && "type_handle cannot be NULL");
@@ -277,13 +277,13 @@ property_handle_t object_get_property(const char* name, type_handle_t type_handl
     }
 
     /* Not found */
-    return OBJECT_INVALID_HANDLE;
+    return TYPE_INVALID_HANDLE;
 }
 
-method_handle_t object_register_method(
+method_handle_t type_register_method(
     type_handle_t type_handle,
     const char* name,
-    void (*function)(object_t* self, void* args, void* result))
+    void (*function)(type_instance_t* self, void* args, void* result))
 {
 
     assert(name && "name cannot be NULL");
@@ -297,7 +297,7 @@ method_handle_t object_register_method(
     {
         if (strcmp(type->methods[i].name, name) == 0)
         {
-            log_warning("object_register_method: method '%s' already exists on type '%s'",
+            log_warning("type_register_method: method '%s' already exists on type '%s'",
                        name, type->name);
             return (method_handle_t)&type->methods[i];
         }
@@ -311,8 +311,8 @@ method_handle_t object_register_method(
                                                     new_capacity * sizeof(method_t));
         if (!new_methods)
         {
-            log_error("object_register_method: failed to grow method array");
-            return OBJECT_INVALID_HANDLE;
+            log_error("type_register_method: failed to grow method array");
+            return TYPE_INVALID_HANDLE;
         }
 
         /* Zero out new region */
@@ -330,8 +330,8 @@ method_handle_t object_register_method(
 
     if (!method->name)
     {
-        log_error("object_register_method: failed to allocate method name");
-        return OBJECT_INVALID_HANDLE;
+        log_error("type_register_method: failed to allocate method name");
+        return TYPE_INVALID_HANDLE;
     }
 
     type->methods_count++;
@@ -341,7 +341,7 @@ method_handle_t object_register_method(
     return (method_handle_t)method;
 }
 
-method_handle_t object_get_method(const char* name, type_handle_t type_handle)
+method_handle_t type_get_method(const char* name, type_handle_t type_handle)
 {
     assert(name && "name cannot be NULL");
     assert(type_handle && "type_handle cannot be NULL");
@@ -365,7 +365,7 @@ method_handle_t object_get_method(const char* name, type_handle_t type_handle)
     }
 
     /* Not found */
-    return OBJECT_INVALID_HANDLE;
+    return TYPE_INVALID_HANDLE;
 }
 
 /***************************************************************
@@ -426,9 +426,3 @@ static void type_registry_add(type_t* type)
     /* Add type */
     type_registry[type_count++] = type;
 }
-
-
-
-
-
-
