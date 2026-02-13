@@ -28,6 +28,8 @@ extern "C" {
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
 
+#define OBJECT_INVALID_HANDLE (0U)
+
 /***************************************************************
 ** MARK: TYPEDEFS
 ***************************************************************/
@@ -52,9 +54,16 @@ void object_set_property(object_handle_t object_handle, property_handle_t proper
 
 void object_call_method(object_handle_t object_handle, method_handle_t method_handle, const void* args, void* result);
 
+/* Type registration */
 type_handle_t object_register_type(const char* name, type_handle_t parent_type_handle, size_t local_data_size);
-void object_register_property(type_handle_t type_handle, const char* name, size_t offset, size_t size);
-void object_register_method(type_handle_t type_handle, const char* name, void (*function)(object_handle_t, void*, void*));
+
+/* Property registration */
+property_handle_t object_register_property(type_handle_t type_handle, const char* name, size_t offset, size_t size);
+
+/* Method registration - forward declare object_t for signature */
+struct object_t;
+method_handle_t object_register_method(type_handle_t type_handle, const char* name,
+                                       void (*function)(struct object_t* self, void* args, void* result));
 
 #ifdef __cplusplus
 }
