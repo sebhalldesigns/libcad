@@ -16,27 +16,6 @@
 ***************************************************************/
 
 #include <libcad/libcad.h>
-#include <stdio.h>
-
-#include <cglm/cglm.h>
-
-#ifdef EMSCRIPTEN
-    #include <GLES3/gl3.h>
-#elif __APPLE__
-    #include <TargetConditionals.h>
-    #if TARGET_OS_IPHONE
-        #include <OpenGLES/ES3/gl.h>
-    #else
-        #include <glad/glad.h>
-    #endif
-#else
-    #include <glad/glad.h>
-#endif
-
-
-#include "lc_canvas.h"
-#include "lc_draw.h"
-#include "lc_scene.h"
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -49,22 +28,6 @@
 /***************************************************************
 ** MARK: STATIC VARIABLES
 ***************************************************************/
-
-static int width = 800;
-static int height = 600;
-static int vp_width = 800;
-static int vp_height = 600;
-static int x_pos = 100;
-static int y_pos = 100;
-static float zoom_scale = 1.0f; 
-
-static vec2 cursorPos = {0.0f, 0.0f};
-
-static vec2 mouse3StartPos = {0.0f, 0.0f};
-static bool mouse3Active = false;
-
-static vec2 offset = {0.0f, 0.0f};
-
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
@@ -78,7 +41,10 @@ cad_ctx_t  cad_create_context()
 {
     printf("cad_create_context called\n");
     
-    lc_canvas_init();
+    /* Register core types */
+    object_register_type();
+    document_register_type();
+    textfield_register_type();
 
     return (cad_ctx_t)1;
 }
@@ -90,110 +56,71 @@ void cad_destroy_context(cad_ctx_t ctx)
 
 void cad_set_cursor_pos(int x, int y)
 {
-    lc_canvas_set_cursor_pos((float)x, (float)y);
-    lc_scene_set_cursor_pos((float)x, (float)y);
+    
+    
 }
 
 void cad_cursor_lost()
 {
-    lc_canvas_set_cursor_lost();
-    lc_scene_set_cursor_lost();
+   
 }
 
 void cad_set_cursor_button_state(int button, bool pressed)
 {
-    lc_canvas_set_cursor_button_state(button, pressed);
-    lc_scene_set_cursor_button_state(button, pressed);
+  
 }
 
 void cad_set_modifier_state(int modifier, bool state)
 {
-    lc_scene_set_modifier_state(modifier, state);
+   
 }
 
 void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 {
-    vp_width = vpw;
-    vp_height = vph;
-    width = w;
-    height = h;
-    x_pos = x;
-    y_pos = y;
+   
 }
 
 void cad_render_viewport()
 {
 
-    glClearColor(0.1f, 0.15f, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    //lc_scene_render((float)vp_width, (float)vp_height);
-
-    lc_draw_begin(vp_width, vp_height);
-
-    lc_canvas_render((float)vp_width, (float)vp_height);
-
-    lc_draw_end();
-
-    //lc_draw_render((float)vp_width, (float)vp_height);
+   
 
 }
 
 void cad_init_viewport()
 {
-    printf("cad_init_viewport called\n");
-
-    #if defined(EMSCRIPTEN) || TARGET_OS_IPHONE
-    #else
-    if (!gladLoadGL() /*&& !gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)*/)
-    {
-        printf("Failed to initialize GLAD\n");
-        return;
-    }
-    #endif
-
-    printf("GLAD initialized successfully\n");
-    printf("OpenGL %s\n", glGetString(GL_VERSION));
-    
-    if (!lc_draw_init())
-    {
-        printf("Failed to initialize lc_draw\n");
-        return;
-    }
-
-    lc_scene_init();
+   
 
 }
 
 void cad_axis_delta(int axis, float delta)
 {
-    lc_canvas_axis_delta(axis, delta);
-    lc_scene_axis_delta(axis, delta);
+   
 }
 
 int cad_get_cursor_type()
 {
-    return lc_canvas_get_cursor_type();
+    return 0;
 }
 
 void cad_start_modal_tool(int tool_id)
 {
-    lc_canvas_set_modal_tool(tool_id);
+    
 }
 
 void cad_clear_modal_tool()
 {
-    lc_canvas_set_modal_tool(0);
+
 }
 
 void cad_save_json(const char *path)
 {
-    return lc_canvas_save_json(path);
+
 }
 
 void cad_load_json(const char *path)
 {
-    return lc_canvas_load_json(path);
+
 }
 
 /***************************************************************

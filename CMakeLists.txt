@@ -99,7 +99,7 @@ else()
 endif()
 
 set(CAD_SRC
-    #lib/libcad.c
+    lib/libcad.c
     #lib/lc_draw.c
     #lib/lc_canvas.c
     #lib/lc_scene.c
@@ -107,6 +107,9 @@ set(CAD_SRC
     lib/render/vector/vector.c
     lib/util/log/log.c
     lib/model/type/type.c
+    lib/types/core/object/object.c
+    lib/types/core/document/document.c
+    lib/types/core/textfield/textfield.c
     ${PLATFORM_SRC}
 )
 

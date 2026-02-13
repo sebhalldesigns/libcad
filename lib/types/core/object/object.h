@@ -26,6 +26,10 @@ extern "C" {
 
 #include <model/type/type.h>
 
+#include <libcad/libcad.h>
+
+#include <jansson.h>
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -36,6 +40,7 @@ extern "C" {
 
 /* Base object struct - all document model types inherit from this */
 typedef struct object_t {
+    type_handle_t type;  /* Runtime type information for polymorphism */
     char* name;
 } object_t;
 
@@ -44,17 +49,20 @@ typedef struct object_t {
 ***************************************************************/
 
 /* Normal C API - use these for everyday code */
-object_t* object_create(void);
-void object_destroy(object_t* obj);
-void object_set_name(object_t* obj, const char* name);
-const char* object_get_name(const object_t* obj);
-void object_debug_print(const object_t* obj);
+EXPORT object_t* object_create(void);
+EXPORT void object_destroy(object_t* obj);
+EXPORT void object_set_name(object_t* obj, const char* name);
+EXPORT const char* object_get_name(const object_t* obj);
+EXPORT void object_debug_print(const object_t* obj);
+
+/* Serialization - polymorphic JSON encoding */
+EXPORT json_t* object_encode_to_json(const object_t* obj);
 
 /* Type system registration - called once at startup */
-void object_register_type(void);
+EXPORT void object_register_type(void);
 
 /* Get type handle - used for reflection/serialization */
-type_handle_t object_get_type_handle(void);
+EXPORT type_handle_t object_get_type_handle(void);
 
 #ifdef __cplusplus
 }

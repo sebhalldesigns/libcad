@@ -2,17 +2,17 @@
 **
 ** libcad Header File
 **
-** File         :  document.h
-** Module       :  core/document
+** File         :  textfield.h
+** Module       :  core/textfield
 ** Author       :  SH
 ** Created      :  2026-02-13 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  libcad core document type
+** Description  :  libcad core textfield type
 **
 ***************************************************************/
 
-#ifndef LIBCAD_CORE_DOCUMENT_H
-#define LIBCAD_CORE_DOCUMENT_H
+#ifndef LIBCAD_CORE_TEXTFIELD_H
+#define LIBCAD_CORE_TEXTFIELD_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +29,7 @@ extern "C" {
 
 #include <libcad/libcad.h>
 
+#include <jansson.h>
 
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
@@ -38,51 +39,43 @@ extern "C" {
 ** MARK: TYPEDEFS
 ***************************************************************/
 
-/* Document inherits from object - embeds object_t as first member */
-typedef struct document_t {
+/* TextField inherits from object - embeds object_t as first member */
+typedef struct textfield_t {
     object_t base;  /* MUST be first - allows safe upcasting */
-    char* path;
-
-    /* Children - array of object pointers */
-    object_t** children;
-    size_t children_count;
-    size_t children_capacity;
-} document_t;
+    char* text;
+    float x, y;     /* Position */
+    float font_size;
+} textfield_t;
 
 /***************************************************************
 ** MARK: FUNCTION DEFS
 ***************************************************************/
 
 /* Normal C API - use these for everyday code */
-EXPORT document_t* document_create(void);
-EXPORT void document_destroy(document_t* doc);
-EXPORT void document_set_path(document_t* doc, const char* path);
-EXPORT const char* document_get_path(const document_t* doc);
-EXPORT void document_debug_print(const document_t* doc);
-
-/* Children management */
-EXPORT void document_add_child(document_t* doc, object_t* child);
-EXPORT void document_remove_child(document_t* doc, size_t index);
-EXPORT object_t* document_get_child(const document_t* doc, size_t index);
-EXPORT size_t document_get_child_count(const document_t* doc);
+EXPORT textfield_t* textfield_create(void);
+EXPORT void textfield_destroy(textfield_t* field);
+EXPORT void textfield_set_text(textfield_t* field, const char* text);
+EXPORT const char* textfield_get_text(const textfield_t* field);
+EXPORT void textfield_set_position(textfield_t* field, float x, float y);
+EXPORT void textfield_set_font_size(textfield_t* field, float size);
+EXPORT void textfield_debug_print(const textfield_t* field);
 
 /* Serialization */
-EXPORT bool document_save(const document_t* doc, const char* filepath);
-EXPORT document_t* document_load(const char* filepath);
+EXPORT json_t* textfield_encode_to_json(const textfield_t* field);
 
 /* Upcast to base type (always safe because base is first member) */
-static inline object_t* document_as_object(document_t* doc) {
-    return (object_t*)doc;
+static inline object_t* textfield_as_object(textfield_t* field) {
+    return (object_t*)field;
 }
 
 /* Type system registration - called once at startup */
-EXPORT void document_register_type(void);
+EXPORT void textfield_register_type(void);
 
 /* Get type handle - used for reflection/serialization */
-EXPORT type_handle_t document_get_type_handle(void);
+EXPORT type_handle_t textfield_get_type_handle(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* LIBCAD_CORE_DOCUMENT_H */
+#endif /* LIBCAD_CORE_TEXTFIELD_H */

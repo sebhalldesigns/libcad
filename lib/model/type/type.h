@@ -24,6 +24,9 @@ extern "C" {
 
 #include <stdint.h>
 
+#include <libcad/libcad.h>
+
+
 /***************************************************************
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
@@ -100,34 +103,34 @@ typedef uintptr_t type_instance_handle_t;
 ***************************************************************/
 
 /* lookup functions */
-type_handle_t type_get(const char* name);
-property_handle_t type_get_property(const char* name, type_handle_t type_handle);
-method_handle_t type_get_method(const char* name, type_handle_t type_handle);
+EXPORT type_handle_t type_get(const char* name);
+EXPORT property_handle_t type_get_property(const char* name, type_handle_t type_handle);
+EXPORT method_handle_t type_get_method(const char* name, type_handle_t type_handle);
 
 /* Type instance creation and destruction */
-type_instance_handle_t type_instance_create(type_handle_t type_handle);
-void type_instance_destroy(type_instance_handle_t instance_handle);
+EXPORT type_instance_handle_t type_instance_create(type_handle_t type_handle);
+EXPORT void type_instance_destroy(type_instance_handle_t instance_handle);
 
 /* Type instance property access */
-void type_instance_set_property(type_instance_handle_t instance_handle, property_handle_t property_handle, const void* value);
-void* type_instance_get_property_ptr(type_instance_handle_t instance_handle, property_handle_t property_handle);
+EXPORT void type_instance_set_property(type_instance_handle_t instance_handle, property_handle_t property_handle, const void* value);
+EXPORT void* type_instance_get_property_ptr(type_instance_handle_t instance_handle, property_handle_t property_handle);
 
 /* Type instance method invocation */
-void type_instance_call_method(type_instance_handle_t instance_handle, method_handle_t method_handle, const void* args, void* result);
+EXPORT void type_instance_call_method(type_instance_handle_t instance_handle, method_handle_t method_handle, const void* args, void* result);
 
 /* Type registration */
-type_handle_t type_register(const char* name, type_handle_t parent_type_handle, size_t local_data_size);
+EXPORT type_handle_t type_register(const char* name, type_handle_t parent_type_handle, size_t local_data_size);
 
 /* Lifecycle method registration (fast path - no string lookup) */
-void type_set_init(type_handle_t type_handle, void (*init)(struct type_instance_t* self, void* params));
-void type_set_destroy(type_handle_t type_handle, void (*destroy)(struct type_instance_t* self));
+EXPORT void type_set_init(type_handle_t type_handle, void (*init)(struct type_instance_t* self, void* params));
+EXPORT void type_set_destroy(type_handle_t type_handle, void (*destroy)(struct type_instance_t* self));
 
 /* Property registration */
-property_handle_t type_register_property(type_handle_t type_handle, const char* name, size_t offset, size_t size);
+EXPORT property_handle_t type_register_property(type_handle_t type_handle, const char* name, size_t offset, size_t size);
 
 /* Method registration - forward declare type_instance_t for signature */
 struct type_instance_t;
-method_handle_t type_register_method(type_handle_t type_handle, const char* name,
+EXPORT method_handle_t type_register_method(type_handle_t type_handle, const char* name,
                                      void (*function)(struct type_instance_t* self, void* args, void* result));
 
 #ifdef __cplusplus

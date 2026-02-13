@@ -66,72 +66,50 @@ def _get_lib() -> ctypes.CDLL:
 def _setup_function_signatures(lib):
     """Configure ctypes function signatures for all libcad functions."""
 
-    # Context management
-    lib.cad_create_context.argtypes = []
-    lib.cad_create_context.restype = cad_ctx_t
+    # Helper to safely set up function signatures
+    def setup_func(name, argtypes, restype):
+        try:
+            func = getattr(lib, name)
+            func.argtypes = argtypes
+            func.restype = restype
+            return True
+        except AttributeError:
+            # Function doesn't exist in DLL, skip it
+            return False
 
-    lib.cad_destroy_context.argtypes = [cad_ctx_t]
-    lib.cad_destroy_context.restype = None
+    # Context management
+    setup_func('cad_create_context', [], cad_ctx_t)
+    setup_func('cad_destroy_context', [cad_ctx_t], None)
 
     # Model loading
-    #lib.cad_load_model_file.argtypes = [cad_ctx_t, ctypes.POINTER(cad_model_t), ctypes.c_char_p]
-    #lib.cad_load_model_file.restype = ctypes.c_bool
-
-    #lib.cad_load_model_data.argtypes = [cad_ctx_t, ctypes.POINTER(cad_model_t), ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t]
-    #lib.cad_load_model_data.restype = ctypes.c_bool
-
-    #lib.cad_unload_model.argtypes = [cad_ctx_t]
-    #lib.cad_unload_model.restype = None
+    setup_func('cad_load_model_file', [cad_ctx_t, ctypes.POINTER(cad_model_t), ctypes.c_char_p], ctypes.c_bool)
+    setup_func('cad_load_model_data', [cad_ctx_t, ctypes.POINTER(cad_model_t), ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t], ctypes.c_bool)
+    setup_func('cad_unload_model', [cad_ctx_t], None)
 
     # Model writing
-    #lib.cad_write_model_file.argtypes = [cad_ctx_t, cad_model_t, ctypes.c_char_p, ctypes.c_char_p]
-    #lib.cad_write_model_file.restype = ctypes.c_bool
-
-    #lib.cad_write_model_data.argtypes = [cad_ctx_t, cad_model_t, ctypes.c_char_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_uint8)), ctypes.POINTER(ctypes.c_size_t)]
-    #lib.cad_write_model_data.restype = ctypes.c_bool
+    setup_func('cad_write_model_file', [cad_ctx_t, cad_model_t, ctypes.c_char_p, ctypes.c_char_p], ctypes.c_bool)
+    setup_func('cad_write_model_data', [cad_ctx_t, cad_model_t, ctypes.c_char_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_uint8)), ctypes.POINTER(ctypes.c_size_t)], ctypes.c_bool)
 
     # Viewport
-    lib.cad_set_viewport.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
-    lib.cad_set_viewport.restype = None
-
-    lib.cad_render_viewport.argtypes = []
-    lib.cad_render_viewport.restype = None
-
-    lib.cad_init_viewport.argtypes = []
-    lib.cad_init_viewport.restype = None
+    setup_func('cad_set_viewport', [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int], None)
+    setup_func('cad_render_viewport', [], None)
+    setup_func('cad_init_viewport', [], None)
 
     # Input handling
-    lib.cad_set_cursor_pos.argtypes = [ctypes.c_int, ctypes.c_int]
-    lib.cad_set_cursor_pos.restype = None
-
-    lib.cad_cursor_lost.argtypes = []
-    lib.cad_cursor_lost.restype = None
-
-    lib.cad_set_cursor_button_state.argtypes = [ctypes.c_int, ctypes.c_bool]
-    lib.cad_set_cursor_button_state.restype = None
-
-    lib.cad_set_modifier_state.argtypes = [ctypes.c_int, ctypes.c_bool]
-    lib.cad_set_modifier_state.restype = None
-
-    lib.cad_axis_delta.argtypes = [ctypes.c_int, ctypes.c_float]
-    lib.cad_axis_delta.restype = None
+    setup_func('cad_set_cursor_pos', [ctypes.c_int, ctypes.c_int], None)
+    setup_func('cad_cursor_lost', [], None)
+    setup_func('cad_set_cursor_button_state', [ctypes.c_int, ctypes.c_bool], None)
+    setup_func('cad_set_modifier_state', [ctypes.c_int, ctypes.c_bool], None)
+    setup_func('cad_axis_delta', [ctypes.c_int, ctypes.c_float], None)
 
     # Tools
-    lib.cad_start_modal_tool.argtypes = [ctypes.c_int]
-    lib.cad_start_modal_tool.restype = None
-
-    lib.cad_clear_modal_tool.argtypes = []
-    lib.cad_clear_modal_tool.restype = None
-
-    lib.cad_get_cursor_type.argtypes = []
-    lib.cad_get_cursor_type.restype = ctypes.c_int
+    setup_func('cad_start_modal_tool', [ctypes.c_int], None)
+    setup_func('cad_clear_modal_tool', [], None)
+    setup_func('cad_get_cursor_type', [], ctypes.c_int)
 
     # JSON serialization
-    lib.cad_save_json.argtypes = [ctypes.c_char_p]
-    lib.cad_save_json.restype = None
-
-    lib.cad_load_json.argtypes = [ctypes.c_char_p]
-    lib.cad_load_json.restype = None
+    setup_func('cad_save_json', [ctypes.c_char_p], None)
+    setup_func('cad_load_json', [ctypes.c_char_p], None)
 
 
 # Context management functions

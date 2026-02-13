@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stddef.h>
 
+#include <jansson.h>
 #include <util/log/log.h>
 
 #include "object.h"
@@ -47,6 +48,7 @@ static void object_destroy_wrapper(type_instance_t* self);
 
 /* Method wrappers for type system */
 static void object_debug_print_method(type_instance_t* self, void* args, void* result);
+static void object_encode_to_json_method(type_instance_t* self, void* args, void* result);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -63,6 +65,7 @@ object_t* object_create(void)
         return NULL;
     }
 
+    obj->type = object_get_type_handle();
     obj->name = NULL;
 
     log_info("Created object");
@@ -97,6 +100,21 @@ void object_debug_print(const object_t* obj)
     if (!obj) return;
 
     log_info("Object: name='%s'", obj->name ? obj->name : "(null)");
+}
+
+json_t* object_encode_to_json(const object_t* obj)
+{
+    if (!obj) return json_null();
+
+    json_t* json = json_object();
+
+    /* Add type information */
+    json_object_set_new(json, "type", json_string("object"));
+
+    /* Add object properties */
+    json_object_set_new(json, "name", obj->name ? json_string(obj->name) : json_null());
+
+    return json;
 }
 
 /* Type system registration - metadata layer */
@@ -135,6 +153,12 @@ void object_register_type(void)
         object_debug_print_method
     );
 
+    type_register_method(
+        object_type_handle,
+        "encode_to_json",
+        object_encode_to_json_method
+    );
+
     log_info("Registered object type");
 }
 
@@ -168,4 +192,14 @@ static void object_debug_print_method(type_instance_t* self, void* args, void* r
     /* Bridge to the normal C function */
     object_t* obj = (object_t*)self->data;
     object_debug_print(obj);
+}
+
+static void object_encode_to_json_method(type_instance_t* self, void* args, void* result)
+{
+    /* Bridge to the normal C function */
+    object_t* obj = (object_t*)self->data;
+    json_t** json_result = (json_t**)result;
+    if (json_result) {
+        *json_result = object_encode_to_json(obj);
+    }
 }

@@ -22,6 +22,20 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 
+/***************************************************************
+** Type System & Document Model
+***************************************************************/
+
+/* Include type system and core types - these headers have EXPORT macros */
+/*#include "../../lib/model/type/type.h"*/
+/*#include "../../lib/types/core/object/object.h"*/
+/*#include "../../lib/types/core/document/document.h"*/
+/*#include "../../lib/types/core/textfield/textfield.h"*/
+
+/***************************************************************
+** Legacy API (to be organized)
+***************************************************************/
+
 #define MOUSE_LEFT_BUTTON    1
 #define MOUSE_MIDDLE_BUTTON  2
 #define MOUSE_RIGHT_BUTTON   3
