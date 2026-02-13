@@ -1,0 +1,184 @@
+/***************************************************************
+**
+** libcad Source File
+**
+** File         :  document.c
+** Module       :  core/document
+** Author       :  SH
+** Created      :  2026-02-13 (YYYY-MM-DD)
+** License      :  MIT
+** Description  :  libcad core document type
+**
+***************************************************************/
+
+/***************************************************************
+** MARK: INCLUDES
+***************************************************************/
+
+#include <stdlib.h>
+#include <string.h>
+#include <stddef.h>
+
+#include <util/log/log.h>
+
+#include "document.h"
+
+/***************************************************************
+** MARK: CONSTANTS & MACROS
+***************************************************************/
+
+/***************************************************************
+** MARK: TYPEDEFS
+***************************************************************/
+
+/***************************************************************
+** MARK: STATIC VARIABLES
+***************************************************************/
+
+static type_handle_t document_type_handle = TYPE_INVALID_HANDLE;
+
+/***************************************************************
+** MARK: STATIC FUNCTION DEFS
+***************************************************************/
+
+/* Lifecycle wrappers for type system */
+static void document_init_wrapper(type_instance_t* self, void* params);
+static void document_destroy_wrapper(type_instance_t* self);
+
+/* Method wrappers for type system */
+static void document_debug_print_method(type_instance_t* self, void* args, void* result);
+
+/***************************************************************
+** MARK: PUBLIC FUNCTIONS
+***************************************************************/
+
+/* Normal C API - fast path, use these for everyday code */
+
+document_t* document_create(void)
+{
+    document_t* doc = (document_t*)calloc(1, sizeof(document_t));
+    if (!doc)
+    {
+        log_error("document_create: failed to allocate document");
+        return NULL;
+    }
+
+    /* Initialize base object part */
+    doc->base.name = NULL;
+
+    /* Initialize document-specific fields */
+    doc->path = NULL;
+
+    log_info("Created document");
+    return doc;
+}
+
+void document_destroy(document_t* doc)
+{
+    if (!doc) return;
+
+    /* Clean up base object part */
+    free(doc->base.name);
+
+    /* Clean up document-specific fields */
+    free(doc->path);
+
+    free(doc);
+
+    log_info("Destroyed document");
+}
+
+void document_set_path(document_t* doc, const char* path)
+{
+    if (!doc) return;
+
+    free(doc->path);
+    doc->path = path ? strdup(path) : NULL;
+}
+
+const char* document_get_path(const document_t* doc)
+{
+    return doc ? doc->path : NULL;
+}
+
+void document_debug_print(const document_t* doc)
+{
+    if (!doc) return;
+
+    log_info("Document: name='%s', path='%s'",
+             doc->base.name ? doc->base.name : "(null)",
+             doc->path ? doc->path : "(null)");
+}
+
+/* Type system registration - metadata layer */
+
+void document_register_type(void)
+{
+    if (document_type_handle != TYPE_INVALID_HANDLE)
+    {
+        log_warning("document_register_type: type already registered");
+        return;
+    }
+
+    /* Register type with metadata system, inheriting from object */
+    document_type_handle = type_register(
+        "document",
+        object_get_type_handle(),  /* parent type */
+        sizeof(document_t) - sizeof(object_t)  /* local size = only document-specific fields */
+    );
+
+    /* Register lifecycle methods */
+    type_set_init(document_type_handle, document_init_wrapper);
+    type_set_destroy(document_type_handle, document_destroy_wrapper);
+
+    /* Register document-specific properties (base properties already registered) */
+    type_register_property(
+        document_type_handle,
+        "path",
+        offsetof(document_t, path),  /* global offset from start of struct */
+        sizeof(char*)
+    );
+
+    /* Override base methods for polymorphism */
+    type_register_method(
+        document_type_handle,
+        "debug_print",
+        document_debug_print_method
+    );
+
+    log_info("Registered document type (inherits from object)");
+}
+
+type_handle_t document_get_type_handle(void)
+{
+    return document_type_handle;
+}
+
+/***************************************************************
+** MARK: STATIC FUNCTIONS
+***************************************************************/
+
+/* These wrappers bridge the type system to the normal C API */
+
+static void document_init_wrapper(type_instance_t* self, void* params)
+{
+    /* Type system allocated the memory, just initialize it */
+    document_t* doc = (document_t*)self->data;
+    doc->base.name = NULL;
+    doc->path = NULL;
+}
+
+static void document_destroy_wrapper(type_instance_t* self)
+{
+    /* Clean up document data (type system will free the memory) */
+    document_t* doc = (document_t*)self->data;
+    free(doc->base.name);
+    free(doc->path);
+}
+
+static void document_debug_print_method(type_instance_t* self, void* args, void* result)
+{
+    /* Bridge to the normal C function */
+    document_t* doc = (document_t*)self->data;
+    document_debug_print(doc);
+}
