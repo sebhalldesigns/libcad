@@ -5,6 +5,7 @@ __pycache__/
 # Rust stuff
 target/
 *.lock
+gen/
 
 # LLM stuff
 .claude/
