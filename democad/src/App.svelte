@@ -445,7 +445,7 @@
                   <input type="checkbox" checked={consoleVisible} on:change={onConsoleCheckboxChange} />
                   <span>Show console</span>
                 </label>
-                <p class="setting-note">Use this to quickly reveal or hide the console panel/tray tab.</p>
+                <p class="setting-note">Use this to reveal or hide the console panel.</p>
               {/if}
             </section>
           {:else}
@@ -463,12 +463,12 @@
                   <h3>democad</h3>
                   <p class="version">Version 0.1.0-dev</p>
                   <p>
-                    democad is a free and open-source CAD front-end focused on fast sketching and direct 3D scene
-                    interaction with a WASM-powered kernel.
+                    democad is an example implementation of the libcad project, 
+                    set up to feel like a conventional parametric CAD application, but as a website!
                   </p>
                 </div>
               {:else}
-                <iframe class="docs-frame" src="https://libcad.org" title="libcad documentation" scrolling="no"></iframe>
+                <iframe class="docs-frame" src="https://libcad.org/docs" title="libcad documentation"></iframe>
               {/if}
             </section>
           {/if}
