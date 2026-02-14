@@ -5,7 +5,7 @@
 ** File         :  object.c
 ** Module       :  core/object
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
 ** Description  :  libcad core object type
 **
@@ -17,189 +17,118 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <stddef.h>
 
-#include <jansson.h>
 #include <util/log/log.h>
 
 #include "object.h"
 
 /***************************************************************
-** MARK: CONSTANTS & MACROS
+** MARK: FORWARD DECLARATIONS
 ***************************************************************/
+
+static void object_finalize(object_t* self);
 
 /***************************************************************
-** MARK: TYPEDEFS
+** MARK: TYPE REGISTRATION
+**
+** This single macro replaces ~50 lines of boilerplate!
 ***************************************************************/
+
+LIBCAD_DEFINE_TYPE(object, TYPE_INVALID)
 
 /***************************************************************
-** MARK: STATIC VARIABLES
+** MARK: CLASS INITIALIZATION
+**
+** Called ONCE when the type is first registered.
+** Setup vtable and class-level data here.
 ***************************************************************/
 
-static type_handle_t object_type_handle = TYPE_INVALID_HANDLE;
+static void object_class_init(object_class_t* cls)
+{
+    /* Set up vtable - point to default implementations */
+    cls->debug_print = object_debug_print;
+    cls->to_json = object_to_json;
+
+    /* Set finalizer */
+    cls->parent_class.instance_finalize = (void(*)(void*))object_finalize;
+
+    log_info("object_class_t initialized");
+}
 
 /***************************************************************
-** MARK: STATIC FUNCTION DEFS
+** MARK: INSTANCE INITIALIZATION
+**
+** Called for EACH new instance created.
+** Initialize instance fields to defaults.
 ***************************************************************/
 
-/* Lifecycle wrappers for type system */
-static void object_init_wrapper(type_instance_t* self, void* params);
-static void object_destroy_wrapper(type_instance_t* self);
+static void object_init(object_t* self)
+{
+    /* Initialize instance data */
+    self->name = NULL;
 
-/* Method wrappers for type system */
-static void object_debug_print_method(type_instance_t* self, void* args, void* result);
-static void object_encode_to_json_method(type_instance_t* self, void* args, void* result);
+    /* Note: No need to set self->cls - that's done automatically
+       by type_instance_new() before this is called */
+}
 
 /***************************************************************
-** MARK: PUBLIC FUNCTIONS
+** MARK: INSTANCE FINALIZATION
+**
+** Called when instance is destroyed.
+** Clean up any allocated resources.
 ***************************************************************/
 
-/* Normal C API - fast path, use these for everyday code */
-
-object_t* object_create(void)
+static void object_finalize(object_t* self)
 {
-    object_t* obj = (object_t*)calloc(1, sizeof(object_t));
-    if (!obj)
-    {
-        log_error("object_create: failed to allocate object");
-        return NULL;
-    }
-
-    obj->type = object_get_type_handle();
-    obj->name = NULL;
-
-    log_info("Created object");
-    return obj;
+    /* Clean up instance data */
+    free(self->name);
+    self->name = NULL;
 }
 
-void object_destroy(object_t* obj)
+/***************************************************************
+** MARK: PUBLIC API - Property Accessors
+***************************************************************/
+
+void object_set_name(object_t* self, const char* name)
 {
-    if (!obj) return;
+    if (!self) return;
 
-    free(obj->name);
-    free(obj);
-
-    log_info("Destroyed object");
+    free(self->name);
+    self->name = name ? strdup(name) : NULL;
 }
 
-void object_set_name(object_t* obj, const char* name)
+const char* object_get_name(const object_t* self)
 {
-    if (!obj) return;
-
-    free(obj->name);
-    obj->name = name ? strdup(name) : NULL;
+    return self ? self->name : NULL;
 }
 
-const char* object_get_name(const object_t* obj)
+/***************************************************************
+** MARK: PUBLIC API - Methods (Virtual)
+**
+** These are the DEFAULT implementations.
+** Subclasses can override by setting different function pointers
+** in their class_init function.
+***************************************************************/
+
+void object_debug_print(object_t* self)
 {
-    return obj ? obj->name : NULL;
+    if (!self) return;
+
+    log_info("object_t: name='%s'", self->name ? self->name : "(null)");
 }
 
-void object_debug_print(const object_t* obj)
+json_t* object_to_json(object_t* self)
 {
-    if (!obj) return;
-
-    log_info("Object: name='%s'", obj->name ? obj->name : "(null)");
-}
-
-json_t* object_encode_to_json(const object_t* obj)
-{
-    if (!obj) return json_null();
+    if (!self) return json_null();
 
     json_t* json = json_object();
 
     /* Add type information */
-    json_object_set_new(json, "type", json_string("object"));
+    json_object_set_new(json, "type", json_string("object_t"));
 
-    /* Add object properties */
-    json_object_set_new(json, "name", obj->name ? json_string(obj->name) : json_null());
+    /* Add properties */
+    json_object_set_new(json, "name",
+                       self->name ? json_string(self->name) : json_null());
 
     return json;
-}
-
-/* Type system registration - metadata layer */
-
-void object_register_type(void)
-{
-    if (object_type_handle != TYPE_INVALID_HANDLE)
-    {
-        log_warning("object_register_type: type already registered");
-        return;
-    }
-
-    /* Register type with metadata system */
-    object_type_handle = type_register(
-        "object",
-        TYPE_INVALID_HANDLE,  /* no parent */
-        sizeof(object_t)
-    );
-
-    /* Register lifecycle methods */
-    type_set_init(object_type_handle, object_init_wrapper);
-    type_set_destroy(object_type_handle, object_destroy_wrapper);
-
-    /* Register properties for serialization/introspection */
-    type_register_property(
-        object_type_handle,
-        "name",
-        offsetof(object_t, name),
-        sizeof(char*)
-    );
-
-    /* Register methods for dynamic dispatch/polymorphism */
-    type_register_method(
-        object_type_handle,
-        "debug_print",
-        object_debug_print_method
-    );
-
-    type_register_method(
-        object_type_handle,
-        "encode_to_json",
-        object_encode_to_json_method
-    );
-
-    log_info("Registered object type");
-}
-
-type_handle_t object_get_type_handle(void)
-{
-    return object_type_handle;
-}
-
-/***************************************************************
-** MARK: STATIC FUNCTIONS
-***************************************************************/
-
-/* These wrappers bridge the type system to the normal C API */
-
-static void object_init_wrapper(type_instance_t* self, void* params)
-{
-    /* Type system allocated the memory, just initialize it */
-    object_t* obj = (object_t*)self->data;
-    obj->name = NULL;
-}
-
-static void object_destroy_wrapper(type_instance_t* self)
-{
-    /* Clean up object data (type system will free the memory) */
-    object_t* obj = (object_t*)self->data;
-    free(obj->name);
-}
-
-static void object_debug_print_method(type_instance_t* self, void* args, void* result)
-{
-    /* Bridge to the normal C function */
-    object_t* obj = (object_t*)self->data;
-    object_debug_print(obj);
-}
-
-static void object_encode_to_json_method(type_instance_t* self, void* args, void* result)
-{
-    /* Bridge to the normal C function */
-    object_t* obj = (object_t*)self->data;
-    json_t** json_result = (json_t**)result;
-    if (json_result) {
-        *json_result = object_encode_to_json(obj);
-    }
 }

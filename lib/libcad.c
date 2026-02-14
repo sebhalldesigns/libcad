@@ -42,9 +42,9 @@ cad_ctx_t  cad_create_context()
     printf("cad_create_context called\n");
     
     /* Register core types */
-    object_register_type();
-    document_register_type();
-    textfield_register_type();
+    object_get_type();
+    document_get_type();
+    text_field_get_type();
 
     return (cad_ctx_t)1;
 }

@@ -5,16 +5,17 @@
 ** File         :  test_type.c
 ** Module       :  type
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  Test suite for libcad type system
+** Description  :  Test suite for libcad type system (Class-based)
 **
 ***************************************************************/
 
 #include <model/type/type.h>
+#include <types/core/object/object.h>
+#include <types/core/document/document.h>
 #include <stdio.h>
 #include <string.h>
-#include <stddef.h>
 #include <stdbool.h>
 #include <assert.h>
 
@@ -30,6 +31,7 @@ static int test_failed = 0;
     do { \
         if (!(condition)) { \
             printf("  ✗ FAILED: %s\n", message); \
+            printf("      at %s:%d\n", __FILE__, __LINE__); \
             test_failed++; \
             return; \
         } \
@@ -49,460 +51,435 @@ static int test_failed = 0;
     } while (0)
 
 /***************************************************************
-** TEST DATA STRUCTURES
+** TEST TYPE DEFINITIONS
+**
+** Define a custom type for testing inheritance and vtable
 ***************************************************************/
 
-/* Base type data */
-typedef struct {
-    uint64_t id;
-    bool visible;
-} base_data_t;
+/* test_shape_t - inherits from object_t */
+typedef struct test_shape_t {
+    object_t parent;
+    int x, y;
+    int area_call_count;
+} test_shape_t;
 
-/* Derived type data (extends base) */
-typedef struct {
-    int value;
-    float x, y, z;
-} derived_local_data_t;
+typedef struct test_shape_class_t {
+    object_class_t parent_class;
+    int (*compute_area)(test_shape_t* self);
+} test_shape_class_t;
 
-/* Method implementations */
-static int init_call_count = 0;
-static int destroy_call_count = 0;
-static int custom_call_count = 0;
+/* Forward declarations */
+type_handle_t test_shape_get_type(void);
+test_shape_t* test_shape_new(void);
+void test_shape_free(test_shape_t* self);
+void test_shape_set_position(test_shape_t* self, int x, int y);
+int test_shape_compute_area(test_shape_t* self);
 
-void base_init(type_instance_t* self, void* params)
+/* test_rectangle_t - inherits from test_shape_t */
+typedef struct test_rectangle_t {
+    test_shape_t parent;
+    int width, height;
+} test_rectangle_t;
+
+typedef struct test_rectangle_class_t {
+    test_shape_class_t parent_class;
+    /* Can add more methods here */
+} test_rectangle_class_t;
+
+/* Forward declarations */
+type_handle_t test_rectangle_get_type(void);
+test_rectangle_t* test_rectangle_new(void);
+void test_rectangle_free(test_rectangle_t* self);
+void test_rectangle_set_size(test_rectangle_t* self, int width, int height);
+int test_rectangle_compute_area(test_rectangle_t* self);
+
+/***************************************************************
+** TEST TYPE IMPLEMENTATIONS
+***************************************************************/
+
+/* test_shape_t implementation */
+
+LIBCAD_DEFINE_TYPE(test_shape, object_get_type())
+
+static void test_shape_class_init(test_shape_class_t* cls)
 {
-    base_data_t* data = (base_data_t*)self->data;
-    data->id = 123;
-    data->visible = true;
-    init_call_count++;
+    cls->compute_area = test_shape_compute_area;
 }
 
-void base_destroy(type_instance_t* self)
+static void test_shape_init(test_shape_t* self)
 {
-    destroy_call_count++;
+    self->x = 0;
+    self->y = 0;
+    self->area_call_count = 0;
 }
 
-void derived_init(type_instance_t* self, void* params)
+void test_shape_set_position(test_shape_t* self, int x, int y)
 {
-    base_data_t* base = (base_data_t*)self->data;
-    derived_local_data_t* derived = (derived_local_data_t*)((uint8_t*)self->data + sizeof(base_data_t));
-
-    base->id = 456;
-    base->visible = false;
-    derived->value = 42;
-    derived->x = 1.0f;
-    derived->y = 2.0f;
-    derived->z = 3.0f;
-
-    init_call_count++;
+    if (!self) return;
+    self->x = x;
+    self->y = y;
 }
 
-void custom_method(type_instance_t* self, void* args, void* result)
+int test_shape_compute_area(test_shape_t* self)
 {
-    int* arg = (int*)args;
-    int* res = (int*)result;
-
-    if (arg && res) {
-        *res = *arg * 2;
-    }
-
-    custom_call_count++;
+    if (!self) return 0;
+    self->area_call_count++;
+    return 0;  /* Default - no area */
 }
 
-/* Test methods for method registration tests (these have the standard 3-parameter signature) */
-void setup_method(type_instance_t* self, void* args, void* result)
+/* test_rectangle_t implementation */
+
+LIBCAD_DEFINE_TYPE(test_rectangle, test_shape_get_type())
+
+static void test_rectangle_class_init(test_rectangle_class_t* cls)
 {
-    base_data_t* data = (base_data_t*)self->data;
-    data->id = 123;
-    data->visible = true;
+    /* Override parent's compute_area method */
+    test_shape_class_t* parent = (test_shape_class_t*)cls;
+    parent->compute_area = (int(*)(test_shape_t*))test_rectangle_compute_area;
 }
 
-void cleanup_method(type_instance_t* self, void* args, void* result)
+static void test_rectangle_init(test_rectangle_t* self)
 {
-    /* No-op for testing */
+    self->width = 0;
+    self->height = 0;
 }
 
-void derived_setup_method(type_instance_t* self, void* args, void* result)
+void test_rectangle_set_size(test_rectangle_t* self, int width, int height)
 {
-    base_data_t* base = (base_data_t*)self->data;
-    derived_local_data_t* derived = (derived_local_data_t*)((uint8_t*)self->data + sizeof(base_data_t));
+    if (!self) return;
+    self->width = width;
+    self->height = height;
+}
 
-    base->id = 456;
-    base->visible = false;
-    derived->value = 42;
+int test_rectangle_compute_area(test_rectangle_t* self)
+{
+    if (!self) return 0;
+    self->parent.area_call_count++;
+    return self->width * self->height;
 }
 
 /***************************************************************
 ** TESTS
 ***************************************************************/
 
-void test_type_registration(void)
+void test_basic_type_registration(void)
 {
-    /* Register base type */
-    type_handle_t base_type = type_register(
-        "test.Base",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    type_handle_t type = test_shape_get_type();
 
-    ASSERT(base_type != TYPE_INVALID_HANDLE, "Base type registered");
+    ASSERT(type != TYPE_INVALID, "Type registered successfully");
 
-    /* Lookup type by name */
-    type_handle_t found = type_get("test.Base");
-    ASSERT(found == base_type, "Type lookup works");
+    const char* name = type_name(type);
+    ASSERT(name != NULL, "Type has a name");
+    ASSERT(strcmp(name, "test_shape_t") == 0, "Type name is correct");
 
-    /* Register duplicate - should return existing */
-    type_handle_t duplicate = type_register(
-        "test.Base",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
-    ASSERT(duplicate == base_type, "Duplicate registration returns existing type");
-
-    PASS("Type registration works correctly");
+    PASS("Basic type registration works");
 }
 
-void test_type_inheritance(void)
+void test_type_lookup(void)
 {
-    /* Register base */
-    type_handle_t base_type = type_register(
-        "test.InheritBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    type_handle_t type1 = test_shape_get_type();
+    type_handle_t type2 = type_from_name("test_shape_t");
 
-    /* Register derived */
-    type_handle_t derived_type = type_register(
-        "test.InheritDerived",
-        base_type,
-        sizeof(derived_local_data_t)
-    );
+    ASSERT(type2 != TYPE_INVALID, "Type lookup by name works");
+    ASSERT(type1 == type2, "Lookup returns same type handle");
 
-    ASSERT(derived_type != TYPE_INVALID_HANDLE, "Derived type registered");
-    ASSERT(derived_type != base_type, "Derived type is different from base");
-
-    PASS("Type inheritance works correctly");
+    PASS("Type lookup works correctly");
 }
 
-void test_property_registration(void)
+void test_instance_creation(void)
 {
-    type_handle_t base_type = type_register(
-        "test.PropBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    test_shape_t* shape = test_shape_new();
 
-    /* Register properties */
-    property_handle_t id_prop = type_register_property(
-        base_type,
-        "id",
-        offsetof(base_data_t, id),
-        sizeof(uint64_t)
-    );
+    ASSERT(shape != NULL, "Instance created successfully");
+    ASSERT(shape->parent.cls != NULL, "Instance has class pointer");
+    ASSERT(shape->x == 0, "Instance fields initialized (x)");
+    ASSERT(shape->y == 0, "Instance fields initialized (y)");
+    ASSERT(shape->area_call_count == 0, "Instance fields initialized (counter)");
 
-    property_handle_t visible_prop = type_register_property(
-        base_type,
-        "visible",
-        offsetof(base_data_t, visible),
-        sizeof(bool)
-    );
+    test_shape_free(shape);
 
-    ASSERT(id_prop != TYPE_INVALID_HANDLE, "ID property registered");
-    ASSERT(visible_prop != TYPE_INVALID_HANDLE, "Visible property registered");
-    ASSERT(id_prop != visible_prop, "Properties are distinct");
-
-    /* Lookup properties */
-    property_handle_t found_id = type_get_property("id", base_type);
-    property_handle_t found_visible = type_get_property("visible", base_type);
-
-    ASSERT(found_id == id_prop, "ID property lookup works");
-    ASSERT(found_visible == visible_prop, "Visible property lookup works");
-
-    PASS("Property registration and lookup work correctly");
+    PASS("Instance creation works correctly");
 }
 
-void test_property_inheritance(void)
+void test_instance_methods(void)
 {
-    type_handle_t base_type = type_register(
-        "test.PropInheritBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    test_shape_t* shape = test_shape_new();
 
-    type_handle_t derived_type = type_register(
-        "test.PropInheritDerived",
-        base_type,
-        sizeof(derived_local_data_t)
-    );
+    test_shape_set_position(shape, 10, 20);
 
-    /* Register base property */
-    type_register_property(base_type, "id",
-                          offsetof(base_data_t, id),
-                          sizeof(uint64_t));
+    ASSERT(shape->x == 10, "Method modified field (x)");
+    ASSERT(shape->y == 20, "Method modified field (y)");
 
-    /* Register derived property */
-    type_register_property(derived_type, "value",
-                          sizeof(base_data_t) + offsetof(derived_local_data_t, value),
-                          sizeof(int));
+    test_shape_free(shape);
 
-    /* Derived type should find both properties */
-    property_handle_t derived_id = type_get_property("id", derived_type);
-    property_handle_t derived_value = type_get_property("value", derived_type);
-
-    ASSERT(derived_id != TYPE_INVALID_HANDLE, "Derived finds inherited property");
-    ASSERT(derived_value != TYPE_INVALID_HANDLE, "Derived finds own property");
-
-    /* Base type should not find derived property */
-    property_handle_t base_value = type_get_property("value", base_type);
-    ASSERT(base_value == TYPE_INVALID_HANDLE, "Base doesn't find derived property");
-
-    PASS("Property inheritance works correctly");
+    PASS("Instance methods work correctly");
 }
 
-void test_method_registration(void)
+void test_vtable_dispatch(void)
 {
-    type_handle_t base_type = type_register(
-        "test.MethodBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    test_shape_t* shape = test_shape_new();
+    test_shape_class_t* cls = (test_shape_class_t*)LIBCAD_GET_CLASS(shape);
 
-    /* Register methods */
-    method_handle_t setup = type_register_method(
-        base_type,
-        "setup",
-        setup_method
-    );
+    ASSERT(cls->compute_area != NULL, "Vtable has compute_area method");
 
-    method_handle_t cleanup = type_register_method(
-        base_type,
-        "cleanup",
-        cleanup_method
-    );
+    int area = cls->compute_area(shape);
 
-    ASSERT(setup != TYPE_INVALID_HANDLE, "Setup method registered");
-    ASSERT(cleanup != TYPE_INVALID_HANDLE, "Cleanup method registered");
+    ASSERT(area == 0, "Vtable method returns correct value");
+    ASSERT(shape->area_call_count == 1, "Vtable method was called");
 
-    /* Lookup methods */
-    method_handle_t found_setup = type_get_method("setup", base_type);
-    method_handle_t found_cleanup = type_get_method("cleanup", base_type);
+    test_shape_free(shape);
 
-    ASSERT(found_setup == setup, "Setup method lookup works");
-    ASSERT(found_cleanup == cleanup, "Cleanup method lookup works");
-
-    PASS("Method registration and lookup work correctly");
+    PASS("Vtable dispatch works correctly");
 }
 
-void test_method_inheritance_and_override(void)
+void test_inheritance_basic(void)
 {
-    type_handle_t base_type = type_register(
-        "test.MethodInheritBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    type_handle_t shape_type = test_shape_get_type();
+    type_handle_t rect_type = test_rectangle_get_type();
 
-    type_handle_t derived_type = type_register(
-        "test.MethodInheritDerived",
-        base_type,
-        sizeof(derived_local_data_t)
-    );
+    ASSERT(rect_type != TYPE_INVALID, "Child type registered");
+    ASSERT(rect_type != shape_type, "Child type is distinct from parent");
 
-    /* Register base methods */
-    method_handle_t base_setup = type_register_method(base_type, "setup", setup_method);
-    type_register_method(base_type, "cleanup", cleanup_method);
+    ASSERT(type_is_a(rect_type, shape_type), "Child is-a parent");
+    ASSERT(!type_is_a(shape_type, rect_type), "Parent is-not-a child");
 
-    /* Override setup in derived */
-    method_handle_t derived_setup = type_register_method(derived_type, "setup", derived_setup_method);
-
-    /* Derived setup should override base setup */
-    method_handle_t found_setup = type_get_method("setup", derived_type);
-    ASSERT(found_setup == derived_setup, "Derived setup overrides base setup");
-    ASSERT(found_setup != base_setup, "Derived setup is different from base setup");
-
-    /* Derived should inherit cleanup */
-    method_handle_t found_cleanup = type_get_method("cleanup", derived_type);
-    ASSERT(found_cleanup != TYPE_INVALID_HANDLE, "Derived inherits cleanup method");
-
-    PASS("Method inheritance and override work correctly");
+    PASS("Basic inheritance works correctly");
 }
 
-void test_instance_creation_and_destruction(void)
+void test_inheritance_instance_creation(void)
 {
-    type_handle_t base_type = type_register(
-        "test.InstanceBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    test_rectangle_t* rect = test_rectangle_new();
 
-    type_set_init(base_type, base_init);
-    type_set_destroy(base_type, base_destroy);
+    ASSERT(rect != NULL, "Child instance created");
 
-    init_call_count = 0;
-    destroy_call_count = 0;
+    /* Check parent fields initialized */
+    ASSERT(rect->parent.x == 0, "Parent fields initialized (x)");
+    ASSERT(rect->parent.y == 0, "Parent fields initialized (y)");
 
-    /* Create instance */
-    type_instance_handle_t instance = type_instance_create(base_type);
+    /* Check child fields initialized */
+    ASSERT(rect->width == 0, "Child fields initialized (width)");
+    ASSERT(rect->height == 0, "Child fields initialized (height)");
 
-    ASSERT(instance != TYPE_INVALID_HANDLE, "Instance created successfully");
-    ASSERT(init_call_count == 1, "Init method called on creation");
+    test_rectangle_free(rect);
 
-    /* Destroy instance */
-    type_instance_destroy(instance);
-
-    ASSERT(destroy_call_count == 1, "Destroy method called on destruction");
-
-    PASS("Instance creation and destruction work correctly");
+    PASS("Inheritance instance creation works");
 }
 
-void test_instance_property_access(void)
+void test_inheritance_method_override(void)
 {
-    type_handle_t base_type = type_register(
-        "test.PropAccessBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    test_shape_t* shape = test_shape_new();
+    test_rectangle_t* rect = test_rectangle_new();
 
-    property_handle_t id_prop = type_register_property(
-        base_type,
-        "id",
-        offsetof(base_data_t, id),
-        sizeof(uint64_t)
-    );
+    test_rectangle_set_size(rect, 5, 10);
 
-    property_handle_t visible_prop = type_register_property(
-        base_type,
-        "visible",
-        offsetof(base_data_t, visible),
-        sizeof(bool)
-    );
+    /* Call via test_shape_t pointer (polymorphism!) */
+    test_shape_t* rect_as_shape = (test_shape_t*)rect;
+    test_shape_class_t* cls = (test_shape_class_t*)LIBCAD_GET_CLASS(rect_as_shape);
 
-    /* Create instance */
-    type_instance_handle_t instance = type_instance_create(base_type);
+    int area = cls->compute_area(rect_as_shape);
 
-    /* Set properties */
-    uint64_t id = 999;
-    bool visible = false;
+    ASSERT(area == 50, "Overridden method returns correct value");
+    ASSERT(rect->parent.area_call_count == 1, "Overridden method was called");
 
-    type_instance_set_property(instance, id_prop, &id);
-    type_instance_set_property(instance, visible_prop, &visible);
+    test_shape_free(shape);
+    test_rectangle_free(rect);
 
-    /* Get properties */
-    uint64_t* id_ptr = (uint64_t*)type_instance_get_property_ptr(instance, id_prop);
-    bool* visible_ptr = (bool*)type_instance_get_property_ptr(instance, visible_prop);
-
-    ASSERT(*id_ptr == 999, "ID property set correctly");
-    ASSERT(*visible_ptr == false, "Visible property set correctly");
-
-    /* Modify via pointer */
-    *id_ptr = 1234;
-
-    uint64_t* id_ptr2 = (uint64_t*)type_instance_get_property_ptr(instance, id_prop);
-    ASSERT(*id_ptr2 == 1234, "Property modification via pointer works");
-
-    type_instance_destroy(instance);
-
-    PASS("Instance property access works correctly");
+    PASS("Method override works correctly");
 }
 
-void test_instance_method_invocation(void)
+void test_polymorphism(void)
 {
-    type_handle_t base_type = type_register(
-        "test.MethodCallBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    test_shape_t* shape = test_shape_new();
+    test_rectangle_t* rect = test_rectangle_new();
+    test_rectangle_set_size(rect, 4, 6);
 
-    method_handle_t custom = type_register_method(base_type, "custom", custom_method);
+    /* Array of test_shape_t pointers (polymorphic) */
+    test_shape_t* shapes[2];
+    shapes[0] = shape;
+    shapes[1] = (test_shape_t*)rect;
 
-    custom_call_count = 0;
+    /* Call compute_area on both - should dispatch to correct implementation */
+    int total_area = 0;
+    for (int i = 0; i < 2; i++) {
+        test_shape_class_t* cls = (test_shape_class_t*)LIBCAD_GET_CLASS(shapes[i]);
+        total_area += cls->compute_area(shapes[i]);
+    }
 
-    type_instance_handle_t instance = type_instance_create(base_type);
+    ASSERT(total_area == 24, "Polymorphic dispatch works (0 + 24 = 24)");
+    ASSERT(shape->area_call_count == 1, "Shape method called once");
+    ASSERT(rect->parent.area_call_count == 1, "Rectangle method called once");
 
-    /* Call method with args and result */
-    int input = 21;
-    int output = 0;
+    test_shape_free(shape);
+    test_rectangle_free(rect);
 
-    type_instance_call_method(instance, custom, &input, &output);
-
-    ASSERT(custom_call_count == 1, "Method was called");
-    ASSERT(output == 42, "Method computed correct result");
-
-    type_instance_destroy(instance);
-
-    PASS("Instance method invocation works correctly");
+    PASS("Polymorphism works correctly");
 }
 
-void test_full_inheritance_example(void)
+void test_object_type(void)
 {
-    /* Setup types */
-    type_handle_t base_type = type_register(
-        "test.FullBase",
-        TYPE_INVALID_HANDLE,
-        sizeof(base_data_t)
-    );
+    object_t* obj = object_new();
 
-    type_handle_t derived_type = type_register(
-        "test.FullDerived",
-        base_type,
-        sizeof(derived_local_data_t)
-    );
+    ASSERT(obj != NULL, "object_t created successfully");
+    ASSERT(obj->cls != NULL, "object_t has class pointer");
+    ASSERT(obj->name == NULL, "object_t name initialized to NULL");
 
-    /* Setup base properties */
-    property_handle_t id_prop = type_register_property(
-        base_type,
-        "id",
-        offsetof(base_data_t, id),
-        sizeof(uint64_t)
-    );
+    object_set_name(obj, "Test object_t");
+    const char* name = object_get_name(obj);
 
-    /* Setup derived properties */
-    property_handle_t value_prop = type_register_property(
-        derived_type,
-        "value",
-        sizeof(base_data_t) + offsetof(derived_local_data_t, value),
-        sizeof(int)
-    );
+    ASSERT(name != NULL, "object_t name set successfully");
+    ASSERT(strcmp(name, "Test object_t") == 0, "object_t name is correct");
 
-    /* Setup methods */
-    type_set_init(base_type, base_init);
-    type_set_init(derived_type, derived_init);  /* Override */
-    type_register_method(derived_type, "custom", custom_method);
+    object_free(obj);
 
-    /* Create derived instance */
-    init_call_count = 0;
-    type_instance_handle_t instance = type_instance_create(derived_type);
+    PASS("object_t type works correctly");
+}
 
-    ASSERT(init_call_count == 1, "Derived init called (not base init)");
+void test_document_type(void)
+{
+    document_t* doc = document_new();
 
-    /* Access inherited property */
-    uint64_t* id_ptr = (uint64_t*)type_instance_get_property_ptr(instance, id_prop);
-    ASSERT(*id_ptr == 456, "Derived init set ID to 456");
+    ASSERT(doc != NULL, "document_t created successfully");
+    ASSERT(doc->parent.cls != NULL, "document_t has class pointer");
+    ASSERT(doc->path == NULL, "document_t path initialized to NULL");
+    ASSERT(doc->children_count == 0, "document_t has no children");
 
-    /* Access derived property */
-    int* value_ptr = (int*)type_instance_get_property_ptr(instance, value_prop);
-    ASSERT(*value_ptr == 42, "Derived property initialized correctly");
+    document_set_path(doc, "/test/path.cad");
+    const char* path = document_get_path(doc);
 
-    /* Modify inherited property */
-    uint64_t new_id = 9999;
-    type_instance_set_property(instance, id_prop, &new_id);
+    ASSERT(path != NULL, "document_t path set successfully");
+    ASSERT(strcmp(path, "/test/path.cad") == 0, "document_t path is correct");
 
-    uint64_t* id_ptr2 = (uint64_t*)type_instance_get_property_ptr(instance, id_prop);
-    ASSERT(*id_ptr2 == 9999, "Can modify inherited property");
+    document_free(doc);
 
-    /* Call derived method */
-    custom_call_count = 0;
-    method_handle_t custom = type_get_method("custom", derived_type);
+    PASS("document_t type works correctly");
+}
 
-    int input = 100;
-    int output = 0;
-    type_instance_call_method(instance, custom, &input, &output);
+void test_document_inheritance(void)
+{
+    type_handle_t obj_type = object_get_type();
+    type_handle_t doc_type = document_get_type();
 
-    ASSERT(custom_call_count == 1, "Derived method called");
-    ASSERT(output == 200, "Derived method works correctly");
+    ASSERT(type_is_a(doc_type, obj_type), "document_t is-a object_t");
 
-    type_instance_destroy(instance);
+    document_t* doc = document_new();
+    object_t* obj_ptr = (object_t*)doc;
 
-    PASS("Full inheritance example works correctly");
+    /* Set name via object_t interface */
+    object_set_name(obj_ptr, "My document_t");
+
+    /* Set path via document_t interface */
+    document_set_path(doc, "/path/to/doc.cad");
+
+    const char* name = object_get_name(obj_ptr);
+    const char* path = document_get_path(doc);
+
+    ASSERT(strcmp(name, "My document_t") == 0, "object_t methods work on document_t");
+    ASSERT(strcmp(path, "/path/to/doc.cad") == 0, "document_t methods work");
+
+    document_free(doc);
+
+    PASS("document_t inheritance works correctly");
+}
+
+void test_document_children(void)
+{
+    document_t* doc = document_new();
+    object_t* child1 = object_new();
+    object_t* child2 = object_new();
+
+    object_set_name(child1, "Child 1");
+    object_set_name(child2, "Child 2");
+
+    document_add_child(doc, child1);
+    document_add_child(doc, child2);
+
+    ASSERT(document_get_child_count(doc) == 2, "document_t has 2 children");
+
+    object_t* retrieved = document_get_child(doc, 0);
+    ASSERT(retrieved == child1, "First child retrieved correctly");
+
+    document_remove_child(doc, 0);
+    ASSERT(document_get_child_count(doc) == 1, "Child removed");
+
+    retrieved = document_get_child(doc, 0);
+    ASSERT(retrieved == child2, "Remaining child is child2");
+
+    document_free(doc);
+    object_free(child1);
+    object_free(child2);
+
+    PASS("document_t children management works correctly");
+}
+
+void test_polymorphic_json_serialization(void)
+{
+    document_t* doc = document_new();
+    object_t* obj = object_new();
+
+    object_set_name((object_t*)doc, "Test document_t");
+    document_set_path(doc, "/test.cad");
+
+    object_set_name(obj, "Test object_t");
+
+    /* Get JSON via object_t interface (polymorphic!) */
+    json_t* doc_json = OBJECT_TO_JSON((object_t*)doc);
+    json_t* obj_json = OBJECT_TO_JSON(obj);
+
+    ASSERT(doc_json != NULL, "document_t JSON created");
+    ASSERT(obj_json != NULL, "object_t JSON created");
+
+    /* Check type field */
+    json_t* doc_type = json_object_get(doc_json, "type");
+    json_t* obj_type = json_object_get(obj_json, "type");
+
+    ASSERT(strcmp(json_string_value(doc_type), "document_t") == 0,
+           "document_t JSON has correct type");
+    ASSERT(strcmp(json_string_value(obj_type), "object_t") == 0,
+           "object_t JSON has correct type");
+
+    /* Check document-specific field */
+    json_t* path_field = json_object_get(doc_json, "path");
+    ASSERT(strcmp(json_string_value(path_field), "/test.cad") == 0,
+           "document_t JSON has path field");
+
+    json_decref(doc_json);
+    json_decref(obj_json);
+
+    document_free(doc);
+    object_free(obj);
+
+    PASS("Polymorphic JSON serialization works correctly");
+}
+
+void test_class_singleton(void)
+{
+    /* Ensure type is registered first */
+    object_get_type();
+
+    /* Get class multiple times */
+    object_class_t* klass1 = object_class_get();
+    object_class_t* klass2 = object_class_get();
+
+    ASSERT(klass1 == klass2, "Class is a singleton");
+    ASSERT(klass1->debug_print != NULL, "Class has vtable methods");
+
+    PASS("Class singleton works correctly");
+}
+
+void test_libcad_call_macro(void)
+{
+    object_t* obj = object_new();
+    object_set_name(obj, "Macro Test");
+
+    /* Test the OBJECT_TO_JSON macro (which uses LIBCAD_CALL internally) */
+    json_t* json = OBJECT_TO_JSON(obj);
+
+    ASSERT(json != NULL, "OBJECT_TO_JSON macro works");
+
+    json_decref(json);
+    object_free(obj);
+
+    PASS("object_t polymorphic macros work correctly");
 }
 
 /***************************************************************
@@ -511,30 +488,47 @@ void test_full_inheritance_example(void)
 
 int main(void)
 {
-    printf("\n╔════════════════════════════════════════╗\n");
-    printf("║   libcad Type System Test Suite       ║\n");
-    printf("╚════════════════════════════════════════╝\n");
+    printf("\n╔═══════════════════════════════════════════╗\n");
+    printf("║  libcad Type System Test Suite (V2)      ║\n");
+    printf("║  Class-Based with Macros                  ║\n");
+    printf("╚═══════════════════════════════════════════╝\n");
 
-    /* Run all tests */
-    RUN_TEST(type_registration);
-    RUN_TEST(type_inheritance);
-    RUN_TEST(property_registration);
-    RUN_TEST(property_inheritance);
-    RUN_TEST(method_registration);
-    RUN_TEST(method_inheritance_and_override);
-    RUN_TEST(instance_creation_and_destruction);
-    RUN_TEST(instance_property_access);
-    RUN_TEST(instance_method_invocation);
-    RUN_TEST(full_inheritance_example);
+    /* Core type system tests */
+    RUN_TEST(basic_type_registration);
+    RUN_TEST(type_lookup);
+    RUN_TEST(instance_creation);
+    RUN_TEST(instance_methods);
+    RUN_TEST(vtable_dispatch);
+
+    /* Inheritance tests */
+    RUN_TEST(inheritance_basic);
+    RUN_TEST(inheritance_instance_creation);
+    RUN_TEST(inheritance_method_override);
+    RUN_TEST(polymorphism);
+
+    /* object_t/document_t tests */
+    RUN_TEST(object_type);
+    RUN_TEST(document_type);
+    RUN_TEST(document_inheritance);
+    RUN_TEST(document_children);
+    RUN_TEST(polymorphic_json_serialization);
+
+    /* Utility tests */
+    RUN_TEST(class_singleton);
+    RUN_TEST(libcad_call_macro);
 
     /* Print results */
-    printf("\n╔════════════════════════════════════════╗\n");
-    printf("║   Test Results                         ║\n");
-    printf("╠════════════════════════════════════════╣\n");
-    printf("║   Total:  %3d                          ║\n", test_count);
-    printf("║   Passed: %3d ✓                        ║\n", test_passed);
-    printf("║   Failed: %3d ✗                        ║\n", test_failed);
-    printf("╚════════════════════════════════════════╝\n\n");
+    printf("\n╔═══════════════════════════════════════════╗\n");
+    printf("║   Test Results                            ║\n");
+    printf("╠═══════════════════════════════════════════╣\n");
+    printf("║   Total:  %3d                             ║\n", test_count);
+    printf("║   Passed: %3d ✓                           ║\n", test_passed);
+    printf("║   Failed: %3d ✗                           ║\n", test_failed);
+    printf("╚═══════════════════════════════════════════╝\n\n");
+
+    if (test_failed == 0) {
+        printf("🎉 All tests passed! The new type system is working perfectly.\n\n");
+    }
 
     return (test_failed == 0) ? 0 : 1;
 }

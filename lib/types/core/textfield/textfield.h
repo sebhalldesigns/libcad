@@ -5,7 +5,7 @@
 ** File         :  textfield.h
 ** Module       :  core/textfield
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
 ** Description  :  libcad core textfield type
 **
@@ -22,57 +22,89 @@ extern "C" {
 ** MARK: INCLUDES
 ***************************************************************/
 
-#include <stdbool.h>
-
-#include <model/type/type.h>
 #include <types/core/object/object.h>
 
-#include <libcad/libcad.h>
-
-#include <jansson.h>
-
 /***************************************************************
-** MARK: CONSTANTS & MACROS
+** MARK: FORWARD DECLARATIONS
 ***************************************************************/
 
+typedef struct text_field_t text_field_t;
+typedef struct text_field_class_t text_field_class_t;
+
 /***************************************************************
-** MARK: TYPEDEFS
+** MARK: TYPE DEFINITIONS
 ***************************************************************/
 
-/* TextField inherits from object - embeds object_t as first member */
-typedef struct textfield_t {
-    object_t base;  /* MUST be first - allows safe upcasting */
+/*
+** text_field_t instance - inherits from object_t
+**
+** IMPORTANT: First field MUST be parent (object_t parent)
+**            This enables safe upcasting: text_field_t* -> object_t*
+*/
+typedef struct text_field_t {
+    object_t parent;  /* Inherit from object_t (MUST be first!) */
+
+    /* text_field_t-specific instance data */
     char* text;
-    float x, y;     /* Position */
+    float x, y;      /* Position */
     float font_size;
-} textfield_t;
+} text_field_t;
+
+/*
+** text_field_t class - inherits from object_class_t
+**
+** Extends parent vtable with new virtual methods
+*/
+typedef struct text_field_class_t {
+    object_class_t parent_class;  /* Inherit parent vtable */
+
+    /* New virtual methods specific to text_field_t */
+    void (*set_position)(text_field_t* self, float x, float y);
+} text_field_class_t;
 
 /***************************************************************
-** MARK: FUNCTION DEFS
+** MARK: TYPE SYSTEM
 ***************************************************************/
 
-/* Normal C API - use these for everyday code */
-EXPORT textfield_t* textfield_create(void);
-EXPORT void textfield_destroy(textfield_t* field);
-EXPORT void textfield_set_text(textfield_t* field, const char* text);
-EXPORT const char* textfield_get_text(const textfield_t* field);
-EXPORT void textfield_set_position(textfield_t* field, float x, float y);
-EXPORT void textfield_set_font_size(textfield_t* field, float size);
-EXPORT void textfield_debug_print(const textfield_t* field);
+type_handle_t text_field_get_type(void);
+text_field_class_t* text_field_class_get(void);
 
-/* Serialization */
-EXPORT json_t* textfield_encode_to_json(const textfield_t* field);
+/***************************************************************
+** MARK: CONSTRUCTORS
+***************************************************************/
 
-/* Upcast to base type (always safe because base is first member) */
-static inline object_t* textfield_as_object(textfield_t* field) {
-    return (object_t*)field;
-}
+text_field_t* text_field_new(void);
+void text_field_free(text_field_t* self);
 
-/* Type system registration - called once at startup */
-EXPORT void textfield_register_type(void);
+/***************************************************************
+** MARK: PUBLIC API
+***************************************************************/
 
-/* Get type handle - used for reflection/serialization */
-EXPORT type_handle_t textfield_get_type_handle(void);
+/* Property accessors */
+void text_field_set_text(text_field_t* self, const char* text);
+const char* text_field_get_text(const text_field_t* self);
+void text_field_set_position(text_field_t* self, float x, float y);
+void text_field_set_font_size(text_field_t* self, float size);
+
+/* Methods (virtual - can be overridden) */
+void text_field_debug_print(text_field_t* self);
+json_t* text_field_to_json(text_field_t* self);
+
+/***************************************************************
+** MARK: CONVENIENCE MACROS
+***************************************************************/
+
+/* Casting */
+#define TEXT_FIELD(obj) ((text_field_t*)obj)
+#define TEXT_FIELD_CLASS(cls) ((text_field_class_t*)cls)
+#define IS_TEXT_FIELD(obj) (obj && type_is_a((type_handle_t)LIBCAD_GET_CLASS(obj), text_field_get_type()))
+
+/* Safe upcast to object_t */
+#define TEXT_FIELD_AS_OBJECT(field) ((object_t*)(field))
+
+/* Polymorphic calls */
+#define TEXT_FIELD_SET_POSITION(field, x, y) \
+    LIBCAD_CALL(field, set_position, x, y)
 
 #ifdef __cplusplus
 }

@@ -5,9 +5,9 @@
 ** File         :  type.c
 ** Module       :  type
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  libcad Type System API
+** Description  :  libcad Type System - Class-based with macros
 **
 ***************************************************************/
 
@@ -27,484 +27,262 @@
 ** MARK: CONSTANTS & MACROS
 ***************************************************************/
 
-/* Initial capacities */
-#define INITIAL_TYPE_CAPACITY       (32U)
-#define INITIAL_PROPERTY_CAPACITY   (16U)
-#define INITIAL_METHOD_CAPACITY     (16U)
+#define INITIAL_TYPE_CAPACITY 32
 
 /***************************************************************
-** MARK: TYPEDEFS
+** MARK: TYPE REGISTRY
 ***************************************************************/
 
-/***************************************************************
-** MARK: STATIC VARIABLES
-***************************************************************/
+typedef struct {
+    type_handle_t handle;
+    const char* name;
+    type_class_t* cls;
+} type_registry_entry_t;
 
-/* Type registry - dynamically allocated array of types */
-static type_t **type_registry = NULL;
+static type_registry_entry_t* type_registry = NULL;
 static size_t type_count = 0;
 static size_t type_capacity = 0;
-
-/***************************************************************
-** MARK: STATIC FUNCTION DEFS
-***************************************************************/
-
-static type_t* type_registry_find_by_name(const char* name);
-static void type_registry_add(type_t* type);
-
-/***************************************************************
-** MARK: PUBLIC FUNCTIONS
-***************************************************************/
-
-type_handle_t type_register(
-    const char* name,
-    type_handle_t parent_handle,
-    size_t local_data_size
-)
-{
-    assert(name && "name cannot be NULL");
-
-    /* Check if type already exists */
-    type_t* existing = type_registry_find_by_name(name);
-    if (existing)
-    {
-        log_warning("type_register: type '%s' already registered", name);
-        return (type_handle_t)existing;
-    }
-
-    /* Allocate new type */
-    type_t* type = (type_t*)calloc(1, sizeof(type_t));
-    if (!type)
-    {
-        log_error("type_register: failed to allocate type");
-        return TYPE_INVALID_HANDLE;
-    }
-
-    /* Set parent */
-    type->parent = (type_t*)parent_handle;
-
-    /* Calculate data sizes */
-    type->local_data_size = local_data_size;
-    if (type->parent)
-    {
-        type->total_data_size = type->parent->total_data_size + local_data_size;
-    }
-    else
-    {
-        type->total_data_size = local_data_size;
-    }
-
-    /* Copy name (registry owns the string) */
-    type->name = strdup(name);
-    if (!type->name)
-    {
-        log_error("type_register: failed to allocate name");
-        free(type);
-        return TYPE_INVALID_HANDLE;
-    }
-
-    /* Allocate property and method arrays */
-    type->properties = (property_t*)calloc(INITIAL_PROPERTY_CAPACITY, sizeof(property_t));
-    type->properties_count = 0;
-    type->properties_capacity = INITIAL_PROPERTY_CAPACITY;
-
-    type->methods = (method_t*)calloc(INITIAL_METHOD_CAPACITY, sizeof(method_t));
-    type->methods_count = 0;
-    type->methods_capacity = INITIAL_METHOD_CAPACITY;
-
-    if (!type->properties || !type->methods)
-    {
-        log_error("type_register: failed to allocate property/method arrays");
-        free(type->name);
-        free(type->properties);
-        free(type->methods);
-        free(type);
-        return TYPE_INVALID_HANDLE;
-    }
-
-    /* Add to registry */
-    type_registry_add(type);
-
-    log_info("Registered type '%s' (local_size=%zu, total_size=%zu, parent=%s)",
-             name, local_data_size, type->total_data_size,
-             type->parent ? type->parent->name : "none");
-
-    return (type_handle_t)type;
-}
-
-type_handle_t type_get(const char* name)
-{
-    assert(name && "name cannot be NULL");
-
-    type_t* type = type_registry_find_by_name(name);
-    return (type_handle_t)type;
-}
-
-property_handle_t type_register_property(
-    type_handle_t type_handle,
-    const char* name,
-    size_t offset,
-    size_t size)
-{
-    assert(name && "name cannot be NULL");
-    assert(type_handle && "type_handle cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-
-    /* Check if property already exists on this type */
-    for (size_t i = 0; i < type->properties_count; i++)
-    {
-        if (strcmp(type->properties[i].name, name) == 0)
-        {
-            log_warning("type_register_property: property '%s' already exists on type '%s'",
-                       name, type->name);
-            return (property_handle_t)&type->properties[i];
-        }
-    }
-
-    /* Grow array if needed */
-    if (type->properties_count >= type->properties_capacity)
-    {
-        size_t new_capacity = type->properties_capacity * 2;
-        property_t* new_props = (property_t*)realloc(type->properties,
-                                                      new_capacity * sizeof(property_t));
-        if (!new_props)
-        {
-            log_error("type_register_property: failed to grow property array");
-            return TYPE_INVALID_HANDLE;
-        }
-
-        /* Zero out new region */
-        memset(&new_props[type->properties_capacity], 0,
-               (new_capacity - type->properties_capacity) * sizeof(property_t));
-
-        type->properties = new_props;
-        type->properties_capacity = new_capacity;
-    }
-
-    /* Add property */
-    property_t* prop = &type->properties[type->properties_count];
-    prop->name = strdup(name);
-    prop->offset = offset;
-    prop->size = size;
-
-    if (!prop->name)
-    {
-        log_error("type_register_property: failed to allocate property name");
-        return TYPE_INVALID_HANDLE;
-    }
-
-    type->properties_count++;
-
-    log_info("Registered property '%s.%s' (offset=%zu, size=%zu)",
-             type->name, name, offset, size);
-
-    return (property_handle_t)prop;
-}
-
-property_handle_t type_get_property(const char* name, type_handle_t type_handle)
-{
-    assert(name && "name cannot be NULL");
-    assert(type_handle && "type_handle cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-
-    /* Walk up inheritance chain (child -> parent) */
-    while (type != NULL)
-    {
-        /* Search this type's properties */
-        for (size_t i = 0; i < type->properties_count; i++)
-        {
-            if (strcmp(type->properties[i].name, name) == 0)
-            {
-                return (property_handle_t)&type->properties[i];
-            }
-        }
-
-        /* Try parent */
-        type = type->parent;
-    }
-
-    /* Not found */
-    return TYPE_INVALID_HANDLE;
-}
-
-method_handle_t type_register_method(
-    type_handle_t type_handle,
-    const char* name,
-    void (*function)(type_instance_t* self, void* args, void* result))
-{
-
-    assert(name && "name cannot be NULL");
-    assert(type_handle && "type_handle cannot be NULL");
-    assert(function && "function cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-
-    /* Check if method already exists on this type */
-    for (size_t i = 0; i < type->methods_count; i++)
-    {
-        if (strcmp(type->methods[i].name, name) == 0)
-        {
-            log_warning("type_register_method: method '%s' already exists on type '%s'",
-                       name, type->name);
-            return (method_handle_t)&type->methods[i];
-        }
-    }
-
-    /* Grow array if needed */
-    if (type->methods_count >= type->methods_capacity)
-    {
-        size_t new_capacity = type->methods_capacity * 2;
-        method_t* new_methods = (method_t*)realloc(type->methods,
-                                                    new_capacity * sizeof(method_t));
-        if (!new_methods)
-        {
-            log_error("type_register_method: failed to grow method array");
-            return TYPE_INVALID_HANDLE;
-        }
-
-        /* Zero out new region */
-        memset(&new_methods[type->methods_capacity], 0,
-               (new_capacity - type->methods_capacity) * sizeof(method_t));
-
-        type->methods = new_methods;
-        type->methods_capacity = new_capacity;
-    }
-
-    /* Add method */
-    method_t* method = &type->methods[type->methods_count];
-    method->name = strdup(name);
-    method->function = function;
-
-    if (!method->name)
-    {
-        log_error("type_register_method: failed to allocate method name");
-        return TYPE_INVALID_HANDLE;
-    }
-
-    type->methods_count++;
-
-    log_info("Registered method '%s.%s'", type->name, name);
-
-    return (method_handle_t)method;
-}
-
-method_handle_t type_get_method(const char* name, type_handle_t type_handle)
-{
-    assert(name && "name cannot be NULL");
-    assert(type_handle && "type_handle cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-
-    /* Walk up inheritance chain (child -> parent) */
-    while (type != NULL)
-    {
-        /* Search this type's methods */
-        for (size_t i = 0; i < type->methods_count; i++)
-        {
-            if (strcmp(type->methods[i].name, name) == 0)
-            {
-                return (method_handle_t)&type->methods[i];
-            }
-        }
-
-        /* Try parent */
-        type = type->parent;
-    }
-
-    /* Not found */
-    return TYPE_INVALID_HANDLE;
-}
-
-void type_set_init(type_handle_t type_handle, void (*init)(struct type_instance_t* self, void* params))
-{
-    assert(type_handle && "type_handle cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-    type->init = init;
-
-    log_info("Set init method for type '%s'", type->name);
-}
-
-void type_set_destroy(type_handle_t type_handle, void (*destroy)(struct type_instance_t* self))
-{
-    assert(type_handle && "type_handle cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-    type->destroy = destroy;
-
-    log_info("Set destroy method for type '%s'", type->name);
-}
-
-type_instance_handle_t type_instance_create(type_handle_t type_handle)
-{
-    assert(type_handle && "type_handle cannot be NULL");
-
-    type_t* type = (type_t*)type_handle;
-
-    /* Allocate instance structure */
-    type_instance_t* instance = (type_instance_t*)calloc(1, sizeof(type_instance_t));
-    if (!instance)
-    {
-        log_error("type_instance_create: failed to allocate instance");
-        return TYPE_INVALID_HANDLE;
-    }
-
-    /* Allocate instance data buffer */
-    instance->data = calloc(1, type->total_data_size);
-    if (!instance->data)
-    {
-        log_error("type_instance_create: failed to allocate instance data");
-        free(instance);
-        return TYPE_INVALID_HANDLE;
-    }
-
-    instance->type = type;
-
-    /* Call init function if set (direct call - no string lookup) */
-    if (type->init)
-    {
-        type->init(instance, NULL);
-    }
-
-    log_info("Created instance of type '%s' (data_size=%zu)",
-             type->name, type->total_data_size);
-
-    return (type_instance_handle_t)instance;
-}
-
-void type_instance_destroy(type_instance_handle_t instance_handle)
-{
-    if (instance_handle == TYPE_INVALID_HANDLE)
-    {
-        return;
-    }
-
-    type_instance_t* instance = (type_instance_t*)instance_handle;
-
-    /* Call destroy function if set (direct call - no string lookup) */
-    if (instance->type->destroy)
-    {
-        instance->type->destroy(instance);
-    }
-
-    log_info("Destroying instance of type '%s'", instance->type->name);
-
-    /* Free data buffer */
-    free(instance->data);
-
-    /* Free instance structure */
-    free(instance);
-}
-
-void type_instance_set_property(
-    type_instance_handle_t instance_handle,
-    property_handle_t property_handle,
-    const void* value)
-{
-    assert(instance_handle && "instance_handle cannot be NULL");
-    assert(property_handle && "property_handle cannot be NULL");
-    assert(value && "value cannot be NULL");
-
-    type_instance_t* instance = (type_instance_t*)instance_handle;
-    property_t* prop = (property_t*)property_handle;
-
-    /* Get destination pointer in instance data */
-    uint8_t* dest = (uint8_t*)instance->data + prop->offset;
-
-    /* Copy value */
-    memcpy(dest, value, prop->size);
-}
-
-void* type_instance_get_property_ptr(
-    type_instance_handle_t instance_handle,
-    property_handle_t property_handle)
-{
-    assert(instance_handle && "instance_handle cannot be NULL");
-    assert(property_handle && "property_handle cannot be NULL");
-
-    type_instance_t* instance = (type_instance_t*)instance_handle;
-    property_t* prop = (property_t*)property_handle;
-
-    /* Return pointer to property in instance data */
-    return (uint8_t*)instance->data + prop->offset;
-}
-
-void type_instance_call_method(
-    type_instance_handle_t instance_handle,
-    method_handle_t method_handle,
-    const void* args,
-    void* result)
-{
-    assert(instance_handle && "instance_handle cannot be NULL");
-    assert(method_handle && "method_handle cannot be NULL");
-
-    type_instance_t* instance = (type_instance_t*)instance_handle;
-    method_t* method = (method_t*)method_handle;
-
-    /* Call the method function */
-    if (method->function)
-    {
-        method->function(instance, (void*)args, result);
-    }
-}
 
 /***************************************************************
 ** MARK: STATIC FUNCTIONS
 ***************************************************************/
 
-static type_t* type_registry_find_by_name(const char* name)
+static type_handle_t registry_add(const char* name, type_class_t* cls)
 {
-    assert(name && "name cannot be NULL");
-
-    for (size_t i = 0; i < type_count; i++)
-    {
-        if (strcmp(type_registry[i]->name, name) == 0)
-        {
-            return type_registry[i];
-        }
-    }
-    return NULL;
-}
-
-static void type_registry_add(type_t* type)
-{
-    assert(type && "type cannot be NULL");
-
     /* Initialize registry if needed */
-    if (type_registry == NULL)
-    {
-        type_registry = (type_t**)calloc(INITIAL_TYPE_CAPACITY, sizeof(type_t*));
-        if (!type_registry)
-        {
-            log_error("type_registry_add: failed to initialize registry");
-            return;
+    if (!type_registry) {
+        type_registry = calloc(INITIAL_TYPE_CAPACITY, sizeof(type_registry_entry_t));
+        if (!type_registry) {
+            log_error("Failed to initialize type registry");
+            return TYPE_INVALID;
         }
         type_capacity = INITIAL_TYPE_CAPACITY;
         type_count = 0;
     }
 
     /* Grow if needed */
-    if (type_count >= type_capacity)
-    {
+    if (type_count >= type_capacity) {
         size_t new_capacity = type_capacity * 2;
-        type_t** new_registry = (type_t**)realloc(type_registry,
-                                                   new_capacity * sizeof(type_t*));
-        if (!new_registry)
-        {
-            log_error("type_registry_add: failed to grow registry");
-            return;
+        type_registry_entry_t* new_registry = realloc(
+            type_registry,
+            new_capacity * sizeof(type_registry_entry_t)
+        );
+        if (!new_registry) {
+            log_error("Failed to grow type registry");
+            return TYPE_INVALID;
         }
-
-        /* Zero out new region */
-        memset(&new_registry[type_capacity], 0,
-               (new_capacity - type_capacity) * sizeof(type_t*));
-
+        memset(
+            &new_registry[type_capacity],
+            0,
+            (new_capacity - type_capacity) * sizeof(type_registry_entry_t)
+        );
         type_registry = new_registry;
         type_capacity = new_capacity;
     }
 
-    /* Add type */
-    type_registry[type_count++] = type;
+    /* Add entry */
+    type_handle_t handle = (type_handle_t)cls;
+    type_registry[type_count].handle = handle;
+    type_registry[type_count].name = name;
+    type_registry[type_count].cls = cls;
+    type_count++;
+
+    return handle;
+}
+
+static type_class_t* registry_find(const char* name)
+{
+    for (size_t i = 0; i < type_count; i++) {
+        if (strcmp(type_registry[i].name, name) == 0) {
+            return type_registry[i].cls;
+        }
+    }
+    return NULL;
+}
+
+/***************************************************************
+** MARK: PUBLIC FUNCTIONS
+***************************************************************/
+
+type_handle_t type_register_static(
+    const char* type_name,
+    type_handle_t parent_type,
+    size_t class_size,
+    void (*class_init)(void* cls),
+    size_t instance_size,
+    void (*instance_init)(void* instance)
+)
+{
+    assert(type_name && "type_name cannot be NULL");
+    assert(class_size >= sizeof(type_class_t) && "class_size too small");
+    assert(instance_size > 0 && "instance_size must be > 0");
+
+    /* Check if already registered */
+    type_class_t* existing = registry_find(type_name);
+    if (existing) {
+        log_warning("Type '%s' already registered", type_name);
+        return (type_handle_t)existing;
+    }
+
+    /* Allocate class structure */
+    type_class_t* cls = calloc(1, class_size);
+    if (!cls) {
+        log_error("Failed to allocate class for type '%s'", type_name);
+        return TYPE_INVALID;
+    }
+
+    /* Initialize base class fields */
+    cls->type_name = type_name;
+    cls->parent_type = parent_type;
+    cls->instance_size = instance_size;
+    cls->instance_init = instance_init;
+    cls->instance_finalize = NULL; /* Set by subclass if needed */
+
+    /* Copy parent class vtable if we have a parent */
+    if (parent_type != TYPE_INVALID) {
+        type_class_t* parent_class = (type_class_t*)parent_type;
+        if (parent_class) {
+            /* Copy parent vtable entries (everything after base type_class_t) */
+            size_t parent_size = parent_class->instance_size;
+            if (class_size > sizeof(type_class_t) && parent_size >= sizeof(type_class_t)) {
+                /* Copy parent's vtable section */
+                memcpy(
+                    (char*)cls + sizeof(type_class_t),
+                    (char*)parent_class + sizeof(type_class_t),
+                    (class_size > parent_size ? parent_size : class_size) - sizeof(type_class_t)
+                );
+            }
+        }
+    }
+
+    /* Call class initializer to setup vtable and class data */
+    if (class_init) {
+        class_init(cls);
+    }
+
+    /* Register in global registry */
+    type_handle_t handle = registry_add(type_name, cls);
+
+    log_info("Registered type '%s' (class_size=%zu, instance_size=%zu, parent=%s)",
+             type_name, class_size, instance_size,
+             parent_type != TYPE_INVALID ? ((type_class_t*)parent_type)->type_name : "none");
+
+    return handle;
+}
+
+type_handle_t type_from_name(const char* name)
+{
+    assert(name && "name cannot be NULL");
+
+    type_class_t* cls = registry_find(name);
+    return cls ? (type_handle_t)cls : TYPE_INVALID;
+}
+
+type_class_t* type_class_peek(type_handle_t type)
+{
+    return (type_class_t*)type;
+}
+
+const char* type_name(type_handle_t type)
+{
+    if (type == TYPE_INVALID) {
+        return NULL;
+    }
+    type_class_t* cls = (type_class_t*)type;
+    return cls->type_name;
+}
+
+bool type_is_a(type_handle_t type, type_handle_t ancestor)
+{
+    if (type == TYPE_INVALID || ancestor == TYPE_INVALID) {
+        return false;
+    }
+
+    type_class_t* cls = (type_class_t*)type;
+
+    /* Walk up the inheritance chain */
+    while (cls) {
+        if ((type_handle_t)cls == ancestor) {
+            return true;
+        }
+        if (cls->parent_type == TYPE_INVALID) {
+            break;
+        }
+        cls = (type_class_t*)cls->parent_type;
+    }
+
+    return false;
+}
+
+void* type_instance_new(type_handle_t type)
+{
+    if (type == TYPE_INVALID) {
+        log_error("Cannot create instance of TYPE_INVALID");
+        return NULL;
+    }
+
+    type_class_t* cls = (type_class_t*)type;
+
+    /* Allocate instance */
+    void* instance = calloc(1, cls->instance_size);
+    if (!instance) {
+        log_error("Failed to allocate instance of type '%s'", cls->type_name);
+        return NULL;
+    }
+
+    /* Set class pointer as first field */
+    *(type_class_t**)instance = cls;
+
+    /* Call instance initializer chain (from base to derived) */
+    /* Build initialization chain */
+    type_class_t* chain[32]; /* Max inheritance depth */
+    int depth = 0;
+    type_class_t* current = cls;
+    while (current && depth < 32) {
+        chain[depth++] = current;
+        current = (current->parent_type != TYPE_INVALID)
+                  ? (type_class_t*)current->parent_type
+                  : NULL;
+    }
+
+    /* Call initializers from base to derived */
+    for (int i = depth - 1; i >= 0; i--) {
+        if (chain[i]->instance_init) {
+            chain[i]->instance_init(instance);
+        }
+    }
+
+    log_info("Created instance of type '%s' (size=%zu)",
+             cls->type_name, cls->instance_size);
+
+    return instance;
+}
+
+void type_instance_free(void* instance)
+{
+    if (!instance) {
+        return;
+    }
+
+    type_class_t* cls = *(type_class_t**)instance;
+    if (!cls) {
+        log_error("Instance has NULL class pointer");
+        free(instance);
+        return;
+    }
+
+    /* Call finalizer chain (from derived to base) */
+    type_class_t* current = cls;
+    while (current) {
+        if (current->instance_finalize) {
+            current->instance_finalize(instance);
+        }
+        current = (current->parent_type != TYPE_INVALID)
+                  ? (type_class_t*)current->parent_type
+                  : NULL;
+    }
+
+    log_info("Destroying instance of type '%s'", cls->type_name);
+
+    free(instance);
 }

@@ -5,7 +5,7 @@
 ** File         :  document.c
 ** Module       :  core/document
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
 ** Description  :  libcad core document type
 **
@@ -17,243 +17,164 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <stddef.h>
 
-#include <jansson.h>
 #include <util/log/log.h>
+#include <util/vector/vector.h>
 
 #include "document.h"
 
 /***************************************************************
-** MARK: CONSTANTS & MACROS
+** MARK: FORWARD DECLARATIONS
 ***************************************************************/
 
-#define INITIAL_CHILDREN_CAPACITY 8
+static void document_finalize(document_t* self);
 
 /***************************************************************
-** MARK: TYPEDEFS
+** MARK: TYPE REGISTRATION
+**
+** Inherit from object_t - this one line handles everything!
 ***************************************************************/
+
+LIBCAD_DEFINE_TYPE(document, object_get_type())
 
 /***************************************************************
-** MARK: STATIC VARIABLES
+** MARK: CLASS INITIALIZATION
+**
+** Setup vtable - inherit parent methods and add new ones
 ***************************************************************/
 
-static type_handle_t document_type_handle = TYPE_INVALID_HANDLE;
+static void document_class_init(document_class_t* cls)
+{
+    /* Parent vtable is already copied by type_register_static() */
+
+    /* Override parent methods if needed */
+    object_class_t* parent_class = (object_class_t*)cls;
+    parent_class->debug_print = (void(*)(object_t*))document_debug_print;
+    parent_class->to_json = (json_t*(*)(object_t*))document_to_json;
+
+    /* Set finalizer */
+    cls->parent_class.parent_class.instance_finalize = (void(*)(void*))document_finalize;
+
+    /* Set up our new virtual methods */
+    cls->add_child = document_add_child;
+    cls->remove_child = document_remove_child;
+    cls->save = document_save;
+
+    log_info("document_class_t initialized");
+}
 
 /***************************************************************
-** MARK: STATIC FUNCTION DEFS
+** MARK: INSTANCE INITIALIZATION
+**
+** Initialize document_t-specific fields
+** (object_t parent is auto-initialized by parent's instance_init)
 ***************************************************************/
 
-/* Lifecycle wrappers for type system */
-static void document_init_wrapper(type_instance_t* self, void* params);
-static void document_destroy_wrapper(type_instance_t* self);
+static void document_init(document_t* self)
+{
+    /* Parent (object_t) is already initialized automatically! */
 
-/* Method wrappers for type system */
-static void document_debug_print_method(type_instance_t* self, void* args, void* result);
+    /* Initialize our fields */
+    self->path = NULL;
+    self->children = NULL;
+    self->children_count = 0;
+    self->children_capacity = 0;
+}
 
 /***************************************************************
-** MARK: PUBLIC FUNCTIONS
+** MARK: INSTANCE FINALIZATION
 ***************************************************************/
 
-/* Normal C API - fast path, use these for everyday code */
-
-document_t* document_create(void)
+static void document_finalize(document_t* self)
 {
-    document_t* doc = (document_t*)calloc(1, sizeof(document_t));
-    if (!doc)
-    {
-        log_error("document_create: failed to allocate document");
-        return NULL;
-    }
+    /* Clean up document-specific data */
+    free(self->path);
 
-    /* Initialize base object part */
-    doc->base.type = document_get_type_handle();
-    doc->base.name = NULL;
+    /* Free children array (but not the children themselves - they're owned by caller) */
+    VECTOR_FREE(self->children);
 
-    /* Initialize document-specific fields */
-    doc->path = NULL;
-
-    /* Initialize children array */
-    doc->children = (object_t**)calloc(INITIAL_CHILDREN_CAPACITY, sizeof(object_t*));
-    doc->children_count = 0;
-    doc->children_capacity = INITIAL_CHILDREN_CAPACITY;
-
-    if (!doc->children)
-    {
-        log_error("document_create: failed to allocate children array");
-        free(doc);
-        return NULL;
-    }
-
-    log_info("Created document");
-    return doc;
+    /* Note: Parent finalization is called automatically */
 }
 
-void document_destroy(document_t* doc)
+/***************************************************************
+** MARK: PUBLIC API - Property Accessors
+***************************************************************/
+
+void document_set_path(document_t* self, const char* path)
 {
-    if (!doc) return;
+    if (!self) return;
 
-    /* Clean up base object part */
-    free(doc->base.name);
-
-    /* Clean up document-specific fields */
-    free(doc->path);
-
-    /* Note: We don't destroy children here - they are owned by the caller */
-    /* Just free the children array itself */
-    free(doc->children);
-
-    free(doc);
-
-    log_info("Destroyed document");
+    free(self->path);
+    self->path = path ? strdup(path) : NULL;
 }
 
-void document_set_path(document_t* doc, const char* path)
+const char* document_get_path(const document_t* self)
 {
-    if (!doc) return;
-
-    free(doc->path);
-    doc->path = path ? strdup(path) : NULL;
+    return self ? self->path : NULL;
 }
 
-const char* document_get_path(const document_t* doc)
+/***************************************************************
+** MARK: PUBLIC API - Child Management
+***************************************************************/
+
+void document_add_child(document_t* self, object_t* child)
 {
-    return doc ? doc->path : NULL;
+    if (!self || !child) return;
+
+    VECTOR_PUSH(self->children, self->children_count, self->children_capacity, object_t*, child);
+    log_info("Added child to document (count now %zu)", self->children_count);
 }
 
-void document_debug_print(const document_t* doc)
+void document_remove_child(document_t* self, size_t index)
 {
-    if (!doc) return;
+    if (!self || index >= self->children_count) return;
 
-    log_info("Document: name='%s', path='%s', children=%zu",
-             doc->base.name ? doc->base.name : "(null)",
-             doc->path ? doc->path : "(null)",
-             doc->children_count);
+    VECTOR_REMOVE(self->children, self->children_count, index);
+    log_info("Removed child from document (count now %zu)", self->children_count);
 }
 
-/* Children management */
-
-void document_add_child(document_t* doc, object_t* child)
+object_t* document_get_child(const document_t* self, size_t index)
 {
-    if (!doc || !child) return;
-
-    /* Grow array if needed */
-    if (doc->children_count >= doc->children_capacity)
-    {
-        size_t new_capacity = doc->children_capacity * 2;
-        object_t** new_children = (object_t**)realloc(doc->children, new_capacity * sizeof(object_t*));
-        if (!new_children)
-        {
-            log_error("document_add_child: failed to grow children array");
-            return;
-        }
-
-        /* Zero out new region */
-        memset(&new_children[doc->children_capacity], 0,
-               (new_capacity - doc->children_capacity) * sizeof(object_t*));
-
-        doc->children = new_children;
-        doc->children_capacity = new_capacity;
-    }
-
-    /* Add child */
-    doc->children[doc->children_count++] = child;
-    log_info("Added child to document (count now %zu)", doc->children_count);
+    if (!self) return NULL;
+    return VECTOR_GET(self->children, self->children_count, index);
 }
 
-void document_remove_child(document_t* doc, size_t index)
+size_t document_get_child_count(const document_t* self)
 {
-    if (!doc || index >= doc->children_count) return;
-
-    /* Shift remaining children down */
-    for (size_t i = index; i < doc->children_count - 1; i++)
-    {
-        doc->children[i] = doc->children[i + 1];
-    }
-
-    doc->children_count--;
-    doc->children[doc->children_count] = NULL;
-
-    log_info("Removed child from document (count now %zu)", doc->children_count);
+    return self ? self->children_count : 0;
 }
 
-object_t* document_get_child(const document_t* doc, size_t index)
-{
-    if (!doc || index >= doc->children_count) return NULL;
-    return doc->children[index];
-}
+/***************************************************************
+** MARK: PUBLIC API - Serialization
+***************************************************************/
 
-size_t document_get_child_count(const document_t* doc)
+bool document_save(const document_t* self, const char* filepath)
 {
-    return doc ? doc->children_count : 0;
-}
-
-/* Serialization */
-
-bool document_save(const document_t* doc, const char* filepath)
-{
-    if (!doc || !filepath)
-    {
+    if (!self || !filepath) {
         log_error("document_save: invalid arguments");
         return false;
     }
 
-    /* Encode document to JSON */
-    json_t* json = json_object();
-
-    /* Add type */
-    json_object_set_new(json, "type", json_string("document"));
-
-    /* Add document properties */
-    json_object_set_new(json, "name", doc->base.name ? json_string(doc->base.name) : json_null());
-    json_object_set_new(json, "path", doc->path ? json_string(doc->path) : json_null());
-
-    /* Add children array */
-    json_t* children_array = json_array();
-    for (size_t i = 0; i < doc->children_count; i++)
-    {
-        object_t* child = doc->children[i];
-        if (child && child->type)
-        {
-            /* Get the encode_to_json method for the child's actual type (polymorphic) */
-            method_handle_t encode_method = type_get_method("encode_to_json", child->type);
-            if (encode_method != TYPE_INVALID_HANDLE)
-            {
-                /* Create a temporary type_instance wrapper */
-                type_instance_t temp_instance;
-                temp_instance.type = (type_t*)child->type;
-                temp_instance.data = child;
-
-                /* Call the polymorphic method */
-                json_t* child_json = NULL;
-                type_instance_call_method((type_instance_handle_t)&temp_instance, encode_method, NULL, &child_json);
-
-                if (child_json) {
-                    json_array_append_new(children_array, child_json);
-                }
-            }
-        }
-    }
-    json_object_set_new(json, "children", children_array);
+    /* Get JSON representation (polymorphic call) */
+    json_t* json = OBJECT_TO_JSON(DOCUMENT_AS_OBJECT((document_t*)self));
+    if (!json) return false;
 
     /* Write to file */
-    int result = json_dump_file(json, filepath, JSON_INDENT(2));
+    int result = json_dump_file(json, filepath, JSON_INDENT(2) | JSON_PRESERVE_ORDER);
     json_decref(json);
 
-    if (result != 0)
-    {
-        log_error("document_save: failed to write JSON to file '%s'", filepath);
+    if (result != 0) {
+        log_error("document_save: failed to write to file '%s'", filepath);
         return false;
     }
 
     log_info("Saved document to '%s'", filepath);
-    return true;
+    return result == 0;
 }
 
 document_t* document_load(const char* filepath)
 {
-    if (!filepath)
-    {
+    if (!filepath) {
         log_error("document_load: invalid filepath");
         return NULL;
     }
@@ -261,51 +182,45 @@ document_t* document_load(const char* filepath)
     /* Load JSON from file */
     json_error_t error;
     json_t* json = json_load_file(filepath, 0, &error);
-    if (!json)
-    {
-        log_error("document_load: failed to load JSON from '%s': %s", filepath, error.text);
+    if (!json) {
+        log_error("Failed to load document: %s", error.text);
         return NULL;
     }
 
-    /* Verify it's a document */
-    json_t* type_json = json_object_get(json, "type");
-    const char* type_str = json_string_value(type_json);
-    if (!type_str || strcmp(type_str, "document") != 0)
-    {
-        log_error("document_load: JSON is not a document");
+    /* Verify type */
+    json_t* type_field = json_object_get(json, "type");
+    const char* type_str = json_string_value(type_field);
+    if (!type_str || strcmp(type_str, "document_t") != 0) {
+        log_error("document_load: JSON is not a document_t");
         json_decref(json);
         return NULL;
     }
 
-    /* Create document */
-    document_t* doc = document_create();
-    if (!doc)
-    {
+    /* Create new document */
+    document_t* doc = document_new();
+    if (!doc) {
         json_decref(json);
         return NULL;
     }
 
-    /* Load properties */
-    json_t* name_json = json_object_get(json, "name");
-    if (json_is_string(name_json))
-    {
-        doc->base.name = strdup(json_string_value(name_json));
+    /* Parse JSON and populate document */
+    json_t* name_field = json_object_get(json, "name");
+    json_t* path_field = json_object_get(json, "path");
+
+    if (json_is_string(name_field)) {
+        object_set_name(DOCUMENT_AS_OBJECT(doc), json_string_value(name_field));
     }
 
-    json_t* path_json = json_object_get(json, "path");
-    if (json_is_string(path_json))
-    {
-        doc->path = strdup(json_string_value(path_json));
+    if (json_is_string(path_field)) {
+        document_set_path(doc, json_string_value(path_field));
     }
 
     /* Load children */
-    json_t* children_json = json_object_get(json, "children");
-    if (json_is_array(children_json))
-    {
-        size_t array_size = json_array_size(children_json);
-        for (size_t i = 0; i < array_size; i++)
-        {
-            json_t* child_json = json_array_get(children_json, i);
+    json_t* children_field = json_object_get(json, "children");
+    if (json_is_array(children_field)) {
+        size_t array_size = json_array_size(children_field);
+        for (size_t i = 0; i < array_size; i++) {
+            json_t* child_json = json_array_get(children_field, i);
 
             /* TODO: Implement polymorphic object loading based on type field */
             /* For now, this is a placeholder - we'll need a registry of type loaders */
@@ -319,75 +234,47 @@ document_t* document_load(const char* filepath)
     return doc;
 }
 
-/* Type system registration - metadata layer */
-
-void document_register_type(void)
-{
-    if (document_type_handle != TYPE_INVALID_HANDLE)
-    {
-        log_warning("document_register_type: type already registered");
-        return;
-    }
-
-    /* Register type with metadata system, inheriting from object */
-    document_type_handle = type_register(
-        "document",
-        object_get_type_handle(),  /* parent type */
-        sizeof(document_t) - sizeof(object_t)  /* local size = only document-specific fields */
-    );
-
-    /* Register lifecycle methods */
-    type_set_init(document_type_handle, document_init_wrapper);
-    type_set_destroy(document_type_handle, document_destroy_wrapper);
-
-    /* Register document-specific properties (base properties already registered) */
-    type_register_property(
-        document_type_handle,
-        "path",
-        offsetof(document_t, path),  /* global offset from start of struct */
-        sizeof(char*)
-    );
-
-    /* Override base methods for polymorphism */
-    type_register_method(
-        document_type_handle,
-        "debug_print",
-        document_debug_print_method
-    );
-
-    log_info("Registered document type (inherits from object)");
-}
-
-type_handle_t document_get_type_handle(void)
-{
-    return document_type_handle;
-}
-
 /***************************************************************
-** MARK: STATIC FUNCTIONS
+** MARK: OVERRIDDEN METHODS
+**
+** These override the object_t implementations
 ***************************************************************/
 
-/* These wrappers bridge the type system to the normal C API */
-
-static void document_init_wrapper(type_instance_t* self, void* params)
+void document_debug_print(document_t* self)
 {
-    /* Type system allocated the memory, just initialize it */
-    document_t* doc = (document_t*)self->data;
-    doc->base.name = NULL;
-    doc->path = NULL;
+    if (!self) return;
+
+    /* We can call parent implementation if we want */
+    const char* name = object_get_name(DOCUMENT_AS_OBJECT(self));
+
+    log_info("document_t: name='%s', path='%s', children=%zu",
+             name ? name : "(null)",
+             self->path ? self->path : "(null)",
+             self->children_count);
 }
 
-static void document_destroy_wrapper(type_instance_t* self)
+json_t* document_to_json(document_t* self)
 {
-    /* Clean up document data (type system will free the memory) */
-    document_t* doc = (document_t*)self->data;
-    free(doc->base.name);
-    free(doc->path);
-}
+    if (!self) return json_null();
 
-static void document_debug_print_method(type_instance_t* self, void* args, void* result)
-{
-    /* Bridge to the normal C function */
-    document_t* doc = (document_t*)self->data;
-    document_debug_print(doc);
+    /* Start with parent's JSON */
+    json_t* json = object_to_json(DOCUMENT_AS_OBJECT(self));
+
+    /* Override type field */
+    json_object_set_new(json, "type", json_string("document_t"));
+
+    /* Add document-specific fields */
+    json_object_set_new(json, "path",
+                       self->path ? json_string(self->path) : json_null());
+
+    /* Add children */
+    json_t* children_array = json_array();
+    for (size_t i = 0; i < self->children_count; i++) {
+        /* Polymorphic call - each child serializes itself! */
+        json_t* child_json = OBJECT_TO_JSON(self->children[i]);
+        json_array_append_new(children_array, child_json);
+    }
+    json_object_set_new(json, "children", children_array);
+
+    return json;
 }

@@ -5,7 +5,7 @@
 ** File         :  document.h
 ** Module       :  core/document
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
 ** Description  :  libcad core document type
 **
@@ -22,64 +22,104 @@ extern "C" {
 ** MARK: INCLUDES
 ***************************************************************/
 
-#include <stdbool.h>
-
-#include <model/type/type.h>
 #include <types/core/object/object.h>
 
-#include <libcad/libcad.h>
-
-
 /***************************************************************
-** MARK: CONSTANTS & MACROS
+** MARK: FORWARD DECLARATIONS
 ***************************************************************/
 
+typedef struct document_t document_t;
+typedef struct document_class_t document_class_t;
+
 /***************************************************************
-** MARK: TYPEDEFS
+** MARK: TYPE DEFINITIONS
 ***************************************************************/
 
-/* Document inherits from object - embeds object_t as first member */
+/*
+** document_t instance - inherits from object_t
+**
+** IMPORTANT: First field MUST be parent (object_t parent)
+**            This enables safe upcasting: document_t* -> object_t*
+*/
 typedef struct document_t {
-    object_t base;  /* MUST be first - allows safe upcasting */
+    object_t parent;  /* Inherit from object_t (MUST be first!) */
+
+    /* document_t-specific instance data */
     char* path;
 
-    /* Children - array of object pointers */
+    /* Children */
     object_t** children;
     size_t children_count;
     size_t children_capacity;
 } document_t;
 
+/*
+** document_t class - inherits from object_class_t
+**
+** Extends parent vtable with new virtual methods
+*/
+typedef struct document_class_t {
+    object_class_t parent_class;  /* Inherit parent vtable */
+
+    /* New virtual methods specific to document_t */
+    void (*add_child)(document_t* self, object_t* child);
+    void (*remove_child)(document_t* self, size_t index);
+    bool (*save)(document_t* self, const char* filepath);
+} document_class_t;
+
 /***************************************************************
-** MARK: FUNCTION DEFS
+** MARK: TYPE SYSTEM
 ***************************************************************/
 
-/* Normal C API - use these for everyday code */
-EXPORT document_t* document_create(void);
-EXPORT void document_destroy(document_t* doc);
-EXPORT void document_set_path(document_t* doc, const char* path);
-EXPORT const char* document_get_path(const document_t* doc);
-EXPORT void document_debug_print(const document_t* doc);
+type_handle_t document_get_type(void);
+document_class_t* document_class_get(void);
 
-/* Children management */
-EXPORT void document_add_child(document_t* doc, object_t* child);
-EXPORT void document_remove_child(document_t* doc, size_t index);
-EXPORT object_t* document_get_child(const document_t* doc, size_t index);
-EXPORT size_t document_get_child_count(const document_t* doc);
+/***************************************************************
+** MARK: CONSTRUCTORS
+***************************************************************/
 
-/* Serialization */
-EXPORT bool document_save(const document_t* doc, const char* filepath);
-EXPORT document_t* document_load(const char* filepath);
+document_t* document_new(void);
+void document_free(document_t* self);
 
-/* Upcast to base type (always safe because base is first member) */
-static inline object_t* document_as_object(document_t* doc) {
-    return (object_t*)doc;
-}
+/***************************************************************
+** MARK: PUBLIC API
+***************************************************************/
 
-/* Type system registration - called once at startup */
-EXPORT void document_register_type(void);
+/* Property accessors */
+void document_set_path(document_t* self, const char* path);
+const char* document_get_path(const document_t* self);
 
-/* Get type handle - used for reflection/serialization */
-EXPORT type_handle_t document_get_type_handle(void);
+/* Methods */
+void document_add_child(document_t* self, object_t* child);
+void document_remove_child(document_t* self, size_t index);
+object_t* document_get_child(const document_t* self, size_t index);
+size_t document_get_child_count(const document_t* self);
+
+bool document_save(const document_t* self, const char* filepath);
+document_t* document_load(const char* filepath);
+
+/* Virtual method implementations */
+void document_debug_print(document_t* self);
+json_t* document_to_json(document_t* self);
+
+/***************************************************************
+** MARK: CONVENIENCE MACROS
+***************************************************************/
+
+/* Casting */
+#define DOCUMENT(obj) ((document_t*)obj)
+#define DOCUMENT_CLASS(cls) ((document_class_t*)cls)
+#define IS_DOCUMENT(obj) (obj && type_is_a((type_handle_t)LIBCAD_GET_CLASS(obj), document_get_type()))
+
+/* Safe upcast to object_t */
+#define DOCUMENT_AS_OBJECT(doc) ((object_t*)(doc))
+
+/* Polymorphic calls */
+#define DOCUMENT_ADD_CHILD(doc, child) \
+    LIBCAD_CALL(doc, add_child, child)
+
+#define DOCUMENT_SAVE(doc, path) \
+    LIBCAD_CALL(doc, save, path)
 
 #ifdef __cplusplus
 }

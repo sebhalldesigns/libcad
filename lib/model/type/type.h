@@ -5,9 +5,9 @@
 ** File         :  type.h
 ** Module       :  type
 ** Author       :  SH
-** Created      :  2026-02-13 (YYYY-MM-DD)
+** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
-** Description  :  libcad Type System API
+** Description  :  libcad Type System - Class-based with macros
 **
 ***************************************************************/
 
@@ -23,115 +23,166 @@ extern "C" {
 ***************************************************************/
 
 #include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
 #include <libcad/libcad.h>
 
-
 /***************************************************************
-** MARK: CONSTANTS & MACROS
+** MARK: CORE TYPE SYSTEM
 ***************************************************************/
 
-#define TYPE_INVALID_HANDLE (0U)
-
-/***************************************************************
-** MARK: TYPEDEFS
-***************************************************************/
-
-struct type_instance_t;
-
-typedef struct
-{
-    /* name of the method */
-    char* name;
-
-    /* function pointer, self is a type_instance_t */
-    void (*function)(struct type_instance_t *self, void *args, void *result);
-} method_t;
-
-typedef struct
-{
-    /* name of the property */
-    char* name;
-
-    /* data layout - always GLOBAL offset in instance data */
-    size_t offset;
-    size_t size;
-} property_t;
-
-typedef struct type_t
-{
-    /* name of the type */
-    char* name;
-
-    /* parent for inheritance */
-    struct type_t *parent; /* can be NULL */
-
-    size_t local_data_size; /* data size just for this type */
-    size_t total_data_size; /* combined data size of this and all parent types */
-
-    /* lifecycle methods (fast path - called directly without lookup) */
-    void (*init)(struct type_instance_t* self, void* params);
-    void (*destroy)(struct type_instance_t* self);
-
-    /* properties should always be defined with global layout
-    ** i.e offset by total_data_size - local_data_size
-    ** this is so that each instance's data can be contiguous
-    */
-    property_t *properties;
-    size_t properties_count;
-    size_t properties_capacity;
-
-    method_t *methods;
-    size_t methods_count;
-    size_t methods_capacity;
-} type_t;
-
-typedef struct type_instance_t
-{
-    type_t *type; /* pointer to the type of this instance */
-    void *data;   /* pointer to the raw instance data */
-} type_instance_t;
-
+/* Forward declarations */
+typedef struct type_class_t type_class_t;
 typedef uintptr_t type_handle_t;
-typedef uintptr_t property_handle_t;
-typedef uintptr_t method_handle_t;
 
-typedef uintptr_t type_instance_handle_t;
+#define TYPE_INVALID ((type_handle_t)0)
+
+/* Base class structure - all type classes inherit from this */
+struct type_class_t {
+    /* Type metadata */
+    const char* type_name;
+    type_handle_t parent_type;
+    size_t instance_size;
+
+    /* Lifecycle - called automatically */
+    void (*instance_init)(void* instance);
+    void (*instance_finalize)(void* instance);
+
+    /* Reserved for future use */
+    void* reserved[4];
+};
+
+/* Type registry functions */
+EXPORT type_handle_t type_register_static(
+    const char* type_name,
+    type_handle_t parent_type,
+    size_t class_size,
+    void (*class_init)(void* cls),
+    size_t instance_size,
+    void (*instance_init)(void* instance)
+);
+
+EXPORT type_handle_t type_from_name(const char* name);
+EXPORT type_class_t* type_class_peek(type_handle_t type);
+EXPORT const char* type_name(type_handle_t type);
+EXPORT bool type_is_a(type_handle_t type, type_handle_t ancestor);
+
+/* Instance allocation (uses class metadata) */
+EXPORT void* type_instance_new(type_handle_t type);
+EXPORT void type_instance_free(void* instance);
 
 /***************************************************************
-** MARK: FUNCTION DEFS
+** MARK: CONVENIENCE MACROS
 ***************************************************************/
 
-/* lookup functions */
-EXPORT type_handle_t type_get(const char* name);
-EXPORT property_handle_t type_get_property(const char* name, type_handle_t type_handle);
-EXPORT method_handle_t type_get_method(const char* name, type_handle_t type_handle);
+/* Get the type_class_t* from an instance */
+#define LIBCAD_GET_CLASS(instance) \
+    ((type_class_t*)(*(void**)(instance)))
 
-/* Type instance creation and destruction */
-EXPORT type_instance_handle_t type_instance_create(type_handle_t type_handle);
-EXPORT void type_instance_destroy(type_instance_handle_t instance_handle);
+/* Cast checking macros */
+#define LIBCAD_CHECK_CAST(instance, type_t, type_func) \
+    ((type_t*)instance) /* TODO: Add runtime check in debug builds */
 
-/* Type instance property access */
-EXPORT void type_instance_set_property(type_instance_handle_t instance_handle, property_handle_t property_handle, const void* value);
-EXPORT void* type_instance_get_property_ptr(type_instance_handle_t instance_handle, property_handle_t property_handle);
+#define LIBCAD_CHECK_CLASS_CAST(cls, type_class_t) \
+    ((type_class_t*)cls)
 
-/* Type instance method invocation */
-EXPORT void type_instance_call_method(type_instance_handle_t instance_handle, method_handle_t method_handle, const void* args, void* result);
+/***************************************************************
+** MARK: TYPE DEFINITION MACROS
+**
+** These drastically reduce boilerplate for defining new types
+***************************************************************/
 
-/* Type registration */
-EXPORT type_handle_t type_register(const char* name, type_handle_t parent_type_handle, size_t local_data_size);
+/*
+** Define a new type with no parent
+**
+** Usage:
+**   LIBCAD_DEFINE_TYPE(object, TYPE_INVALID)
+**
+** Generates:
+**   - type_handle_t object_get_type(void)
+**   - object_t* object_new(void)
+**   - void object_free(object_t* self)
+**   - object_class_t* object_class_get(void)
+*/
+#define LIBCAD_DEFINE_TYPE(type_name, parent_type_func) \
+    LIBCAD_DEFINE_TYPE_EXTENDED(type_name, parent_type_func, 0)
 
-/* Lifecycle method registration (fast path - no string lookup) */
-EXPORT void type_set_init(type_handle_t type_handle, void (*init)(struct type_instance_t* self, void* params));
-EXPORT void type_set_destroy(type_handle_t type_handle, void (*destroy)(struct type_instance_t* self));
+/*
+** Extended version with flags (for future expansion)
+*/
+#define LIBCAD_DEFINE_TYPE_EXTENDED(type_name, parent_type_func, flags) \
+    \
+    /* Forward declare class init */ \
+    static void type_name##_class_init(type_name##_class_t* cls); \
+    static void type_name##_init(type_name##_t* self); \
+    \
+    /* Get or register the type */ \
+    type_handle_t type_name##_get_type(void) { \
+        static type_handle_t type_handle = TYPE_INVALID; \
+        if (type_handle == TYPE_INVALID) { \
+            type_handle = type_register_static( \
+                #type_name "_t", \
+                parent_type_func, \
+                sizeof(type_name##_class_t), \
+                (void(*)(void*))type_name##_class_init, \
+                sizeof(type_name##_t), \
+                (void(*)(void*))type_name##_init \
+            ); \
+        } \
+        return type_handle; \
+    } \
+    \
+    /* Get the class (singleton) */ \
+    type_name##_class_t* type_name##_class_get(void) { \
+        return (type_name##_class_t*)type_class_peek(type_name##_get_type()); \
+    } \
+    \
+    /* Convenience constructor */ \
+    type_name##_t* type_name##_new(void) { \
+        return (type_name##_t*)type_instance_new(type_name##_get_type()); \
+    } \
+    \
+    /* Convenience destructor */ \
+    void type_name##_free(type_name##_t* self) { \
+        type_instance_free(self); \
+    }
 
-/* Property registration */
-EXPORT property_handle_t type_register_property(type_handle_t type_handle, const char* name, size_t offset, size_t size);
+/*
+** Helper macros for accessing parent class
+*/
+#define LIBCAD_DEFINE_TYPE_WITH_CODE(type_name, parent_type_func, code) \
+    LIBCAD_DEFINE_TYPE(type_name, parent_type_func) \
+    code
 
-/* Method registration - forward declare type_instance_t for signature */
-struct type_instance_t;
-EXPORT method_handle_t type_register_method(type_handle_t type_handle, const char* name,
-                                     void (*function)(struct type_instance_t* self, void* args, void* result));
+/* Get parent class from a class structure */
+#define LIBCAD_PARENT_CLASS(cls) \
+    ((type_class_t*)type_class_peek(((type_class_t*)cls)->parent_type))
+
+/***************************************************************
+** MARK: PROPERTY SYSTEM (Future)
+**
+** Placeholder for GObject-style properties
+***************************************************************/
+
+/* TODO: Add property registration system similar to GParamSpec */
+
+/***************************************************************
+** MARK: METHOD INVOCATION
+***************************************************************/
+
+/* Direct vtable call - fastest */
+#define LIBCAD_CALL(instance, method, ...) \
+    ((LIBCAD_GET_CLASS(instance))->method((instance), ##__VA_ARGS__))
+
+/* Check if method exists before calling */
+#define LIBCAD_CALL_IF_EXISTS(instance, method, ...) \
+    do { \
+        void* _method = (void*)(LIBCAD_GET_CLASS(instance))->method; \
+        if (_method) { \
+            ((LIBCAD_GET_CLASS(instance))->method((instance), ##__VA_ARGS__)); \
+        } \
+    } while(0)
 
 #ifdef __cplusplus
 }
