@@ -1,47 +1,194 @@
+<!--
+  Main Application Component
+
+  Root component that sets up the overall layout structure.
+  Implements a classic CAD application layout with:
+  - Top toolbar for common operations
+  - Left sidebar for model tree/hierarchy
+  - Center viewport for 3D rendering
+  - Right panel for properties
+  - Bottom status bar
+-->
 <script lang="ts">
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from  './assets/svelte.svg'
-  import Counter from './lib/Counter.svelte'
+  import Toolbar from './lib/components/Toolbar.svelte';
+  import Sidebar from './lib/components/Sidebar.svelte';
+  import Viewport from './lib/components/Viewport.svelte';
+  import PropertiesPanel from './lib/components/PropertiesPanel.svelte';
+  import StatusBar from './lib/components/StatusBar.svelte';
+  import { panelVisibility } from './lib/stores/appState';
+
+  // Panel resize state
+  let sidebarWidth = 250;
+  let propertiesWidth = 280;
+  let isResizingSidebar = false;
+  let isResizingProperties = false;
+
+  /**
+   * Handle sidebar resize drag
+   */
+  function startSidebarResize() {
+    isResizingSidebar = true;
+  }
+
+  /**
+   * Handle properties panel resize drag
+   */
+  function startPropertiesResize() {
+    isResizingProperties = true;
+  }
+
+  /**
+   * Handle global mouse move for resizing
+   */
+  function handleGlobalMouseMove(e: MouseEvent) {
+    if (isResizingSidebar) {
+      sidebarWidth = Math.max(200, Math.min(400, e.clientX));
+    }
+    if (isResizingProperties) {
+      propertiesWidth = Math.max(200, Math.min(400, window.innerWidth - e.clientX));
+    }
+  }
+
+  /**
+   * Handle global mouse up to stop resizing
+   */
+  function handleGlobalMouseUp() {
+    isResizingSidebar = false;
+    isResizingProperties = false;
+  }
 </script>
 
-<main>
-  <div>
-    <a href="https://vite.dev" target="_blank" rel="noreferrer">
-      <img src={viteLogo} class="logo" alt="Vite Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank" rel="noreferrer">
-      <img src={svelteLogo} class="logo svelte" alt="Svelte Logo" />
-    </a>
+<svelte:window
+  onmousemove={handleGlobalMouseMove}
+  onmouseup={handleGlobalMouseUp}
+/>
+
+<div class="app-container">
+  <!-- Top Toolbar -->
+  <Toolbar />
+
+  <!-- Main Content Area -->
+  <div class="main-content">
+    <!-- Left Sidebar -->
+    {#if $panelVisibility.leftSidebar}
+      <div
+        class="sidebar-container"
+        style="width: {sidebarWidth}px;"
+      >
+        <Sidebar />
+
+        <!-- Resize Handle -->
+        <div
+          class="resize-handle resize-handle-right"
+          role="separator"
+          aria-orientation="vertical"
+          onmousedown={startSidebarResize}
+        ></div>
+      </div>
+    {/if}
+
+    <!-- Center Viewport -->
+    <div class="viewport-container">
+      <Viewport />
+    </div>
+
+    <!-- Right Properties Panel -->
+    {#if $panelVisibility.rightPanel}
+      <div
+        class="properties-container"
+        style="width: {propertiesWidth}px;"
+      >
+        <!-- Resize Handle -->
+        <div
+          class="resize-handle resize-handle-left"
+          role="separator"
+          aria-orientation="vertical"
+          onmousedown={startPropertiesResize}
+        ></div>
+
+        <PropertiesPanel />
+      </div>
+    {/if}
   </div>
-  <h1>Vite + Svelte</h1>
 
-  <div class="card">
-    <Counter />
-  </div>
-
-  <p>
-    Check out <a href="https://github.com/sveltejs/kit#readme" target="_blank" rel="noreferrer">SvelteKit</a>, the official Svelte app framework powered by Vite!
-  </p>
-
-  <p class="read-the-docs">
-    Click on the Vite and Svelte logos to learn more
-  </p>
-</main>
+  <!-- Bottom Status Bar -->
+  {#if $panelVisibility.statusBar}
+    <StatusBar />
+  {/if}
+</div>
 
 <style>
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    background: var(--color-bg);
+    overflow: hidden;
   }
-  .logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
+
+  .main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
   }
-  .logo.svelte:hover {
-    filter: drop-shadow(0 0 2em #ff3e00aa);
+
+  .sidebar-container {
+    position: relative;
+    min-width: 200px;
+    max-width: 400px;
+    height: 100%;
+    display: flex;
+    flex-shrink: 0;
   }
-  .read-the-docs {
-    color: #888;
+
+  .viewport-container {
+    flex: 1;
+    min-width: 400px;
+    height: 100%;
+    position: relative;
+  }
+
+  .properties-container {
+    position: relative;
+    min-width: 200px;
+    max-width: 400px;
+    height: 100%;
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  /* Resize Handles */
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    z-index: 10;
+    transition: background-color var(--transition-fast);
+  }
+
+  .resize-handle-right {
+    right: 0;
+  }
+
+  .resize-handle-left {
+    left: 0;
+  }
+
+  .resize-handle:hover {
+    background-color: var(--color-primary);
+  }
+
+  .resize-handle:active {
+    background-color: var(--color-primary-dark);
+  }
+
+  /* Accessibility */
+  .resize-handle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -1px;
   }
 </style>
