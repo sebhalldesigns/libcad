@@ -1,8 +1,15 @@
 <script lang="ts">
   import type { RibbonTab } from '../model';
 
+  interface AppLink {
+    label: string;
+    href: string;
+  }
+
   export let tabs: RibbonTab[] = [];
   export let activeTabId = '';
+  export let appIconHref = '#';
+  export let appLinks: AppLink[] = [];
   export let onTabChange: (tabId: string) => void = () => {};
   export let onAction: (actionId: string) => void = () => {};
 
@@ -11,8 +18,15 @@
 
 <section class="ribbon-shell" aria-label="Main CAD ribbon">
   <div class="app-strip">
-    <div class="badge">DEMO CAD</div>
+    <a class="app-brand" href={appIconHref} title="democad home">
+      <div class="badge">democad</div>
+    </a>
     <div class="doc-title">Untitled Assembly</div>
+    <nav class="app-links" aria-label="Quick links">
+      {#each appLinks as link}
+        <a href={link.href}>{link.label}</a>
+      {/each}
+    </nav>
     <div class="status">Draft Mode</div>
   </div>
 
@@ -37,11 +51,16 @@
           {#each group.actions as action}
             <button
               class="action-btn"
+              class:size-large={action.size === 'large'}
+              class:size-small={action.size !== 'large'}
+              class:selected={action.selected}
               class:emphasized={action.emphasized}
               title={action.hint}
               on:click={() => onAction(action.id)}
             >
-              <span class="icon" aria-hidden="true">{action.icon}</span>
+              <span class="icon" aria-hidden="true">
+                <img src={action.icon} alt="" loading="lazy" />
+              </span>
               <span class="label">{action.label}</span>
             </button>
           {/each}

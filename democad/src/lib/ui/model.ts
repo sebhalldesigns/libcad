@@ -3,6 +3,9 @@ export interface RibbonAction {
   label: string;
   icon: string;
   hint: string;
+  // Ribbon actions use fixed tile footprints for a more consistent CAD-style layout.
+  size?: 'large' | 'small';
+  selected?: boolean;
   emphasized?: boolean;
 }
 
@@ -38,6 +41,9 @@ export interface ConsoleMessage {
   time: string;
 }
 
+const BI_BASE = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/icons';
+const bi = (name: string): string => `${BI_BASE}/${name}.svg`;
+
 export const ribbonTabs: RibbonTab[] = [
   {
     id: 'home',
@@ -47,27 +53,27 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'project',
         label: 'Project',
         actions: [
-          { id: 'new-sketch', label: 'New Sketch', icon: '?', hint: 'Create sketch on selected plane', emphasized: true },
-          { id: 'import', label: 'Import', icon: '?', hint: 'Load STEP / STL / DXF' },
-          { id: 'save', label: 'Save', icon: '??', hint: 'Save project snapshot' }
+          { id: 'new-sketch', label: 'New Sketch', icon: bi('pencil-square'), hint: 'Create sketch on selected plane', size: 'large', selected: true, emphasized: true },
+          { id: 'import', label: 'Import', icon: bi('box-arrow-in-down'), hint: 'Load STEP / STL / DXF', size: 'small' },
+          { id: 'save', label: 'Save', icon: bi('floppy'), hint: 'Save project snapshot', size: 'small' }
         ]
       },
       {
         id: 'draw',
         label: 'Draw',
         actions: [
-          { id: 'line', label: 'Line', icon: '?', hint: '2-point line tool' },
-          { id: 'arc', label: 'Arc', icon: '?', hint: '3-point arc tool' },
-          { id: 'constraints', label: 'Constraints', icon: '?', hint: 'Horizontal / tangent / equal' }
+          { id: 'line', label: 'Line', icon: bi('slash-lg'), hint: '2-point line tool', size: 'large' },
+          { id: 'arc', label: 'Arc', icon: bi('circle'), hint: '3-point arc tool', size: 'small' },
+          { id: 'constraints', label: 'Constraints', icon: bi('link-45deg'), hint: 'Horizontal / tangent / equal', size: 'small' }
         ]
       },
       {
         id: 'create',
         label: 'Create',
         actions: [
-          { id: 'extrude', label: 'Extrude', icon: '?', hint: 'Create volume from profile', emphasized: true },
-          { id: 'revolve', label: 'Revolve', icon: '?', hint: 'Revolve around axis' },
-          { id: 'loft', label: 'Loft', icon: '?', hint: 'Blend profiles' }
+          { id: 'extrude', label: 'Extrude', icon: bi('box'), hint: 'Create volume from profile', size: 'large', selected: true, emphasized: true },
+          { id: 'revolve', label: 'Revolve', icon: bi('arrow-repeat'), hint: 'Revolve around axis', size: 'small' },
+          { id: 'loft', label: 'Loft', icon: bi('layers'), hint: 'Blend profiles', size: 'small' }
         ]
       }
     ]
@@ -80,18 +86,18 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'construction',
         label: 'Construction',
         actions: [
-          { id: 'centerline', label: 'Centerline', icon: '?', hint: 'Toggle construction style' },
-          { id: 'offset', label: 'Offset', icon: '?', hint: 'Offset selected geometry' },
-          { id: 'mirror', label: 'Mirror', icon: '?', hint: 'Mirror across axis' }
+          { id: 'centerline', label: 'Centerline', icon: bi('dash-lg'), hint: 'Toggle construction style', size: 'large' },
+          { id: 'offset', label: 'Offset', icon: bi('arrows-move'), hint: 'Offset selected geometry', size: 'small' },
+          { id: 'mirror', label: 'Mirror', icon: bi('symmetry-horizontal'), hint: 'Mirror across axis', size: 'small' }
         ]
       },
       {
         id: 'dimensions',
         label: 'Dimensions',
         actions: [
-          { id: 'smart-dim', label: 'Smart Dim', icon: '?', hint: 'Add parametric dimensions', emphasized: true },
-          { id: 'driven', label: 'Driven', icon: '?', hint: 'Add reference dimension' },
-          { id: 'table', label: 'Table', icon: '?', hint: 'Inspect parameters as table' }
+          { id: 'smart-dim', label: 'Smart Dim', icon: bi('rulers'), hint: 'Add parametric dimensions', size: 'large', selected: true, emphasized: true },
+          { id: 'driven', label: 'Driven', icon: bi('123'), hint: 'Add reference dimension', size: 'small' },
+          { id: 'table', label: 'Table', icon: bi('table'), hint: 'Inspect parameters as table', size: 'small' }
         ]
       }
     ]
@@ -104,18 +110,18 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'camera',
         label: 'Camera',
         actions: [
-          { id: 'fit', label: 'Fit', icon: '?', hint: 'Zoom to extents' },
-          { id: 'ortho', label: 'Ortho', icon: '?', hint: 'Orthographic camera', emphasized: true },
-          { id: 'perspective', label: 'Persp', icon: '?', hint: 'Perspective camera' }
+          { id: 'fit', label: 'Fit', icon: bi('arrows-fullscreen'), hint: 'Zoom to extents', size: 'large' },
+          { id: 'ortho', label: 'Ortho', icon: bi('bounding-box'), hint: 'Orthographic camera', size: 'small', selected: true, emphasized: true },
+          { id: 'perspective', label: 'Persp', icon: bi('camera'), hint: 'Perspective camera', size: 'small' }
         ]
       },
       {
         id: 'display',
         label: 'Display',
         actions: [
-          { id: 'wireframe', label: 'Wire', icon: '?', hint: 'Wireframe display mode' },
-          { id: 'shaded', label: 'Shaded', icon: '?', hint: 'Shaded + edges mode' },
-          { id: 'section', label: 'Section', icon: '?', hint: 'Section clipping plane' }
+          { id: 'wireframe', label: 'Wire', icon: bi('grid-3x3'), hint: 'Wireframe display mode', size: 'large' },
+          { id: 'shaded', label: 'Shaded', icon: bi('eye'), hint: 'Shaded + edges mode', size: 'small' },
+          { id: 'section', label: 'Section', icon: bi('scissors'), hint: 'Section clipping plane', size: 'small' }
         ]
       }
     ]
