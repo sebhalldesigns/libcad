@@ -60,7 +60,23 @@ typedef struct
 ***************************************************************/
 
 #ifdef USE_GLES
+extern uint8_t resources_shaders_vector_line_es_vs_glsl[];
+extern uint32_t resources_shaders_vector_line_es_vs_glsl_size;
 
+extern uint8_t resources_shaders_vector_line_es_fs_glsl[];
+extern uint32_t resources_shaders_vector_line_es_fs_glsl_size;
+
+extern uint8_t resources_shaders_vector_shape_es_vs_glsl[];
+extern uint32_t resources_shaders_vector_shape_es_vs_glsl_size;
+
+extern uint8_t resources_shaders_vector_shape_es_fs_glsl[];
+extern uint32_t resources_shaders_vector_shape_es_fs_glsl_size;
+
+extern uint8_t resources_shaders_vector_glyph_es_vs_glsl[];
+extern uint32_t resources_shaders_vector_glyph_es_vs_glsl_size;
+
+extern uint8_t resources_shaders_vector_glyph_es_fs_glsl[];
+extern uint32_t resources_shaders_vector_glyph_es_fs_glsl_size;
 #else
 extern uint8_t resources_shaders_vector_line_core_vs_glsl[];
 extern uint32_t resources_shaders_vector_line_core_vs_glsl_size;
@@ -148,11 +164,19 @@ bool vector_init()
 
     /* LINE RENDERER SETUP */
 
+
     if (!gpu_compile_shader(
+#if USE_GLES
+        (const char*)resources_shaders_vector_line_es_vs_glsl,
+        resources_shaders_vector_line_es_vs_glsl_size,
+        (const char*)resources_shaders_vector_line_es_fs_glsl,
+        resources_shaders_vector_line_es_fs_glsl_size,
+#else
         (const char*)resources_shaders_vector_line_core_vs_glsl,
         resources_shaders_vector_line_core_vs_glsl_size,
         (const char*)resources_shaders_vector_line_core_fs_glsl,
         resources_shaders_vector_line_core_fs_glsl_size,
+#endif
         &line_shader
     ))
     {
@@ -199,10 +223,17 @@ bool vector_init()
     /* SHAPE RENDERER SETUP */
 
     if (!gpu_compile_shader(
+#if USE_GLES
+        (const char*)resources_shaders_vector_shape_es_vs_glsl,
+        resources_shaders_vector_shape_es_vs_glsl_size,
+        (const char*)resources_shaders_vector_shape_es_fs_glsl,
+        resources_shaders_vector_shape_es_fs_glsl_size,
+#else
         (const char*)resources_shaders_vector_shape_core_vs_glsl,
         resources_shaders_vector_shape_core_vs_glsl_size,
         (const char*)resources_shaders_vector_shape_core_fs_glsl,
         resources_shaders_vector_shape_core_fs_glsl_size,
+#endif
         &shape_shader
     ))
     {
@@ -256,10 +287,17 @@ bool vector_init()
     /* GLYPH RENDERER SETUP */
 
     if (!gpu_compile_shader(
+#if USE_GLES
+        (const char*)resources_shaders_vector_glyph_es_vs_glsl,
+        resources_shaders_vector_glyph_es_vs_glsl_size,
+        (const char*)resources_shaders_vector_glyph_es_fs_glsl,
+        resources_shaders_vector_glyph_es_fs_glsl_size,
+#else
         (const char*)resources_shaders_vector_glyph_core_vs_glsl,
         resources_shaders_vector_glyph_core_vs_glsl_size,
         (const char*)resources_shaders_vector_glyph_core_fs_glsl,
         resources_shaders_vector_glyph_core_fs_glsl_size,
+#endif
         &glyph_shader
     ))
     {
@@ -498,15 +536,17 @@ void vector_destroy_glyph(vector_instance_t instance)
 static void instance_arena_init(instance_arena_t *arena, size_t instance_size, size_t initial_count)
 {
    size_t initial_capacity = initial_count * instance_size;
-    
+
+    /* Always set instance_size to avoid divide-by-zero */
+    arena->instance_size = instance_size;
+
     arena->data = malloc(initial_capacity);
     arena->indices = malloc(initial_count * sizeof(uint32_t));
     arena->reverse_indices = malloc(initial_count * sizeof(uint32_t));
-    
+
     if (arena->data && arena->indices && arena->reverse_indices)
     {
         arena->capacity = initial_capacity;
-        arena->instance_size = instance_size;
         arena->used = 0;
         arena->max_handles = initial_count;
     }
@@ -515,7 +555,7 @@ static void instance_arena_init(instance_arena_t *arena, size_t instance_size, s
         #ifdef DEBUG
             log_error("Failed to allocate instance arena.");
         #endif
-        
+
         /* clean up partial allocation */
         free(arena->data);
         free(arena->indices);
@@ -523,6 +563,9 @@ static void instance_arena_init(instance_arena_t *arena, size_t instance_size, s
         arena->data = NULL;
         arena->indices = NULL;
         arena->reverse_indices = NULL;
+        arena->capacity = 0;
+        arena->used = 0;
+        arena->max_handles = 0;
     }
 }
 
@@ -547,6 +590,15 @@ static void instance_arena_clear(instance_arena_t *arena)
 
 static uint32_t instance_arena_add(instance_arena_t *arena, const void *instance)
 {
+    /* Check if arena is valid (initialization succeeded) */
+    if (!arena->data || arena->instance_size == 0 || arena->capacity == 0)
+    {
+        #ifdef DEBUG
+            log_error("Attempted to add instance to uninitialized arena");
+        #endif
+        return UINT32_MAX;
+    }
+
     /* check if we need to grow the data array */
     if (arena->used + arena->instance_size > arena->capacity)
     {

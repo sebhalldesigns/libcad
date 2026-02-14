@@ -17,6 +17,11 @@
 
 #include <libcad/libcad.h>
 #include <stdio.h>
+#include <string.h>
+
+#ifdef __EMSCRIPTEN__
+    #include <emscripten/html5.h>
+#endif
 
 #ifdef USE_GLES
     #include <GLES3/gl3.h>
@@ -60,13 +65,32 @@ static char info_log[INFO_LOG_SIZE];
 
 bool gpu_init(void)
 {
+#ifdef __EMSCRIPTEN__
+    EmscriptenWebGLContextAttributes attrs;
+    emscripten_webgl_init_context_attributes(&attrs);
+    attrs.majorVersion = 2;
+    attrs.minorVersion = 0;
+
+    /* Use the canvas element with id="cad-canvas" */
+    EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context("#cad-canvas", &attrs);
+    if (ctx <= 0)
+    {
+        #ifdef DEBUG
+        log_error("Failed to create WebGL context");
+        #endif
+        return false;
+    }
+
+    emscripten_webgl_make_context_current(ctx);
+#elif !defined(USE_GLES)
     if (!gladLoadGL())
     {
-        #if DEBUG
+        #ifdef DEBUG
         log_error("Failed to initialize GLAD\n");
         #endif
         return false;
     }
+#endif
 
     return true;
 }

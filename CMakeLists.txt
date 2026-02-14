@@ -3,6 +3,8 @@
 
 cmake_minimum_required(VERSION 3.16)
 
+include(ExternalProject)
+
 # Embed Resources function courtesy of shir0areed on GitHub
 function(embed_resources target)
     set(script_path "${CMAKE_CURRENT_BINARY_DIR}/anything_to_c.cmake")
@@ -30,6 +32,9 @@ option(LIBCAD_BUILD_SHARED "Build shared libraries." ON)
 option(LIBCAD_BUILD_STATIC "Build static libraries." ON)
 option(LIBCAD_BUILD_DEMOCAD "Build the democad web application." ON)
 option(LIBCAD_BUILD_DEMOCAD_NATIVE "Build the native democad application." ON)
+option(LIBCAD_BUILD_WASM "Build libcad with Emscripten via ExternalProject." ON)
+set(LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE "" CACHE FILEPATH "Path to Emscripten.cmake toolchain file.")
+set(LIBCAD_EMSCRIPTEN_NINJA "" CACHE FILEPATH "Path to ninja executable used by the wasm ExternalProject.")
 
 if (WIN32)
     # Force static CRT on Windows
@@ -40,12 +45,76 @@ endif()
 
 add_subdirectory(extern)
 
-if (LIBCAD_BUILD_DEMOCAD OR LIBCAD_BUILD_DEMOCAD_NATIVE)
+if ((LIBCAD_BUILD_DEMOCAD OR LIBCAD_BUILD_DEMOCAD_NATIVE) AND NOT EMSCRIPTEN)
     add_subdirectory(democad)
 endif()
 
-if (LIBCAD_BUILD_DEMOCAD_NATIVE)
+if (LIBCAD_BUILD_DEMOCAD_NATIVE AND NOT EMSCRIPTEN)
     add_subdirectory(democad/native)
+endif()
+
+if (LIBCAD_BUILD_WASM AND NOT EMSCRIPTEN)
+    if (NOT LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE)
+        if (DEFINED ENV{EMSDK})
+            set(LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE
+                "$ENV{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake")
+        endif()
+    endif()
+
+    if (LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE AND EXISTS "${LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE}")
+        message(STATUS "Emscripten toolchain: ${LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE}")
+
+        set(LIBCAD_WEB_DIST_DIR "${CMAKE_SOURCE_DIR}/democad/dist")
+        if (NOT LIBCAD_EMSCRIPTEN_NINJA)
+            # Use ninja from PATH by default; callers can still override with
+            # -DLIBCAD_EMSCRIPTEN_NINJA=<absolute path>.
+            set(LIBCAD_EMSCRIPTEN_NINJA "ninja")
+        endif()
+
+        message(STATUS "Emscripten Ninja: ${LIBCAD_EMSCRIPTEN_NINJA}")
+
+        ExternalProject_Add(libcad_wasm
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}
+            PREFIX "web"
+            BINARY_DIR ${CMAKE_BINARY_DIR}/wasm
+            CMAKE_GENERATOR Ninja
+            BUILD_ALWAYS 1
+            INSTALL_COMMAND ""
+            CMAKE_ARGS
+                -DCMAKE_TOOLCHAIN_FILE=${LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE}
+                -DCMAKE_BUILD_TYPE=Release
+                -DCMAKE_C_COMPILER=emcc
+                -DCMAKE_CXX_COMPILER=em++
+                -DCMAKE_MAKE_PROGRAM=${LIBCAD_EMSCRIPTEN_NINJA}
+                -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${LIBCAD_WEB_DIST_DIR}
+                -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${LIBCAD_WEB_DIST_DIR}
+                -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${LIBCAD_WEB_DIST_DIR}
+                -DLIBCAD_BUILD_WASM=OFF
+                -DLIBCAD_BUILD_DEMOCAD=OFF
+                -DLIBCAD_BUILD_DEMOCAD_NATIVE=OFF
+                -DLIBCAD_BUILD_SHARED=OFF
+                -DLIBCAD_BUILD_STATIC=OFF
+            BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target cad
+        )
+        ExternalProject_Add_Step(libcad_wasm copy_web_outputs
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBCAD_WEB_DIST_DIR}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different <BINARY_DIR>/cad.js ${LIBCAD_WEB_DIST_DIR}/cad.js
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different <BINARY_DIR>/cad.wasm ${LIBCAD_WEB_DIST_DIR}/cad.wasm
+            DEPENDEES build
+            ALWAYS 1
+        )
+
+        # Ensure frontend dist exists before placing wasm/native artifacts there.
+        if (TARGET democad_build)
+            add_dependencies(libcad_wasm democad_build)
+        endif()
+    else()
+        message(WARNING
+            "LIBCAD_BUILD_WASM is ON, but no valid Emscripten toolchain was found. "
+            "Set EMSDK and source emsdk_env, or pass "
+            "-DLIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE=<path>/Emscripten.cmake. "
+            "Skipping wasm external build target.")
+    endif()
 endif()
 
 if (WIN32)
@@ -65,11 +134,12 @@ elseif (EMSCRIPTEN)
     )
 
     set(PLATFORM_LIBS
+        "-g"
         "-s USE_WEBGL2=1"
         "-s FULL_ES3=1"
         "-s ALLOW_MEMORY_GROWTH=1"
-        "-s USE_SDL=3"
         "-s USE_ZLIB=1"
+        "-s ASSERTIONS=2"
     )
 
     set(USE_GLES TRUE)
@@ -151,13 +221,25 @@ set(GL_SHADERS
 )
 
 set(GLES_SHADERS
-    
+    resources/shaders/vector/line_es_vs.glsl
+    resources/shaders/vector/line_es_fs.glsl
+    resources/shaders/vector/shape_es_vs.glsl
+    resources/shaders/vector/shape_es_fs.glsl
+    resources/shaders/vector/glyph_es_vs.glsl
+    resources/shaders/vector/glyph_es_fs.glsl
 )
 
-if(LIBCAD_BUILD_SHARED)
-    add_library(cad SHARED
-        ${CAD_SRC}
-    )
+if(LIBCAD_BUILD_SHARED OR EMSCRIPTEN)
+
+    if (LIBCAD_BUILD_SHARED)
+        add_library(cad SHARED
+            ${CAD_SRC}
+        )
+    else()
+        add_executable(cad
+            ${CAD_SRC}
+        )
+    endif()
 
     target_link_libraries(cad PUBLIC
         ${CAD_LIBS}
@@ -180,13 +262,12 @@ if(LIBCAD_BUILD_SHARED)
             ${GLES_SHADERS}
         )
 
-        target_compile_definitions(cad USE_GLES)
+        target_compile_definitions(cad PUBLIC USE_GLES)
     else()
         embed_resources(cad
             ${GL_SHADERS}
         )
     endif()
-
 endif()
 
 if(LIBCAD_BUILD_STATIC)
@@ -215,15 +296,12 @@ if(LIBCAD_BUILD_STATIC)
             ${GLES_SHADERS}
         )
 
-        target_compile_definitions(cad USE_GLES)
+        target_compile_definitions(cad-static PUBLIC USE_GLES)
     else()
         embed_resources(cad-static
             ${GL_SHADERS}
         )
     endif()
 endif()
-
-
-
 
 add_subdirectory(tests)
