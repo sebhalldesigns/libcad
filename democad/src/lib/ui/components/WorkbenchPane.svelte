@@ -6,10 +6,15 @@
 
 <section class="panel" class:compact>
   <header>
-    <h2>{title}</h2>
-    {#if subtitle}
-      <p>{subtitle}</p>
-    {/if}
+    <div class="panel-heading">
+      <h2>{title}</h2>
+      {#if subtitle}
+        <p>{subtitle}</p>
+      {/if}
+    </div>
+    <div class="panel-actions">
+      <slot name="header-actions" />
+    </div>
   </header>
   <div class="content">
     <slot />

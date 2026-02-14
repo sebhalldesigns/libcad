@@ -3,13 +3,12 @@
 
   interface AppLink {
     label: string;
-    href: string;
   }
 
   export let tabs: RibbonTab[] = [];
   export let activeTabId = '';
-  export let appIconHref = '#';
   export let appLinks: AppLink[] = [];
+  export let onAppLink: (label: string) => void = () => {};
   export let onTabChange: (tabId: string) => void = () => {};
   export let onAction: (actionId: string) => void = () => {};
 
@@ -18,16 +17,15 @@
 
 <section class="ribbon-shell" aria-label="Main CAD ribbon">
   <div class="app-strip">
-    <a class="app-brand" href={appIconHref} title="democad home">
+    <div class="app-brand" aria-label="democad">
       <div class="badge">democad</div>
-    </a>
-    <div class="doc-title">Untitled Assembly</div>
+    </div>
+    <div class="doc-title">untitled assy</div>
     <nav class="app-links" aria-label="Quick links">
       {#each appLinks as link}
-        <a href={link.href}>{link.label}</a>
+        <button type="button" on:click={() => onAppLink(link.label)}>{link.label}</button>
       {/each}
     </nav>
-    <div class="status">Draft Mode</div>
   </div>
 
   <div class="tab-row" role="tablist" aria-label="Ribbon tabs">
