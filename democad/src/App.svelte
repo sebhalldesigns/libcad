@@ -33,6 +33,8 @@
   let mobileTrayVisible = true;
   let mobileTrayHeight = 320;
   let coverWindow: 'settings' | 'help' | null = null;
+  let settingsTab: 'general' | 'appearance' | 'debug' = 'general';
+  let helpTab: 'about' | 'docs' = 'about';
 
   type DragMode = 'left' | 'right' | 'console' | 'tray' | null;
   let dragMode: DragMode = null;
@@ -59,8 +61,14 @@
 
   function handleAppLink(label: string): void {
     const normalized = label.trim().toLowerCase();
-    if (normalized === 'settings' || normalized === 'help') {
-      coverWindow = normalized;
+    if (normalized === 'settings') {
+      coverWindow = 'settings';
+      settingsTab = 'general';
+      return;
+    }
+    if (normalized === 'help') {
+      coverWindow = 'help';
+      helpTab = 'about';
       return;
     }
     console.info(`[app] command selected: ${label}`);
@@ -154,6 +162,12 @@
 
   function closeCoverWindow(): void {
     coverWindow = null;
+  }
+
+  function onConsoleCheckboxChange(event: Event): void {
+    const target = event.currentTarget as HTMLInputElement | null;
+    if (!target) return;
+    setConsoleVisible(target.checked);
   }
 
   function clampMobileTrayHeight(): void {
@@ -392,9 +406,71 @@
         </header>
         <div class="cover-content">
           {#if coverWindow === 'settings'}
-            <p>Settings panel placeholder. Add preferences and application options here.</p>
+            <nav class="cover-tab-row" aria-label="Settings sections">
+              <button
+                class="cover-tab"
+                class:active={settingsTab === 'general'}
+                type="button"
+                on:click={() => (settingsTab = 'general')}
+              >
+                General
+              </button>
+              <button
+                class="cover-tab"
+                class:active={settingsTab === 'appearance'}
+                type="button"
+                on:click={() => (settingsTab = 'appearance')}
+              >
+                Appearance
+              </button>
+              <button
+                class="cover-tab"
+                class:active={settingsTab === 'debug'}
+                type="button"
+                on:click={() => (settingsTab = 'debug')}
+              >
+                Debug
+              </button>
+            </nav>
+            <section class="cover-panel">
+              {#if settingsTab === 'general'}
+                <h3>Project Defaults</h3>
+                <p>Example preferences for units, autosave interval, and startup template.</p>
+              {:else if settingsTab === 'appearance'}
+                <h3>Appearance</h3>
+                <p>Example preferences for theme accents, panel density, and icon scale.</p>
+              {:else}
+                <h3>Debug</h3>
+                <label class="setting-check">
+                  <input type="checkbox" checked={consoleVisible} on:change={onConsoleCheckboxChange} />
+                  <span>Show console</span>
+                </label>
+                <p class="setting-note">Use this to quickly reveal or hide the console panel/tray tab.</p>
+              {/if}
+            </section>
           {:else}
-            <p>Help panel placeholder. Add docs links, shortcuts, and onboarding guidance here.</p>
+            <nav class="cover-tab-row" aria-label="Help sections">
+              <button class="cover-tab" class:active={helpTab === 'about'} type="button" on:click={() => (helpTab = 'about')}>
+                About
+              </button>
+              <button class="cover-tab" class:active={helpTab === 'docs'} type="button" on:click={() => (helpTab = 'docs')}>
+                Docs
+              </button>
+            </nav>
+            <section class="cover-panel" class:docs-panel={helpTab === 'docs'}>
+              {#if helpTab === 'about'}
+                <div class="about-box">
+                  <h3>democad</h3>
+                  <p class="version">Version 0.1.0-dev</p>
+                  <p>
+                    democad is a free and open-source CAD front-end focused on fast sketching and direct 3D scene
+                    interaction with a WASM-powered kernel.
+                  </p>
+                </div>
+              {:else}
+                <iframe class="docs-frame" src="https://libcad.org" title="libcad documentation" scrolling="no"></iframe>
+              {/if}
+            </section>
           {/if}
         </div>
       </div>
