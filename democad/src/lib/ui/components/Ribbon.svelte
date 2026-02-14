@@ -20,7 +20,7 @@
     <div class="app-brand" aria-label="democad">
       <div class="badge">democad</div>
     </div>
-    <div class="doc-title">untitled assy</div>
+    <div class="doc-title">Untitled Project</div>
     <nav class="app-links" aria-label="Quick links">
       {#each appLinks as link}
         <button type="button" on:click={() => onAppLink(link.label)}>{link.label}</button>
