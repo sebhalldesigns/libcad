@@ -1,8 +1,8 @@
 <!--
   Status Bar Component
 
-  Bottom status bar displaying application state, messages, and quick info.
-  Shows current tool, coordinates, and system messages.
+  Bottom status bar with skeumorphic design showing app state and info.
+  Features inset styling and visual depth.
 -->
 <script lang="ts">
   import { statusMessage, currentTool } from '../stores/appState';
@@ -46,8 +46,8 @@
 
   <!-- System Info -->
   <div class="status-section">
-    <span class="status-label">Version:</span>
-    <span class="status-value">0.1.0</span>
+    <span class="status-label">DemoCAD</span>
+    <span class="status-value">v0.1.0</span>
   </div>
 </div>
 
@@ -55,53 +55,68 @@
   .status-bar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 6px 16px;
-    background: var(--color-surface);
+    gap: 10px;
+    padding: 4px 12px;
+    background: linear-gradient(180deg, #16161a 0%, #121216 100%);
     border-top: 1px solid var(--color-border);
-    height: 32px;
+    box-shadow:
+      0 -2px 8px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    height: 28px;
     box-sizing: border-box;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .status-section {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    padding: 2px 8px;
+    background: var(--color-inset);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-inset);
   }
 
   .status-icon {
-    font-size: 14px;
+    font-size: 12px;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
   }
 
   .status-text {
     color: var(--color-text);
-    font-weight: 500;
+    font-weight: 600;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
   }
 
   .status-label {
     color: var(--color-text-secondary);
-    font-weight: 500;
+    font-weight: 700;
     text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.3px;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
   }
 
   .status-value {
     color: var(--color-text);
-    font-weight: 600;
+    font-weight: 700;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
   }
 
   .status-value.mono {
-    font-family: 'Consolas', 'Monaco', monospace;
-    min-width: 50px;
+    font-family: var(--font-mono);
+    min-width: 42px;
     text-align: right;
+    font-size: 10px;
+    color: var(--color-primary-light);
   }
 
   .status-divider {
     width: 1px;
-    height: 20px;
-    background: var(--color-border);
+    height: 16px;
+    background: linear-gradient(180deg, transparent 0%, var(--color-border) 50%, transparent 100%);
+    box-shadow: 1px 0 0 rgba(255, 255, 255, 0.05);
   }
 
   .status-spacer {

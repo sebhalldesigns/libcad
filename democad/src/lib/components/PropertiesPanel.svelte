@@ -1,14 +1,13 @@
 <!--
   Properties Panel Component
 
-  Right-side panel displaying properties and parameters of the selected object.
-  Allows users to inspect and modify feature parameters.
+  Right-side panel with skeumorphic design for object properties.
+  Features inset inputs and visual depth.
 -->
 <script lang="ts">
   import { selectedItem, objectProperties, hasSelection } from '../stores/appState';
 
   // Mock properties for demonstration
-  // TODO: Replace with actual object properties from WASM
   const mockProperties = {
     name: 'Sketch 1',
     type: 'Sketch',
@@ -23,7 +22,6 @@
    * Handle property value change
    */
   function handlePropertyChange(key: string, value: any) {
-    // TODO: Update property in WASM and trigger re-render
     console.log(`Property changed: ${key} = ${value}`);
   }
 </script>
@@ -85,12 +83,15 @@
 
       <div class="property-group">
         <label class="property-label">Locked</label>
-        <input
-          type="checkbox"
-          class="property-checkbox"
-          checked={mockProperties.parameters.locked}
-          onchange={(e) => handlePropertyChange('locked', e.currentTarget.checked)}
-        />
+        <label class="checkbox-wrapper">
+          <input
+            type="checkbox"
+            class="property-checkbox"
+            checked={mockProperties.parameters.locked}
+            onchange={(e) => handlePropertyChange('locked', e.currentTarget.checked)}
+          />
+          <span class="checkbox-custom"></span>
+        </label>
       </div>
 
       <div class="divider"></div>
@@ -106,7 +107,7 @@
     <div class="empty-state">
       <div class="empty-icon">📋</div>
       <p class="empty-text">No object selected</p>
-      <p class="empty-hint">Select an item from the model tree to view its properties</p>
+      <p class="empty-hint">Select an item from the model tree</p>
     </div>
   {/if}
 </div>
@@ -117,121 +118,205 @@
     flex-direction: column;
     height: 100%;
     background: var(--color-surface);
-    border-left: 1px solid var(--color-border);
+    border-left: 2px solid var(--color-border);
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.4);
     overflow: hidden;
   }
 
   .panel-header {
-    padding: 12px 16px;
+    padding: 8px 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
     border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
   .panel-header h3 {
     margin: 0;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--color-text);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   }
 
   .panel-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 12px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, transparent 50px);
   }
 
   .property-group {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
 
   .property-label {
     display: block;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 10px;
+    font-weight: 700;
     color: var(--color-text-secondary);
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
   }
 
   .property-input,
   .property-select {
     width: 100%;
-    padding: 8px 12px;
-    background: var(--color-bg);
+    padding: 6px 10px;
+    background: var(--color-inset);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--color-text);
-    font-size: 13px;
-    transition: all 0.15s ease;
+    font-size: 12px;
+    transition: all var(--transition-fast);
+    box-shadow: var(--shadow-inset);
+    font-weight: 500;
   }
 
   .property-input:focus,
   .property-select:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+    box-shadow:
+      var(--shadow-inset),
+      0 0 8px var(--color-primary-glow);
+  }
+
+  .property-input:hover,
+  .property-select:hover {
+    border-color: var(--color-border-light);
   }
 
   .property-value.readonly {
-    padding: 8px 12px;
-    background: var(--color-bg);
+    padding: 6px 10px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.1) 100%);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--color-text-secondary);
-    font-size: 13px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: var(--shadow-inset);
+  }
+
+  /* Custom Checkbox */
+  .checkbox-wrapper {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
   }
 
   .property-checkbox {
-    width: 18px;
-    height: 18px;
+    position: absolute;
+    opacity: 0;
     cursor: pointer;
   }
 
+  .checkbox-custom {
+    width: 18px;
+    height: 18px;
+    background: var(--color-inset);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    position: relative;
+    transition: all var(--transition-fast);
+    box-shadow: var(--shadow-inset);
+  }
+
+  .property-checkbox:checked + .checkbox-custom {
+    background: var(--gradient-primary);
+    border-color: var(--color-primary-dark);
+    box-shadow: 0 2px 6px var(--color-primary-glow);
+  }
+
+  .property-checkbox:checked + .checkbox-custom::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .checkbox-wrapper:hover .checkbox-custom {
+    border-color: var(--color-primary);
+  }
+
   .section-title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     color: var(--color-text);
-    margin: 0 0 12px 0;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   }
 
   .divider {
     height: 1px;
-    background: var(--color-border);
-    margin: 20px 0;
+    background: linear-gradient(90deg, transparent 0%, var(--color-border) 50%, transparent 100%);
+    margin: 14px 0;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .actions {
     display: flex;
-    gap: 8px;
-    margin-top: 20px;
+    gap: 6px;
+    margin-top: 16px;
   }
 
   .action-btn {
     flex: 1;
-    padding: 8px 16px;
-    background: transparent;
+    padding: 7px 14px;
+    background: var(--gradient-button);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--color-text);
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 11px;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all var(--transition-fast);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
   }
 
   .action-btn:hover {
-    background: var(--color-hover);
-    border-color: var(--color-primary);
+    background: var(--gradient-button-hover);
+    border-color: var(--color-border-light);
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .action-btn:active {
+    transform: translateY(0);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
   }
 
   .action-btn.primary {
-    background: var(--color-primary);
-    color: var(--color-bg);
-    border-color: var(--color-primary);
+    background: var(--gradient-primary);
+    color: white;
+    border-color: var(--color-primary-dark);
+    box-shadow:
+      0 2px 6px var(--color-primary-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   .action-btn.primary:hover {
-    background: var(--color-primary-dark);
+    background: linear-gradient(135deg, #7a9bff 0%, #6b8fff 50%, #5b7fff 100%);
+    box-shadow:
+      0 3px 8px var(--color-primary-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
   }
 
   /* Empty State */
@@ -241,27 +326,30 @@
     align-items: center;
     justify-content: center;
     height: 100%;
-    padding: 32px;
+    padding: 24px;
     text-align: center;
   }
 
   .empty-icon {
     font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
+    margin-bottom: 12px;
+    opacity: 0.3;
+    filter: grayscale(1);
   }
 
   .empty-text {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--color-text);
-    margin: 0 0 8px 0;
+    margin: 0 0 6px 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
   .empty-hint {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--color-text-secondary);
     margin: 0;
-    max-width: 200px;
+    max-width: 180px;
+    line-height: 1.4;
   }
 </style>

@@ -1,8 +1,8 @@
 <!--
   Sidebar Component
 
-  Left sidebar displaying the model tree (hierarchy of sketches and features).
-  Allows users to select, toggle visibility, and organize their CAD elements.
+  Left sidebar with skeumorphic design displaying the model tree.
+  Features visual depth with gradients and shadows.
 -->
 <script lang="ts">
   import { modelTree, selectedItem, setStatus } from '../stores/appState';
@@ -129,7 +129,8 @@
     flex-direction: column;
     height: 100%;
     background: var(--color-surface);
-    border-right: 1px solid var(--color-border);
+    border-right: 2px solid var(--color-border);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.4);
     overflow: hidden;
   }
 
@@ -137,125 +138,175 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 8px 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
     border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
   .sidebar-header h3 {
     margin: 0;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--color-text);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   }
 
   .icon-btn {
-    background: transparent;
+    background: var(--gradient-button);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all var(--transition-fast);
     color: var(--color-text);
+    font-size: 12px;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   .icon-btn:hover {
-    background: var(--color-hover);
+    background: var(--gradient-button-hover);
     border-color: var(--color-primary);
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.5),
+      0 0 8px var(--color-primary-glow);
+    transform: translateY(-1px);
+  }
+
+  .icon-btn:active {
+    transform: translateY(0);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
   }
 
   .tree {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 6px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, transparent 50px);
   }
 
   .tree-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 6px 10px;
     margin-bottom: 2px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all var(--transition-fast);
     user-select: none;
+    background: var(--gradient-button);
+    border: 1px solid transparent;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   .tree-item:hover {
-    background: var(--color-hover);
+    background: var(--gradient-button-hover);
+    border-color: var(--color-border-light);
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transform: translateX(2px);
   }
 
   .tree-item.selected {
-    background: var(--color-primary);
-    color: var(--color-bg);
+    background: var(--gradient-primary);
+    color: white;
+    border-color: var(--color-primary-dark);
+    box-shadow:
+      0 2px 6px var(--color-primary-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   .tree-item.child {
-    margin-left: 24px;
+    margin-left: 20px;
+    font-size: 12px;
   }
 
   .visibility-toggle {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 0;
-    font-size: 14px;
-    opacity: 0.5;
-    transition: opacity 0.15s ease;
+    padding: 2px;
+    font-size: 13px;
+    opacity: 0.4;
+    transition: all var(--transition-fast);
+    filter: grayscale(1);
   }
 
   .visibility-toggle:hover {
     opacity: 1;
+    filter: grayscale(0);
+    transform: scale(1.1);
   }
 
   .visibility-toggle.visible {
     opacity: 1;
+    filter: grayscale(0);
   }
 
   .item-icon {
-    font-size: 16px;
+    font-size: 15px;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
   }
 
   .item-name {
     flex: 1;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
   }
 
   .item-type {
-    font-size: 11px;
-    opacity: 0.6;
+    font-size: 9px;
+    opacity: 0.7;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
   }
 
   .tree-children {
-    margin-left: 12px;
+    margin-left: 8px;
   }
 
   .sidebar-footer {
-    padding: 12px;
+    padding: 8px;
     border-top: 1px solid var(--color-border);
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.2) 100%);
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.3);
   }
 
   .action-btn {
     width: 100%;
     padding: 8px 12px;
-    background: var(--color-primary);
-    color: var(--color-bg);
-    border: none;
-    border-radius: 4px;
+    background: var(--gradient-primary);
+    color: white;
+    border: 1px solid var(--color-primary-dark);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.15s ease;
+    font-size: 12px;
+    font-weight: 700;
+    transition: all var(--transition-fast);
+    box-shadow:
+      0 2px 6px var(--color-primary-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
   .action-btn:hover {
-    background: var(--color-primary-dark);
-    transform: translateY(-1px);
+    background: linear-gradient(135deg, #7a9bff 0%, #6b8fff 50%, #5b7fff 100%);
+    box-shadow:
+      0 3px 8px var(--color-primary-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
   }
 
   .action-btn:active {
     transform: translateY(0);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.3),
+      0 1px 3px var(--color-primary-glow);
   }
 </style>

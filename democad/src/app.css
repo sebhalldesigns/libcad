@@ -1,81 +1,73 @@
 /**
  * Global Styles for DemoCAD
  *
- * Defines CSS custom properties (variables) for theming,
- * resets default styles, and sets up base typography.
+ * A characterful, skeumorphic design for a FOSS CAD application.
+ * Features gradients, shadows, and visual depth.
  */
 
 /* CSS Custom Properties (Design Tokens) */
 :root {
-  /* Color Palette - Dark Theme */
-  --color-bg: #0f0f0f;
-  --color-surface: #1a1a1a;
-  --color-surface-elevated: #242424;
-  --color-border: #2a2a2a;
+  /* Color Palette - Rich Dark Theme with Character */
+  --color-bg: #0d0d0f;
+  --color-surface: linear-gradient(180deg, #1e1e22 0%, #16161a 100%);
+  --color-surface-flat: #1a1a1e;
+  --color-surface-elevated: linear-gradient(135deg, #252529 0%, #1c1c20 100%);
+  --color-border: #2d2d35;
+  --color-border-light: #3a3a45;
+  --color-inset: #0a0a0c;
 
-  --color-text: #e0e0e0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-muted: #6a6a6a;
+  --color-text: #e8e8ea;
+  --color-text-secondary: #a8a8b0;
+  --color-text-muted: #6a6a75;
 
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
-  --color-primary-light: #818cf8;
+  /* Primary accent with personality */
+  --color-primary: #5b7fff;
+  --color-primary-dark: #4a6ae5;
+  --color-primary-light: #7a9bff;
+  --color-primary-glow: rgba(91, 127, 255, 0.3);
 
-  --color-hover: rgba(99, 102, 241, 0.1);
-  --color-active: rgba(99, 102, 241, 0.2);
+  --color-hover: rgba(91, 127, 255, 0.12);
+  --color-active: rgba(91, 127, 255, 0.25);
 
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
+  /* Semantic colors with depth */
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
 
-  /* Spacing Scale */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
+  /* Shadows for depth */
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-inset-deep: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.7), 0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px var(--color-primary-glow);
 
-  /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  /* Gradients */
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  --gradient-button: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+  --gradient-button-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+  --gradient-primary: linear-gradient(135deg, #6b8fff 0%, #5b7fff 50%, #4a6ae5 100%);
 
   /* Typography */
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
 
   /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 350ms ease;
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Z-Index Scale */
-  --z-dropdown: 1000;
-  --z-sticky: 1020;
-  --z-fixed: 1030;
-  --z-modal-backdrop: 1040;
-  --z-modal: 1050;
-  --z-popover: 1060;
-  --z-tooltip: 1070;
-}
+  /* Spacing - Reduced for less padding */
+  --spacing-xs: 3px;
+  --spacing-sm: 6px;
+  --spacing-md: 10px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
 
-/* Light Theme Support (Optional - for future implementation) */
-@media (prefers-color-scheme: light) {
-  :root.light-theme {
-    --color-bg: #ffffff;
-    --color-surface: #f5f5f5;
-    --color-surface-elevated: #e5e5e5;
-    --color-border: #d0d0d0;
-
-    --color-text: #1a1a1a;
-    --color-text-secondary: #6a6a6a;
-    --color-text-muted: #a0a0a0;
-  }
+  /* Border Radius */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
 }
 
 /* CSS Reset & Base Styles */
@@ -94,10 +86,10 @@ body {
 
 body {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--color-text);
-  background-color: var(--color-bg);
+  background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -107,13 +99,14 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   line-height: 1.2;
   color: var(--color-text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-h1 { font-size: 32px; }
-h2 { font-size: 24px; }
-h3 { font-size: 18px; }
-h4 { font-size: 16px; }
-h5 { font-size: 14px; }
+h1 { font-size: 28px; }
+h2 { font-size: 22px; }
+h3 { font-size: 16px; }
+h4 { font-size: 14px; }
+h5 { font-size: 13px; }
 h6 { font-size: 12px; }
 
 p {
@@ -123,21 +116,20 @@ p {
 
 /* Links */
 a {
-  color: var(--color-primary);
+  color: var(--color-primary-light);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-primary-light);
+  color: var(--color-primary);
   text-decoration: underline;
 }
 
-/* Form Elements */
+/* Form Elements with Skeumorphism */
 input,
 select,
-textarea,
-button {
+textarea {
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -148,43 +140,56 @@ button {
   border: none;
   background: none;
   padding: 0;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.4;
+  filter: grayscale(0.5);
 }
 
-/* Scrollbars */
+/* Custom Scrollbars with Depth */
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
+  background: var(--color-inset);
+  box-shadow: var(--shadow-inset);
+  border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 6px;
-  border: 2px solid var(--color-bg);
+  background: linear-gradient(135deg, #404048 0%, #2d2d35 100%);
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: linear-gradient(135deg, #4a4a52 0%, #353540 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, #5a5a62 0%, #454550 100%);
 }
 
 /* Selection */
 ::selection {
   background: var(--color-primary);
   color: white;
+  text-shadow: none;
 }
 
-/* Focus Styles */
+/* Focus Styles with Glow */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+  box-shadow: 0 0 8px var(--color-primary-glow);
 }
 
 /* Utility Classes */
@@ -207,4 +212,26 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: radial-gradient(ellipse at top, #141418 0%, var(--color-bg) 100%);
+}
+
+/* Glass Effect Helper */
+.glass {
+  background: var(--gradient-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Panel Effect Helper */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+/* Inset Surface Helper */
+.inset {
+  background: var(--color-inset);
+  box-shadow: var(--shadow-inset-deep);
+  border: 1px solid var(--color-border);
 }
