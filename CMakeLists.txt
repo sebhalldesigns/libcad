@@ -28,6 +28,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LIBCAD_BUILD_SHARED "Build shared libraries." ON)
 option(LIBCAD_BUILD_STATIC "Build static libraries." ON)
+option(LIBCAD_BUILD_DEMOCAD "Build the Rust democad application." ON) # New option
 
 if (WIN32)
     # Force static CRT on Windows
@@ -37,6 +38,11 @@ if (WIN32)
 endif()
 
 add_subdirectory(extern)
+
+# Add democad/app if option is enabled
+if (LIBCAD_BUILD_DEMOCAD)
+    add_subdirectory(democad/app)
+endif()
 
 if (WIN32)
 

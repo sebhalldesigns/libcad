@@ -1,0 +1,23 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="128" height="128" rx="12" fill="#FDE047"/>
+
+  <clipPath id="stripe-clip">
+    <rect width="128" height="128" rx="12"/>
+  </clipPath>
+  
+  <g clip-path="url(#stripe-clip)" stroke="#1F2937" stroke-width="10">
+    <path d="M-56 88L88 -56 
+             M-32 112L112 -32 
+             M-8 136L136 -8 
+             M16 160L160 16 
+             M40 184L184 40 
+             M64 208L208 64 
+             M88 232L232 88"/>
+  </g>
+
+  <rect x="20" y="20" width="88" height="88" rx="8" fill="#2563EB" stroke-width="0"/>
+  
+  <g stroke="white" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 36V92H66C82 92 90 80 90 64C90 48 82 36 66 36H44Z" stroke-width="10"/>
+  </g>
+</svg>

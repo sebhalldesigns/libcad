@@ -1,5 +1,11 @@
 build/
 .vscode/
-.claude/
 __pycache__/
+
+# Rust stuff
+target/
+*.lock
+
+# LLM stuff
+.claude/
 GEMINI.md
