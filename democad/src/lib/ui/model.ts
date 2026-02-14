@@ -53,27 +53,29 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'project',
         label: 'Project',
         actions: [
-          { id: 'new-sketch', label: 'New Sketch', icon: bi('pencil-square'), hint: 'Create sketch on selected plane', size: 'large', selected: true, emphasized: true },
-          { id: 'import', label: 'Import', icon: bi('box-arrow-in-down'), hint: 'Load STEP / STL / DXF', size: 'small' },
-          { id: 'save', label: 'Save', icon: bi('floppy'), hint: 'Save project snapshot', size: 'small' }
+          { id: 'new-project', label: 'New Project', icon: bi('file-earmark-plus'), hint: 'Create a new project file', size: 'large', emphasized: true },
+          { id: 'open-project', label: 'Open', icon: bi('folder2-open'), hint: 'Open an existing project', size: 'small' },
+          { id: 'export-project', label: 'Export', icon: bi('box-arrow-up-right'), hint: 'Export geometry to exchange format', size: 'small' },
+          { id: 'save-project', label: 'Save', icon: bi('floppy'), hint: 'Save current project', size: 'small' },
+          { id: 'save-project-as', label: 'Save As', icon: bi('floppy2'), hint: 'Save project with a new name', size: 'small' }
         ]
       },
       {
-        id: 'draw',
-        label: 'Draw',
+        id: 'model',
+        label: 'Model',
         actions: [
-          { id: 'line', label: 'Line', icon: bi('slash-lg'), hint: '2-point line tool', size: 'large' },
-          { id: 'arc', label: 'Arc', icon: bi('circle'), hint: '3-point arc tool', size: 'small' },
-          { id: 'constraints', label: 'Constraints', icon: bi('link-45deg'), hint: 'Horizontal / tangent / equal', size: 'small' }
+          { id: 'create-extrude', label: 'Extrude', icon: bi('box'), hint: 'Create volume from profile', size: 'large', emphasized: true },
+          { id: 'create-revolve', label: 'Revolve', icon: bi('arrow-repeat'), hint: 'Revolve profile around axis', size: 'small' },
+          { id: 'create-loft', label: 'Loft', icon: bi('layers'), hint: 'Blend between profiles', size: 'small' }
         ]
       },
       {
-        id: 'create',
-        label: 'Create',
+        id: 'construction',
+        label: 'Construct',
         actions: [
-          { id: 'extrude', label: 'Extrude', icon: bi('box'), hint: 'Create volume from profile', size: 'large', selected: true, emphasized: true },
-          { id: 'revolve', label: 'Revolve', icon: bi('arrow-repeat'), hint: 'Revolve around axis', size: 'small' },
-          { id: 'loft', label: 'Loft', icon: bi('layers'), hint: 'Blend profiles', size: 'small' }
+          { id: 'create-sketch', label: 'Sketch', icon: bi('pencil-square'), hint: 'Start a new sketch', size: 'large' },
+          { id: 'create-plane', label: 'Plane', icon: bi('square'), hint: 'Create a reference plane', size: 'small' },
+          { id: 'create-axis', label: 'Axis', icon: bi('textarea-resize'), hint: 'Create a reference axis', size: 'small' }
         ]
       }
     ]
@@ -83,21 +85,45 @@ export const ribbonTabs: RibbonTab[] = [
     label: 'Sketch',
     groups: [
       {
-        id: 'construction',
-        label: 'Construction',
+        id: 'sketch-session',
+        label: 'Sketch',
         actions: [
-          { id: 'centerline', label: 'Centerline', icon: bi('dash-lg'), hint: 'Toggle construction style', size: 'large' },
-          { id: 'offset', label: 'Offset', icon: bi('arrows-move'), hint: 'Offset selected geometry', size: 'small' },
-          { id: 'mirror', label: 'Mirror', icon: bi('symmetry-horizontal'), hint: 'Mirror across axis', size: 'small' }
+          { id: 'sketch-apply', label: 'Apply', icon: bi('check2-circle'), hint: 'Apply sketch changes', size: 'large' },
+          { id: 'sketch-close', label: 'Close', icon: bi('x-circle'), hint: 'Close active sketch session', size: 'large' }
         ]
       },
       {
-        id: 'dimensions',
-        label: 'Dimensions',
+        id: 'sketch-create',
+        label: 'Create',
         actions: [
-          { id: 'smart-dim', label: 'Smart Dim', icon: bi('rulers'), hint: 'Add parametric dimensions', size: 'large', selected: true, emphasized: true },
-          { id: 'driven', label: 'Driven', icon: bi('123'), hint: 'Add reference dimension', size: 'small' },
-          { id: 'table', label: 'Table', icon: bi('table'), hint: 'Inspect parameters as table', size: 'small' }
+          { id: 'sketch-extrude', label: 'Extrude', icon: bi('box'), hint: 'Create an extrude from sketch', size: 'large' },
+          { id: 'sketch-revolve', label: 'Revolve', icon: bi('arrow-repeat'), hint: 'Create a revolve from sketch', size: 'small' },
+          { id: 'sketch-loft', label: 'Loft', icon: bi('layers'), hint: 'Create a loft from sketch', size: 'small' }
+        ]
+      },
+      {
+        id: 'draw',
+        label: 'Draw',
+        actions: [
+          { id: 'draw-line', label: 'Line', icon: bi('slash-lg'), hint: '2-point line tool', size: 'large', emphasized: true },
+          { id: 'draw-circle', label: 'Circle', icon: bi('circle'), hint: 'Center-point circle tool', size: 'small' },
+          { id: 'draw-arc', label: 'Arc', icon: bi('pie-chart'), hint: '3-point arc tool', size: 'small' },
+          { id: 'draw-center-rectangle', label: 'Center Rect', icon: bi('bounding-box'), hint: 'Rectangle from center', size: 'small' },
+          { id: 'draw-corner-rectangle', label: 'Corner Rect', icon: bi('square'), hint: 'Rectangle from corner', size: 'small' },
+          { id: 'draw-inscribed-polygon', label: 'Inscribed Poly', icon: bi('pentagon'), hint: 'Polygon inscribed in circle', size: 'small' },
+          { id: 'draw-circumscribed-polygon', label: 'Circumscribed Poly', icon: bi('hexagon'), hint: 'Polygon circumscribed about circle', size: 'small' }
+        ]
+      },
+      {
+        id: 'constraints',
+        label: 'Constraints',
+        actions: [
+          { id: 'constraint-incident', label: 'Incident', icon: bi('dot'), hint: 'Coincident / incident constraint', size: 'small' },
+          { id: 'constraint-perpendicular', label: 'Perpendicular', icon: bi('distribute-vertical'), hint: 'Perpendicular constraint', size: 'small' },
+          { id: 'constraint-parallel', label: 'Parallel', icon: bi('pause'), hint: 'Parallel constraint', size: 'small' },
+          { id: 'constraint-concentric', label: 'Concentric', icon: bi('bullseye'), hint: 'Concentric circles/arcs', size: 'small' },
+          { id: 'constraint-tangent', label: 'Tangent', icon: bi('bezier2'), hint: 'Tangent continuity constraint', size: 'small' },
+          { id: 'constraint-equal', label: 'Equal', icon: bi('equals'), hint: 'Equal length/radius constraint', size: 'small' }
         ]
       }
     ]
@@ -110,18 +136,21 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'camera',
         label: 'Camera',
         actions: [
-          { id: 'fit', label: 'Fit', icon: bi('arrows-fullscreen'), hint: 'Zoom to extents', size: 'large' },
-          { id: 'ortho', label: 'Ortho', icon: bi('bounding-box'), hint: 'Orthographic camera', size: 'small', selected: true, emphasized: true },
-          { id: 'perspective', label: 'Persp', icon: bi('camera'), hint: 'Perspective camera', size: 'small' }
+          { id: 'camera-fit', label: 'Fit', icon: bi('arrows-fullscreen'), hint: 'Fit model in view', size: 'large' },
+          { id: 'camera-orthographic', label: 'Orthographic', icon: bi('bounding-box'), hint: 'Use orthographic projection', size: 'small', emphasized: true },
+          { id: 'camera-perspective', label: 'Perspective', icon: bi('camera'), hint: 'Use perspective projection', size: 'small' },
+          { id: 'camera-zoom-in', label: 'Zoom In', icon: bi('zoom-in'), hint: 'Zoom camera in', size: 'small' },
+          { id: 'camera-zoom-out', label: 'Zoom Out', icon: bi('zoom-out'), hint: 'Zoom camera out', size: 'small' }
         ]
       },
       {
         id: 'display',
         label: 'Display',
         actions: [
-          { id: 'wireframe', label: 'Wire', icon: bi('grid-3x3'), hint: 'Wireframe display mode', size: 'large' },
-          { id: 'shaded', label: 'Shaded', icon: bi('eye'), hint: 'Shaded + edges mode', size: 'small' },
-          { id: 'section', label: 'Section', icon: bi('scissors'), hint: 'Section clipping plane', size: 'small' }
+          { id: 'display-wireframe', label: 'Wireframe', icon: bi('grid-3x3'), hint: 'Show wireframe mode', size: 'small' },
+          { id: 'display-shaded', label: 'Shaded', icon: bi('eye-fill'), hint: 'Show shaded mode', size: 'small' },
+          { id: 'display-shaded-edges', label: 'Shaded + Edges', icon: bi('bounding-box-circles'), hint: 'Show shaded mode with edges', size: 'small', emphasized: true },
+          { id: 'display-shaded-hidden-edges', label: 'Shaded + Hidden Edges', icon: bi('eye-slash'), hint: 'Show shaded mode with hidden edges', size: 'small' }
         ]
       }
     ]
