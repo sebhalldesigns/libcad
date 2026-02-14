@@ -1,6 +1,8 @@
 {
   "build": {
-    "frontendDist": "../dist"
+    "frontendDist": "../dist",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
   },
   "identifier": "org.libcad.democad",
   "productName": "democad",

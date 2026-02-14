@@ -40,7 +40,7 @@ endif()
 
 add_subdirectory(extern)
 
-if (LIBCAD_BUILD_DEMOCAD)
+if (LIBCAD_BUILD_DEMOCAD OR LIBCAD_BUILD_DEMOCAD_NATIVE)
     add_subdirectory(democad)
 endif()
 
