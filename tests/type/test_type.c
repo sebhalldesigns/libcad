@@ -341,7 +341,7 @@ void test_document_type(void)
     ASSERT(doc != NULL, "document_t created successfully");
     ASSERT(doc->parent.cls != NULL, "document_t has class pointer");
     ASSERT(doc->path == NULL, "document_t path initialized to NULL");
-    ASSERT(doc->children_count == 0, "document_t has no children");
+    ASSERT(document_get_child_count(doc) == 0, "document_t has no children");
 
     document_set_path(doc, "/test/path.cad");
     const char* path = document_get_path(doc);

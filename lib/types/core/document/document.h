@@ -38,6 +38,9 @@ typedef struct document_class_t document_class_t;
 /*
 ** document_t instance - inherits from object_t
 **
+** Represents a document file with a file path and save/load capability.
+** Children management is inherited from object_t.
+**
 ** IMPORTANT: First field MUST be parent (object_t parent)
 **            This enables safe upcasting: document_t* -> object_t*
 */
@@ -46,25 +49,18 @@ typedef struct document_t {
 
     /* document_t-specific instance data */
     char* path;
-
-    /* Children */
-    object_t** children;
-    size_t children_count;
-    size_t children_capacity;
 } document_t;
 
 /*
 ** document_t class - inherits from object_class_t
 **
-** Extends parent vtable with new virtual methods
+** Extends parent vtable with document-specific methods
 */
 typedef struct document_class_t {
     object_class_t parent_class;  /* Inherit parent vtable */
 
-    /* New virtual methods specific to document_t */
-    void (*add_child)(document_t* self, object_t* child);
-    void (*remove_child)(document_t* self, size_t index);
-    bool (*save)(document_t* self, const char* filepath);
+    /* Virtual methods specific to document_t */
+    bool (*save)(const document_t* self, const char* filepath);
 } document_class_t;
 
 /***************************************************************

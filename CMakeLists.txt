@@ -110,6 +110,11 @@ set(CAD_SRC
     lib/types/core/object/object.c
     lib/types/core/document/document.c
     lib/types/core/textfield/textfield.c
+    lib/types/core/plane/plane.c
+    lib/types/sketch/sketch/sketch.c
+    lib/types/sketch/line/line.c
+    lib/types/sketch/circle/circle.c
+    lib/types/sketch/rectangle/rectangle.c
     ${PLATFORM_SRC}
 )
 

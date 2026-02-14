@@ -55,9 +55,7 @@ static void document_class_init(document_class_t* cls)
     /* Set finalizer */
     cls->parent_class.parent_class.instance_finalize = (void(*)(void*))document_finalize;
 
-    /* Set up our new virtual methods */
-    cls->add_child = document_add_child;
-    cls->remove_child = document_remove_child;
+    /* Set up our virtual methods */
     cls->save = document_save;
 
     log_info("document_class_t initialized");
@@ -76,9 +74,6 @@ static void document_init(document_t* self)
 
     /* Initialize our fields */
     self->path = NULL;
-    self->children = NULL;
-    self->children_count = 0;
-    self->children_capacity = 0;
 }
 
 /***************************************************************
@@ -90,10 +85,7 @@ static void document_finalize(document_t* self)
     /* Clean up document-specific data */
     free(self->path);
 
-    /* Free children array (but not the children themselves - they're owned by caller) */
-    VECTOR_FREE(self->children);
-
-    /* Note: Parent finalization is called automatically */
+    /* Note: Parent finalization (including children cleanup) is called automatically */
 }
 
 /***************************************************************
@@ -115,33 +107,28 @@ const char* document_get_path(const document_t* self)
 
 /***************************************************************
 ** MARK: PUBLIC API - Child Management
+**
+** Note: These are convenience wrappers around inherited object_t methods
 ***************************************************************/
 
 void document_add_child(document_t* self, object_t* child)
 {
-    if (!self || !child) return;
-
-    VECTOR_PUSH(self->children, self->children_count, self->children_capacity, object_t*, child);
-    log_info("Added child to document (count now %zu)", self->children_count);
+    object_add_child((object_t*)self, child);
 }
 
 void document_remove_child(document_t* self, size_t index)
 {
-    if (!self || index >= self->children_count) return;
-
-    VECTOR_REMOVE(self->children, self->children_count, index);
-    log_info("Removed child from document (count now %zu)", self->children_count);
+    object_remove_child((object_t*)self, index);
 }
 
 object_t* document_get_child(const document_t* self, size_t index)
 {
-    if (!self) return NULL;
-    return VECTOR_GET(self->children, self->children_count, index);
+    return object_get_child((const object_t*)self, index);
 }
 
 size_t document_get_child_count(const document_t* self)
 {
-    return self ? self->children_count : 0;
+    return object_get_child_count((const object_t*)self);
 }
 
 /***************************************************************
@@ -250,14 +237,14 @@ void document_debug_print(document_t* self)
     log_info("document_t: name='%s', path='%s', children=%zu",
              name ? name : "(null)",
              self->path ? self->path : "(null)",
-             self->children_count);
+             object_get_child_count(DOCUMENT_AS_OBJECT(self)));
 }
 
 json_t* document_to_json(document_t* self)
 {
     if (!self) return json_null();
 
-    /* Start with parent's JSON */
+    /* Start with parent's JSON (includes children) */
     json_t* json = object_to_json(DOCUMENT_AS_OBJECT(self));
 
     /* Override type field */
@@ -267,14 +254,7 @@ json_t* document_to_json(document_t* self)
     json_object_set_new(json, "path",
                        self->path ? json_string(self->path) : json_null());
 
-    /* Add children */
-    json_t* children_array = json_array();
-    for (size_t i = 0; i < self->children_count; i++) {
-        /* Polymorphic call - each child serializes itself! */
-        json_t* child_json = OBJECT_TO_JSON(self->children[i]);
-        json_array_append_new(children_array, child_json);
-    }
-    json_object_set_new(json, "children", children_array);
+    /* Note: children already serialized by parent's to_json */
 
     return json;
 }

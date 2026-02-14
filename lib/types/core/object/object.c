@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include <util/log/log.h>
+#include <util/vector/vector.h>
 
 #include "object.h"
 
@@ -48,6 +49,8 @@ static void object_class_init(object_class_t* cls)
     /* Set up vtable - point to default implementations */
     cls->debug_print = object_debug_print;
     cls->to_json = object_to_json;
+    cls->add_child = object_add_child;
+    cls->remove_child = object_remove_child;
 
     /* Set finalizer */
     cls->parent_class.instance_finalize = (void(*)(void*))object_finalize;
@@ -67,6 +70,11 @@ static void object_init(object_t* self)
     /* Initialize instance data */
     self->name = NULL;
 
+    /* Initialize tree structure */
+    self->children = NULL;
+    self->children_count = 0;
+    self->children_capacity = 0;
+
     /* Note: No need to set self->cls - that's done automatically
        by type_instance_new() before this is called */
 }
@@ -83,6 +91,9 @@ static void object_finalize(object_t* self)
     /* Clean up instance data */
     free(self->name);
     self->name = NULL;
+
+    /* Free children array (but not the children themselves - caller owns them) */
+    VECTOR_FREE(self->children);
 }
 
 /***************************************************************
@@ -100,6 +111,35 @@ void object_set_name(object_t* self, const char* name)
 const char* object_get_name(const object_t* self)
 {
     return self ? self->name : NULL;
+}
+
+/***************************************************************
+** MARK: PUBLIC API - Tree Management
+***************************************************************/
+
+void object_add_child(object_t* self, object_t* child)
+{
+    if (!self || !child) return;
+
+    VECTOR_PUSH(self->children, self->children_count, self->children_capacity, object_t*, child);
+}
+
+void object_remove_child(object_t* self, size_t index)
+{
+    if (!self || index >= self->children_count) return;
+
+    VECTOR_REMOVE(self->children, self->children_count, index);
+}
+
+object_t* object_get_child(const object_t* self, size_t index)
+{
+    if (!self) return NULL;
+    return VECTOR_GET(self->children, self->children_count, index);
+}
+
+size_t object_get_child_count(const object_t* self)
+{
+    return self ? self->children_count : 0;
 }
 
 /***************************************************************
@@ -129,6 +169,15 @@ json_t* object_to_json(object_t* self)
     /* Add properties */
     json_object_set_new(json, "name",
                        self->name ? json_string(self->name) : json_null());
+
+    /* Add children */
+    json_t* children_array = json_array();
+    for (size_t i = 0; i < self->children_count; i++) {
+        /* Polymorphic call - each child serializes itself */
+        json_t* child_json = OBJECT_TO_JSON(self->children[i]);
+        json_array_append_new(children_array, child_json);
+    }
+    json_object_set_new(json, "children", children_array);
 
     return json;
 }
