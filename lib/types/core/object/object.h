@@ -37,7 +37,10 @@ typedef struct object_class_t object_class_t;
 ***************************************************************/
 
 /*
-** object_t instance structure
+** object_t instance structure - base tree node type
+**
+** Every object can have children, forming a document tree.
+** This enables uniform tree traversal, serialization, and hierarchy management.
 **
 ** IMPORTANT: First field MUST be the class pointer (cls)
 **            This is automatically set by type_instance_new()
@@ -47,6 +50,11 @@ typedef struct object_t {
 
     /* Instance data */
     char* name;
+
+    /* Tree structure - every object can have children */
+    object_t** children;
+    size_t children_count;
+    size_t children_capacity;
 } object_t;
 
 /*
@@ -62,6 +70,10 @@ typedef struct object_class_t {
     /* Virtual methods - can be overridden by subclasses */
     void (*debug_print)(object_t* self);
     json_t* (*to_json)(object_t* self);
+
+    /* Tree management virtual methods */
+    void (*add_child)(object_t* self, object_t* child);
+    void (*remove_child)(object_t* self, size_t index);
 } object_class_t;
 
 /***************************************************************
@@ -85,12 +97,32 @@ object_t* object_new(void);
 void object_free(object_t* self);
 
 /***************************************************************
-** MARK: PUBLIC API
+** MARK: PUBLIC API - Properties
 ***************************************************************/
 
 /* Property accessors */
 void object_set_name(object_t* self, const char* name);
 const char* object_get_name(const object_t* self);
+
+/***************************************************************
+** MARK: PUBLIC API - Tree Management
+***************************************************************/
+
+/* Add a child object to this object's children */
+void object_add_child(object_t* self, object_t* child);
+
+/* Remove child at index */
+void object_remove_child(object_t* self, size_t index);
+
+/* Get child at index */
+object_t* object_get_child(const object_t* self, size_t index);
+
+/* Get number of children */
+size_t object_get_child_count(const object_t* self);
+
+/***************************************************************
+** MARK: PUBLIC API - Methods
+***************************************************************/
 
 /* Methods (these are the default implementations) */
 void object_debug_print(object_t* self);
@@ -111,6 +143,12 @@ json_t* object_to_json(object_t* self);
 
 #define OBJECT_TO_JSON(obj) \
     ((object_class_t*)LIBCAD_GET_CLASS(obj))->to_json((object_t*)(obj))
+
+#define OBJECT_ADD_CHILD(obj, child) \
+    ((object_class_t*)LIBCAD_GET_CLASS(obj))->add_child((object_t*)(obj), (object_t*)(child))
+
+#define OBJECT_REMOVE_CHILD(obj, index) \
+    ((object_class_t*)LIBCAD_GET_CLASS(obj))->remove_child((object_t*)(obj), (index))
 
 #ifdef __cplusplus
 }

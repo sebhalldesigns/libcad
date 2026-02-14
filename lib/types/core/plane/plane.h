@@ -40,7 +40,8 @@ typedef struct plane_class_t plane_class_t;
 ** plane_t instance - represents a 2D construction plane in 3D space
 **
 ** A plane is defined by an origin point and a normal vector.
-** It can contain child objects (typically sketch_t instances).
+** It can contain child objects (typically sketch instances) via inherited
+** children management from object_t.
 **
 ** IMPORTANT: First field MUST be parent (object_t parent)
 **            This enables safe upcasting: plane_t* -> object_t*
@@ -58,11 +59,6 @@ typedef struct plane_t {
     vec4 color;       /* RGBA color for rendering the plane */
     bool visible;     /* Whether the plane should be rendered */
     float grid_size;  /* Size of grid squares for visualization */
-
-    /* Children (typically sketches) */
-    object_t** children;
-    size_t children_count;
-    size_t children_capacity;
 } plane_t;
 
 /*
@@ -74,8 +70,6 @@ typedef struct plane_class_t {
     object_class_t parent_class;  /* Inherit parent vtable */
 
     /* Virtual methods specific to plane_t */
-    void (*add_child)(plane_t* self, object_t* child);
-    void (*remove_child)(plane_t* self, size_t index);
     void (*set_transform)(plane_t* self, vec3 origin, vec3 normal);
     void (*get_transform_matrix)(const plane_t* self, mat4 out_matrix);
 } plane_class_t;
@@ -160,22 +154,6 @@ void plane_world_to_local(const plane_t* self, vec3 world_3d, vec2 out_local);
 **   grid_size - Size of grid squares for visualization
 */
 void plane_set_display(plane_t* self, vec4 color, bool visible, float grid_size);
-
-/***************************************************************
-** MARK: PUBLIC API - Children Management
-***************************************************************/
-
-/* Add a child object (typically a sketch) */
-void plane_add_child(plane_t* self, object_t* child);
-
-/* Remove child at index */
-void plane_remove_child(plane_t* self, size_t index);
-
-/* Get child at index */
-object_t* plane_get_child(const plane_t* self, size_t index);
-
-/* Get number of children */
-size_t plane_get_child_count(const plane_t* self);
 
 /***************************************************************
 ** MARK: OVERRIDDEN METHODS

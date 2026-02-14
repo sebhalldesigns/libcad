@@ -3,7 +3,7 @@
 ** libcad Header File
 **
 ** File         :  sketch.h
-** Module       :  sketch
+** Module       :  sketch/sketch
 ** Author       :  SH
 ** Created      :  2026-02-14 (YYYY-MM-DD)
 ** License      :  MIT
@@ -40,6 +40,7 @@ typedef struct sketch_class_t sketch_class_t;
 **
 ** A sketch contains 2D geometric primitives (lines, circles, etc.)
 ** and is typically attached to a plane.
+** Children are managed via inherited object_t tree structure.
 **
 ** IMPORTANT: First field MUST be parent (object_t parent)
 */
@@ -48,11 +49,6 @@ typedef struct sketch_t {
 
     /* Sketch state */
     bool active;      /* Whether this sketch is currently being edited */
-
-    /* Children (sketch primitives: lines, circles, etc.) */
-    object_t** children;
-    size_t children_count;
-    size_t children_capacity;
 } sketch_t;
 
 /*
@@ -62,8 +58,7 @@ typedef struct sketch_class_t {
     object_class_t parent_class;  /* Inherit parent vtable */
 
     /* Virtual methods specific to sketch_t */
-    void (*add_entity)(sketch_t* self, object_t* entity);
-    void (*remove_entity)(sketch_t* self, size_t index);
+    /* (using inherited add_child/remove_child for entities) */
 } sketch_class_t;
 
 /***************************************************************
@@ -83,18 +78,6 @@ void sketch_free(sketch_t* self);
 /***************************************************************
 ** MARK: PUBLIC API
 ***************************************************************/
-
-/* Add a sketch entity (line, circle, etc.) */
-void sketch_add_entity(sketch_t* self, object_t* entity);
-
-/* Remove entity at index */
-void sketch_remove_entity(sketch_t* self, size_t index);
-
-/* Get entity at index */
-object_t* sketch_get_entity(const sketch_t* self, size_t index);
-
-/* Get number of entities */
-size_t sketch_get_entity_count(const sketch_t* self);
 
 /* Set whether sketch is being actively edited */
 void sketch_set_active(sketch_t* self, bool active);
