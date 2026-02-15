@@ -40,6 +40,7 @@ typedef int32_t uniform_t;
 typedef uint32_t vertex_array_t;
 typedef uint32_t buffer_t;
 typedef uint32_t texture_t;
+typedef uint32_t framebuffer_t;
 
 typedef enum
 {
@@ -93,6 +94,14 @@ void gpu_draw_instances(
 void gpu_set_blending(bool blending);
 void gpu_set_depth_test(bool depth_test);
 void gpu_set_depth_write(bool depth_write);
+
+/* Framebuffer operations */
+framebuffer_t gpu_create_framebuffer(void);
+void gpu_bind_framebuffer(framebuffer_t fbo);
+texture_t gpu_create_texture_2d(int width, int height, bool rgba, bool depth);
+void gpu_framebuffer_attach_texture(framebuffer_t fbo, texture_t texture, bool depth);
+bool gpu_check_framebuffer_complete(framebuffer_t fbo);
+void gpu_read_pixels(int x, int y, int width, int height, void *data);
 
 #ifdef __cplusplus
 }

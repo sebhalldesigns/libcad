@@ -101,6 +101,10 @@ bool vector_init(void);
 void vector_render(int width, int height, mat4 projection);
 void vector_set_dpi_scale(float scale);
 
+/* picking */
+uint32_t vector_pick_entity(int screen_x, int screen_y, int width, int height, mat4 projection);
+void vector_set_hovered_entity(uint32_t entity_id);
+
 /* helper functions for encoding parameters */
 float vector_build_dash(float period, float ratio);
 float vector_build_fill(vector_fill_type_t fill_type, float proportion);

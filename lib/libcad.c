@@ -171,7 +171,7 @@ void cad_set_modifier_state(int modifier, bool state)
 
 void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 {
-    printf("CAD set viewport: %d x %d\n", vpw, vph);
+    //printf("CAD set viewport: %d x %d\n", vpw, vph);
 
     viewport_width = vpw;
     viewport_height = vph;
@@ -186,7 +186,7 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
 
 void cad_set_dpi_scale(float scale)
 {
-    printf("CAD set dpi scale: %.2f\n", scale);
+    //printf("CAD set dpi scale: %.2f\n", scale);
 
     vector_set_dpi_scale(scale);
 }
@@ -229,8 +229,33 @@ void cad_render_viewport()
 
 void cad_init_viewport()
 {
-   
 
+
+}
+
+uint32_t cad_pick_entity(int screen_x, int screen_y)
+{
+    if (!current_camera) {
+        printf("cad_pick_entity: No camera\n");
+        return 0xFFFFFFFF;
+    }
+
+    /* Picking uses the same view-projection as rendering */
+    mat4 view_projection;
+    camera_get_view_projection_matrix(current_camera, view_projection);
+
+    /* Call vector renderer picking */
+    uint32_t entity_id = vector_pick_entity(screen_x, screen_y,
+                                           viewport_width, viewport_height,
+                                           view_projection);
+
+    printf("cad_pick_entity: (%d,%d) -> 0x%08X\n", screen_x, screen_y, entity_id);
+    return entity_id;
+}
+
+void cad_set_hovered_entity(uint32_t entity_id)
+{
+    vector_set_hovered_entity(entity_id);
 }
 
 void cad_axis_delta(int axis, float delta)

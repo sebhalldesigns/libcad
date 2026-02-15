@@ -70,6 +70,9 @@ EXPORT void         cad_set_dpi_scale(float scale);
 EXPORT void         cad_render_viewport();
 EXPORT void         cad_init_viewport();
 
+EXPORT uint32_t     cad_pick_entity(int screen_x, int screen_y);
+EXPORT void         cad_set_hovered_entity(uint32_t entity_id);
+
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();
 EXPORT void         cad_set_cursor_button_state(int button, bool pressed);

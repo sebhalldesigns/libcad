@@ -216,10 +216,14 @@ set(CAD_INCLUDE_DIRS
 set(GL_SHADERS
     resources/shaders/vector/line_core_vs.glsl
     resources/shaders/vector/line_core_fs.glsl
+    resources/shaders/vector/line_pick_core_vs.glsl
+    resources/shaders/vector/line_pick_core_fs.glsl
     resources/shaders/vector/axis_core_vs.glsl
     resources/shaders/vector/axis_core_fs.glsl
     resources/shaders/vector/shape_core_vs.glsl
     resources/shaders/vector/shape_core_fs.glsl
+    resources/shaders/vector/shape_pick_core_vs.glsl
+    resources/shaders/vector/shape_pick_core_fs.glsl
     resources/shaders/vector/glyph_core_vs.glsl
     resources/shaders/vector/glyph_core_fs.glsl
 )
@@ -227,10 +231,14 @@ set(GL_SHADERS
 set(GLES_SHADERS
     resources/shaders/vector/line_es_vs.glsl
     resources/shaders/vector/line_es_fs.glsl
+    resources/shaders/vector/line_pick_es_vs.glsl
+    resources/shaders/vector/line_pick_es_fs.glsl
     resources/shaders/vector/axis_es_vs.glsl
     resources/shaders/vector/axis_es_fs.glsl
     resources/shaders/vector/shape_es_vs.glsl
     resources/shaders/vector/shape_es_fs.glsl
+    resources/shaders/vector/shape_pick_es_vs.glsl
+    resources/shaders/vector/shape_pick_es_fs.glsl
     resources/shaders/vector/glyph_es_vs.glsl
     resources/shaders/vector/glyph_es_fs.glsl
 )

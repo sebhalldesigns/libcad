@@ -116,6 +116,23 @@
     };
   };
 
+  const getCanvasPixelPoint = (clientX: number, clientY: number): { x: number; y: number } => {
+    if (!cachedRect || !canvasEl) return { x: 0, y: 0 };
+
+    const localX = clientX - cachedRect.left;
+    const localY = clientY - cachedRect.top;
+    const scaleX = canvasEl.width / Math.max(1, cachedRect.width);
+    const scaleY = canvasEl.height / Math.max(1, cachedRect.height);
+
+    const x = Math.round(localX * scaleX);
+    const y = Math.round(localY * scaleY);
+
+    return {
+      x: Math.max(0, Math.min(canvasEl.width - 1, x)),
+      y: Math.max(0, Math.min(canvasEl.height - 1, y))
+    };
+  };
+
   const applyTouchUpdate = (): void => {
     if (!pendingTouchData || !cadModule) return;
 
@@ -157,11 +174,37 @@
     }
   };
 
+  // Hover picking state
+  let hoverScheduled = false;
+  let pendingHoverX = 0;
+  let pendingHoverY = 0;
+
+  const applyHoverPick = (): void => {
+    hoverScheduled = false;
+    if (!cadModule?._cad_pick_entity || !cadModule?._cad_set_hovered_entity) return;
+
+    const entityId = cadModule._cad_pick_entity(pendingHoverX, pendingHoverY);
+    cadModule._cad_set_hovered_entity(entityId);
+  };
+
+  const scheduleHoverPick = (x: number, y: number): void => {
+    pendingHoverX = x;
+    pendingHoverY = y;
+    if (!hoverScheduled) {
+      hoverScheduled = true;
+      requestAnimationFrame(applyHoverPick);
+    }
+  };
+
   // Camera interaction handlers
   const handleMouseMove = (event: MouseEvent): void => {
     if (!cadModule?._cad_set_cursor_pos || !canvasEl) return;
-    const { x, y } = getCanvasPoint(event.clientX, event.clientY);
-    cadModule._cad_set_cursor_pos(x, y);
+    const cssPoint = getCanvasPoint(event.clientX, event.clientY);
+    const pixelPoint = getCanvasPixelPoint(event.clientX, event.clientY);
+    cadModule._cad_set_cursor_pos(cssPoint.x, cssPoint.y);
+
+    // Schedule hover picking (throttled via RAF)
+    scheduleHoverPick(pixelPoint.x, pixelPoint.y);
   };
 
   const handleMouseDown = (event: MouseEvent): void => {

@@ -51,11 +51,24 @@ typedef struct
     size_t capacity; /* allocated size of raw data */
 
     size_t instance_size; /* size of each instance in bytes */
-    
+
     uint32_t *indices;
     uint32_t *reverse_indices;
     size_t max_handles; /* number of max_handles allocated */
 } instance_arena_t;
+
+/* Extended instance structures for picking (includes entity_id) */
+typedef struct
+{
+    vector_line_instance_t base;
+    float entity_id;
+} vector_line_pick_instance_t;
+
+typedef struct
+{
+    vector_shape_instance_t base;
+    float entity_id;
+} vector_shape_pick_instance_t;
 
 /***************************************************************
 ** MARK: STATIC VARIABLES
@@ -128,6 +141,9 @@ static instance_arena_t glyph_arena;
 /* DPI scale for line thickness */
 static float dpi_scale = 1.0f;
 
+/* Hover state */
+static uint32_t hovered_entity_id = VECTOR_INVALID_INSTANCE;
+
 /* LINE SHADER */
 static shader_t line_shader;
 static uniform_t line_shader_uniform_projection;
@@ -161,6 +177,52 @@ static buffer_t glyph_quad_buffer;
 static buffer_t glyph_instance_buffer;
 static texture_t glyph_atlas_texture;  /* TODO: texture_t typedef needed in gpu.h */
 
+/* PICKING INFRASTRUCTURE */
+static bool picking_initialized = false;
+
+/* Picking shaders */
+#ifdef USE_GLES
+extern uint8_t resources_shaders_vector_line_pick_es_vs_glsl[];
+extern uint32_t resources_shaders_vector_line_pick_es_vs_glsl_size;
+extern uint8_t resources_shaders_vector_line_pick_es_fs_glsl[];
+extern uint32_t resources_shaders_vector_line_pick_es_fs_glsl_size;
+
+extern uint8_t resources_shaders_vector_shape_pick_es_vs_glsl[];
+extern uint32_t resources_shaders_vector_shape_pick_es_vs_glsl_size;
+extern uint8_t resources_shaders_vector_shape_pick_es_fs_glsl[];
+extern uint32_t resources_shaders_vector_shape_pick_es_fs_glsl_size;
+#else
+extern uint8_t resources_shaders_vector_line_pick_core_vs_glsl[];
+extern uint32_t resources_shaders_vector_line_pick_core_vs_glsl_size;
+extern uint8_t resources_shaders_vector_line_pick_core_fs_glsl[];
+extern uint32_t resources_shaders_vector_line_pick_core_fs_glsl_size;
+
+extern uint8_t resources_shaders_vector_shape_pick_core_vs_glsl[];
+extern uint32_t resources_shaders_vector_shape_pick_core_vs_glsl_size;
+extern uint8_t resources_shaders_vector_shape_pick_core_fs_glsl[];
+extern uint32_t resources_shaders_vector_shape_pick_core_fs_glsl_size;
+#endif
+
+static shader_t line_pick_shader;
+static uniform_t line_pick_shader_uniform_projection;
+static uniform_t line_pick_shader_uniform_viewport;
+static vertex_array_t line_pick_vertex_array;
+static buffer_t line_pick_quad_buffer;
+static buffer_t line_pick_instance_buffer;
+
+static shader_t shape_pick_shader;
+static uniform_t shape_pick_shader_uniform_projection;
+static uniform_t shape_pick_shader_uniform_viewport;
+static vertex_array_t shape_pick_vertex_array;
+static buffer_t shape_pick_quad_buffer;
+static buffer_t shape_pick_instance_buffer;
+
+/* Picking framebuffer */
+static framebuffer_t pick_framebuffer;
+static texture_t pick_texture;
+static texture_t pick_depth_texture;
+static int pick_fbo_width = 0;
+static int pick_fbo_height = 0;
 
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
@@ -185,6 +247,8 @@ typedef struct
 static int compare_shape_depth_desc(const void *a, const void *b);
 static void scale_line_stroke_widths(const vector_line_instance_t *src, vector_line_instance_t *dst, size_t count, float scale);
 static void scale_shape_stroke_widths(const vector_shape_instance_t *src, vector_shape_instance_t *dst, size_t count, float scale);
+static void apply_line_hover(vector_line_instance_t *instances, size_t count, uint32_t hover_id, uint32_t type_bits);
+static void apply_shape_hover(vector_shape_instance_t *instances, size_t count, uint32_t hover_id);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -438,14 +502,374 @@ bool vector_init()
 void vector_set_dpi_scale(float scale)
 {
     dpi_scale = fmaxf(scale, 0.1f); /* Clamp to minimum 0.1 */
-    printf("vector_set_dpi_scale: scale=%.2f, dpi_scale=%.2f\n", scale, dpi_scale);
+    //printf("vector_set_dpi_scale: scale=%.2f, dpi_scale=%.2f\n", scale, dpi_scale);
+}
+
+void vector_set_hovered_entity(uint32_t entity_id)
+{
+    hovered_entity_id = entity_id;
+}
+
+/***************************************************************
+** MARK: PICKING INITIALIZATION
+***************************************************************/
+
+static bool vector_init_picking(void)
+{
+    if (picking_initialized) {
+        return true;
+    }
+
+    /* Compile picking shaders */
+    if (!gpu_compile_shader(
+#ifdef USE_GLES
+        (const char*)resources_shaders_vector_line_pick_es_vs_glsl,
+        resources_shaders_vector_line_pick_es_vs_glsl_size,
+        (const char*)resources_shaders_vector_line_pick_es_fs_glsl,
+        resources_shaders_vector_line_pick_es_fs_glsl_size,
+#else
+        (const char*)resources_shaders_vector_line_pick_core_vs_glsl,
+        resources_shaders_vector_line_pick_core_vs_glsl_size,
+        (const char*)resources_shaders_vector_line_pick_core_fs_glsl,
+        resources_shaders_vector_line_pick_core_fs_glsl_size,
+#endif
+        &line_pick_shader))
+    {
+        log_error("Failed to compile line picking shader");
+        return false;
+    }
+
+    if (!gpu_compile_shader(
+#ifdef USE_GLES
+        (const char*)resources_shaders_vector_shape_pick_es_vs_glsl,
+        resources_shaders_vector_shape_pick_es_vs_glsl_size,
+        (const char*)resources_shaders_vector_shape_pick_es_fs_glsl,
+        resources_shaders_vector_shape_pick_es_fs_glsl_size,
+#else
+        (const char*)resources_shaders_vector_shape_pick_core_vs_glsl,
+        resources_shaders_vector_shape_pick_core_vs_glsl_size,
+        (const char*)resources_shaders_vector_shape_pick_core_fs_glsl,
+        resources_shaders_vector_shape_pick_core_fs_glsl_size,
+#endif
+        &shape_pick_shader))
+    {
+        log_error("Failed to compile shape picking shader");
+        return false;
+    }
+
+    /* Get uniforms */
+    gpu_get_shader_uniform(line_pick_shader, "projection", &line_pick_shader_uniform_projection);
+    gpu_get_shader_uniform(line_pick_shader, "viewport", &line_pick_shader_uniform_viewport);
+    gpu_get_shader_uniform(shape_pick_shader, "projection", &shape_pick_shader_uniform_projection);
+    gpu_get_shader_uniform(shape_pick_shader, "viewport", &shape_pick_shader_uniform_viewport);
+
+    /* Set up line picking vertex array */
+    line_pick_vertex_array = gpu_create_vertex_array();
+    gpu_bind_vertex_array(line_pick_vertex_array);
+
+    line_pick_quad_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(line_pick_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
+    gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
+
+    line_pick_instance_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(line_pick_instance_buffer, NULL, 0, true);
+
+    /* Line pick instance attributes */
+    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_pick_instance_t), offsetof(vector_line_pick_instance_t, base.start), 1);
+    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_pick_instance_t), offsetof(vector_line_pick_instance_t, base.end), 1);
+    gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(vector_line_pick_instance_t), offsetof(vector_line_pick_instance_t, base.color), 1);
+    gpu_enable_vertex_attribute(4, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_pick_instance_t), offsetof(vector_line_pick_instance_t, base.stroke_width), 1);
+    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_pick_instance_t), offsetof(vector_line_pick_instance_t, base.dash), 1);
+    gpu_enable_vertex_attribute(6, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_pick_instance_t), offsetof(vector_line_pick_instance_t, entity_id), 1);
+
+    gpu_bind_vertex_array(0);
+
+    /* Set up shape picking vertex array */
+    shape_pick_vertex_array = gpu_create_vertex_array();
+    gpu_bind_vertex_array(shape_pick_vertex_array);
+
+    shape_pick_quad_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(shape_pick_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
+    gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
+
+    shape_pick_instance_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(shape_pick_instance_buffer, NULL, 0, true);
+
+    /* Shape pick instance attributes */
+    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.center), 1);
+    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.normal), 1);
+    gpu_enable_vertex_attribute(3, 2, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.size), 1);
+    gpu_enable_vertex_attribute(4, 4, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.color), 1);
+    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.rotation), 1);
+    gpu_enable_vertex_attribute(6, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.sides), 1);
+    gpu_enable_vertex_attribute(7, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.start_angle), 1);
+    gpu_enable_vertex_attribute(8, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.end_angle), 1);
+    gpu_enable_vertex_attribute(9, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.fill), 1);
+    gpu_enable_vertex_attribute(10, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.stroke_width), 1);
+    gpu_enable_vertex_attribute(11, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.corner_radius), 1);
+    gpu_enable_vertex_attribute(12, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, base.dash), 1);
+    gpu_enable_vertex_attribute(13, 1, GPU_TYPE_FLOAT, false, sizeof(vector_shape_pick_instance_t), offsetof(vector_shape_pick_instance_t, entity_id), 1);
+
+    gpu_bind_vertex_array(0);
+
+    picking_initialized = true;
+    log_info("Picking infrastructure initialized");
+    return true;
+}
+
+static void vector_ensure_pick_framebuffer(int width, int height)
+{
+    /* Resize framebuffer if needed */
+    if (pick_fbo_width != width || pick_fbo_height != height) {
+        if (pick_framebuffer != 0) {
+            /* TODO: Add cleanup functions to GPU API */
+        }
+
+        pick_framebuffer = gpu_create_framebuffer();
+        pick_texture = gpu_create_texture_2d(width, height, true, false);
+        pick_depth_texture = gpu_create_texture_2d(width, height, false, true);
+
+        gpu_bind_framebuffer(pick_framebuffer);
+        gpu_framebuffer_attach_texture(pick_framebuffer, pick_texture, false);
+        gpu_framebuffer_attach_texture(pick_framebuffer, pick_depth_texture, true);
+
+        if (!gpu_check_framebuffer_complete(pick_framebuffer)) {
+            printf("ERROR: Picking framebuffer not complete!\n");
+            log_error("Picking framebuffer not complete");
+            pick_framebuffer = 0;
+            return;
+        }
+
+        gpu_bind_framebuffer(0);
+        pick_fbo_width = width;
+        pick_fbo_height = height;
+
+        printf("Created picking framebuffer: %dx%d\n", width, height);
+        log_info("Created picking framebuffer: %dx%d", width, height);
+    }
+}
+
+/***************************************************************
+** MARK: PICKING IMPLEMENTATION
+***************************************************************/
+
+uint32_t vector_pick_entity(int screen_x, int screen_y, int width, int height, mat4 projection)
+{
+    /* Lazy initialize picking */
+    if (!picking_initialized) {
+        if (!vector_init_picking()) {
+            printf("Failed to initialize picking\n");
+            return VECTOR_INVALID_INSTANCE;
+        }
+        printf("Picking initialized successfully\n");
+    }
+
+    /* Ensure framebuffer is ready */
+    vector_ensure_pick_framebuffer(width, height);
+    if (pick_framebuffer == 0) {
+        printf("Picking framebuffer not ready\n");
+        return VECTOR_INVALID_INSTANCE;
+    }
+
+    /* Bind picking framebuffer */
+    gpu_bind_framebuffer(pick_framebuffer);
+    gpu_set_viewport(width, height);
+
+    /* Clear to background (ID 0) */
+    vec4 clear_color = {0.0f, 0.0f, 0.0f, 0.0f};
+    gpu_clear_color_buffer(clear_color);
+    gpu_clear_depth_buffer();
+
+    gpu_set_blending(false);
+    gpu_set_depth_test(true);
+    gpu_set_depth_write(true);
+
+    vec2 viewport = {(float)width, (float)height};
+
+    size_t shape_count = instance_arena_count(&shape_arena);
+    size_t line_count = instance_arena_count(&line_arena);
+    size_t axis_count = instance_arena_count(&axis_arena);
+    printf("Pick pass: shapes=%zu, lines=%zu, axes=%zu\n", shape_count, line_count, axis_count);
+
+    /* Pass 1: render lines/axes only (explicit priority over shapes) */
+    if (line_count > 0) {
+        vector_line_instance_t *line_data = (vector_line_instance_t *)instance_arena_data(&line_arena);
+        vector_line_pick_instance_t *pick_lines = malloc(line_count * sizeof(vector_line_pick_instance_t));
+
+        if (pick_lines) {
+            for (size_t i = 0; i < line_count; i++) {
+                pick_lines[i].base = line_data[i];
+                /* Entity ID encoding: type (0x0) in upper 4 bits, instance index in lower 28 bits */
+                union { uint32_t u; float f; } id_converter;
+                id_converter.u = 0x00000000 | (uint32_t)i;
+                pick_lines[i].entity_id = id_converter.f;
+            }
+
+            gpu_use_shader(line_pick_shader);
+            gpu_set_uniform_mat4(line_pick_shader_uniform_projection, projection);
+            gpu_set_uniform_vec2(line_pick_shader_uniform_viewport, viewport);
+
+            gpu_bind_vertex_array(line_pick_vertex_array);
+            gpu_upload_array_buffer_data(line_pick_instance_buffer,
+                                         pick_lines,
+                                         line_count * sizeof(vector_line_pick_instance_t),
+                                         true);
+            gpu_draw_instances(line_pick_vertex_array, 0, 4, line_count);
+            gpu_bind_vertex_array(0);
+
+            free(pick_lines);
+        }
+    }
+
+    if (axis_count > 0) {
+        vector_line_instance_t *axis_data = (vector_line_instance_t *)instance_arena_data(&axis_arena);
+        vector_line_pick_instance_t *pick_axes = malloc(axis_count * sizeof(vector_line_pick_instance_t));
+
+        if (pick_axes) {
+            for (size_t i = 0; i < axis_count; i++) {
+                pick_axes[i].base = axis_data[i];
+                /* Entity ID encoding: type (0x1) in upper 4 bits, instance index in lower 28 bits */
+                union { uint32_t u; float f; } id_converter;
+                id_converter.u = 0x10000000 | (uint32_t)i;
+                pick_axes[i].entity_id = id_converter.f;
+            }
+
+            gpu_use_shader(line_pick_shader);
+            gpu_set_uniform_mat4(line_pick_shader_uniform_projection, projection);
+            gpu_set_uniform_vec2(line_pick_shader_uniform_viewport, viewport);
+
+            gpu_bind_vertex_array(line_pick_vertex_array);
+            gpu_upload_array_buffer_data(line_pick_instance_buffer,
+                                         pick_axes,
+                                         axis_count * sizeof(vector_line_pick_instance_t),
+                                         true);
+            gpu_draw_instances(line_pick_vertex_array, 0, 4, axis_count);
+            gpu_bind_vertex_array(0);
+
+            free(pick_axes);
+        }
+    }
+
+    /* Read priority pixel (lines/axes) before rendering any shapes */
+    int gl_y = height - screen_y - 1;
+    uint8_t pixel[4] = {0, 0, 0, 0};
+    uint32_t priority_entity_id = 0;
+    int priority_sample_x = screen_x;
+    int priority_sample_y = gl_y;
+
+    /* Sample center first, then 1px neighborhood to avoid one-sided misses */
+    for (int radius = 0; radius <= 1 && priority_entity_id == 0; radius++) {
+        for (int dy = -radius; dy <= radius && priority_entity_id == 0; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                if (radius > 0 && abs(dx) != radius && abs(dy) != radius) {
+                    continue;
+                }
+
+                int sample_x = screen_x + dx;
+                int sample_y = gl_y + dy;
+                if (sample_x < 0 || sample_x >= width || sample_y < 0 || sample_y >= height) {
+                    continue;
+                }
+
+                gpu_read_pixels(sample_x, sample_y, 1, 1, pixel);
+                uint32_t sample_id = ((uint32_t)pixel[0] << 0) |
+                                     ((uint32_t)pixel[1] << 8) |
+                                     ((uint32_t)pixel[2] << 16) |
+                                     ((uint32_t)pixel[3] << 24);
+                if (sample_id != 0) {
+                    priority_entity_id = sample_id;
+                    priority_sample_x = sample_x;
+                    priority_sample_y = sample_y;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (priority_entity_id != 0) {
+        gpu_bind_framebuffer(0);
+        printf("Picked priority line/axis (%d,%d): RGBA=(%u,%u,%u,%u) -> ID=0x%08X\n",
+               priority_sample_x, height - priority_sample_y - 1,
+               pixel[0], pixel[1], pixel[2], pixel[3], priority_entity_id);
+        return priority_entity_id;
+    }
+
+    /* Pass 2: clear and render shapes only */
+    gpu_clear_color_buffer(clear_color);
+    gpu_clear_depth_buffer();
+
+    if (shape_count > 0) {
+        vector_shape_instance_t *shape_data = (vector_shape_instance_t *)instance_arena_data(&shape_arena);
+        vector_shape_pick_instance_t *pick_shapes = malloc(shape_count * sizeof(vector_shape_pick_instance_t));
+
+        if (pick_shapes) {
+            /* Build picking instances with entity IDs */
+            for (size_t i = 0; i < shape_count; i++) {
+                pick_shapes[i].base = shape_data[i];
+                /* Entity ID encoding: type (0x2) in upper 4 bits, instance index in lower 28 bits */
+                /* Use union to preserve bit pattern when converting uint to float */
+                union { uint32_t u; float f; } id_converter;
+                id_converter.u = 0x20000000 | (uint32_t)i;
+                pick_shapes[i].entity_id = id_converter.f;
+            }
+
+            union { uint32_t u; float f; } first_id;
+            first_id.f = pick_shapes[0].entity_id;
+            printf("Rendering %zu shapes for picking, first ID=0x%08X\n",
+                   shape_count, first_id.u);
+
+            gpu_use_shader(shape_pick_shader);
+            gpu_set_uniform_mat4(shape_pick_shader_uniform_projection, projection);
+            gpu_set_uniform_vec2(shape_pick_shader_uniform_viewport, viewport);
+
+            gpu_bind_vertex_array(shape_pick_vertex_array);
+            gpu_upload_array_buffer_data(shape_pick_instance_buffer,
+                                         pick_shapes,
+                                         shape_count * sizeof(vector_shape_pick_instance_t),
+                                         true);
+            gpu_draw_instances(shape_pick_vertex_array, 0, 4, shape_count);
+            gpu_bind_vertex_array(0);
+
+            free(pick_shapes);
+        }
+    }
+
+    /* Debug: Read center pixel to check if anything rendered in shape pass */
+    uint8_t center_pixel[4] = {0, 0, 0, 0};
+    gpu_read_pixels(width/2, height/2, 1, 1, center_pixel);
+    uint32_t center_id = ((uint32_t)center_pixel[0] << 0) |
+                         ((uint32_t)center_pixel[1] << 8) |
+                         ((uint32_t)center_pixel[2] << 16) |
+                         ((uint32_t)center_pixel[3] << 24);
+    if (center_id != 0) {
+        printf("Center pixel (%d,%d) has ID=0x%08X\n", width/2, height/2, center_id);
+    }
+
+    /* Read pixel at click location from shapes pass */
+    gpu_read_pixels(screen_x, gl_y, 1, 1, pixel);
+
+    /* Decode entity ID from pixel color */
+    uint32_t entity_id = ((uint32_t)pixel[0] << 0) |
+                         ((uint32_t)pixel[1] << 8) |
+                         ((uint32_t)pixel[2] << 16) |
+                         ((uint32_t)pixel[3] << 24);
+
+    /* Unbind picking framebuffer */
+    gpu_bind_framebuffer(0);
+
+    if (entity_id != 0) {
+        printf("Picked pixel (%d,%d): RGBA=(%u,%u,%u,%u) -> ID=0x%08X\n",
+               screen_x, screen_y, pixel[0], pixel[1], pixel[2], pixel[3], entity_id);
+    }
+
+    return entity_id;
 }
 
 void vector_render(int width, int height, mat4 projection)
 {
     static int frame_count = 0;
     if (frame_count % 60 == 0) {
-        printf("vector_render: frame %d, dpi_scale=%.2f\n", frame_count, dpi_scale);
+        //printf("vector_render: frame %d, dpi_scale=%.2f\n", frame_count, dpi_scale);
     }
     frame_count++;
 
@@ -487,6 +911,9 @@ void vector_render(int width, int height, mat4 projection)
 
             /* Scale stroke widths by DPI */
             scale_shape_stroke_widths(sorted_shapes, scaled_shapes, shape_count, dpi_scale);
+
+            /* Apply hover highlighting */
+            apply_shape_hover(scaled_shapes, shape_count, hovered_entity_id);
 
             gpu_use_shader(shape_shader);
             gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
@@ -579,6 +1006,7 @@ void vector_render(int width, int height, mat4 projection)
         if (scaled_lines)
         {
             scale_line_stroke_widths(line_data, scaled_lines, line_count, dpi_scale);
+            apply_line_hover(scaled_lines, line_count, hovered_entity_id, 0x00000000);
             gpu_upload_array_buffer_data(line_instance_buffer,
                                          scaled_lines,
                                          line_count * sizeof(vector_line_instance_t),
@@ -653,6 +1081,7 @@ void vector_render(int width, int height, mat4 projection)
         if (scaled_axes)
         {
             scale_line_stroke_widths(axis_data, scaled_axes, axis_count, dpi_scale);
+            apply_line_hover(scaled_axes, axis_count, hovered_entity_id, 0x10000000);
             gpu_upload_array_buffer_data(axis_instance_buffer,
                                          scaled_axes,
                                          axis_count * sizeof(vector_line_instance_t),
@@ -1047,4 +1476,43 @@ static void scale_shape_stroke_widths(const vector_shape_instance_t *src, vector
         dst[i] = src[i];
         dst[i].stroke_width *= scale;
     }
+}
+
+/* Apply hover highlighting to lines */
+static void apply_line_hover(vector_line_instance_t *instances, size_t count, uint32_t hover_id, uint32_t type_bits)
+{
+    if (hover_id == VECTOR_INVALID_INSTANCE) return;
+
+    uint32_t hover_type = (hover_id >> 28) & 0xF;
+    uint32_t hover_index = hover_id & 0x0FFFFFFF;
+    uint32_t expected_type = (type_bits >> 28) & 0xF;
+
+    if (hover_type != expected_type) return;
+    if (hover_index >= count) return;
+
+    /* Apply cyan color and thicker stroke */
+    instances[hover_index].color[0] = 0.0f;
+    instances[hover_index].color[1] = 1.0f;
+    instances[hover_index].color[2] = 1.0f;
+    instances[hover_index].color[3] = 1.0f;
+    instances[hover_index].stroke_width *= 2.0f;
+}
+
+/* Apply hover highlighting to shapes */
+static void apply_shape_hover(vector_shape_instance_t *instances, size_t count, uint32_t hover_id)
+{
+    if (hover_id == VECTOR_INVALID_INSTANCE) return;
+
+    uint32_t hover_type = (hover_id >> 28) & 0xF;
+    uint32_t hover_index = hover_id & 0x0FFFFFFF;
+
+    if (hover_type != 0x2) return;  /* Shape type */
+    if (hover_index >= count) return;
+
+    /* Apply cyan color and thicker stroke */
+    instances[hover_index].color[0] = 0.0f;
+    instances[hover_index].color[1] = 1.0f;
+    instances[hover_index].color[2] = 1.0f;
+    instances[hover_index].color[3] = 0.8f;  /* Semi-transparent fill */
+    instances[hover_index].stroke_width *= 2.0f;
 }

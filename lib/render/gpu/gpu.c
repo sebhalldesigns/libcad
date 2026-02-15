@@ -316,6 +316,75 @@ void gpu_set_depth_write(bool depth_write)
     glDepthMask(depth_write);
 }
 
+/***************************************************************
+** MARK: FRAMEBUFFER OPERATIONS
+***************************************************************/
+
+framebuffer_t gpu_create_framebuffer(void)
+{
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    return (framebuffer_t)fbo;
+}
+
+void gpu_bind_framebuffer(framebuffer_t fbo)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
+}
+
+texture_t gpu_create_texture_2d(int width, int height, bool rgba, bool depth)
+{
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    if (depth) {
+        /* Depth texture */
+        #ifdef USE_GLES
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0,
+                     GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+        #else
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0,
+                     GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+        #endif
+    } else {
+        /* Color texture - use sized internal format for GLES 3.0+ compatibility */
+        GLenum internal_format = rgba ? GL_RGBA8 : GL_RGB8;
+        GLenum format = rgba ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
+    }
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return (texture_t)texture;
+}
+
+void gpu_framebuffer_attach_texture(framebuffer_t fbo, texture_t texture, bool depth)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
+
+    if (depth) {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, (GLuint)texture, 0);
+    } else {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, (GLuint)texture, 0);
+    }
+}
+
+bool gpu_check_framebuffer_complete(framebuffer_t fbo)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)fbo);
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    return (status == GL_FRAMEBUFFER_COMPLETE);
+}
+
+void gpu_read_pixels(int x, int y, int width, int height, void *data)
+{
+    glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+}
 
 /***************************************************************
 ** MARK: STATIC FUNCTIONS
