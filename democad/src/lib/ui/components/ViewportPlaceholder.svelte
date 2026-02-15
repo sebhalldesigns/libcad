@@ -30,6 +30,14 @@
     lastDispatchedSelectedEntityId = normalized;
   }
 
+  // Export function to set hovered entity by ID (used by explorer hover)
+  export function setHoveredEntity(entityId: number): void {
+    if (!cadModule?._cad_set_hovered_entity) return;
+    const normalized = normalizePickedEntityId(entityId);
+    cadModule._cad_set_hovered_entity(normalized);
+    lastDispatchedHoverEntityId = normalized;
+  }
+
   type CadModule = {
     onRuntimeInitialized?: () => void;
     locateFile?: (path: string) => string;

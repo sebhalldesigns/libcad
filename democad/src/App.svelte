@@ -249,6 +249,19 @@
     viewportRef?.selectEntity?.(entityId);
   }
 
+  function handleNodeHover(nodeId: string): void {
+    hoveredNodeId = nodeId;
+    const entityId = nodeIdToEntity.get(nodeId) ?? INVALID_ENTITY_ID;
+    hoveredEntityId = entityId;
+    viewportRef?.setHoveredEntity?.(entityId);
+  }
+
+  function clearNodeHover(): void {
+    hoveredNodeId = null;
+    hoveredEntityId = INVALID_ENTITY_ID;
+    viewportRef?.setHoveredEntity?.(INVALID_ENTITY_ID);
+  }
+
   function handleEntitySelected(event: CustomEvent): void {
     const entityId = normalizeEntityId(event.detail?.entityId);
     selectedEntityId = entityId;
@@ -340,7 +353,7 @@
 
       <aside class="panel-left panel-floating desktop-panel">
         <WorkbenchPane title="Browser">
-          <ul class="tree">
+          <ul class="tree" on:mouseleave={clearNodeHover}>
             {#each projectTree as node}
               <li>
                 <button
@@ -349,6 +362,7 @@
                   class:hovered={node.id === hoveredNodeId}
                   style={`--depth:${node.depth}`}
                   on:click={() => handleNodeClick(node.id)}
+                  on:mouseenter={() => handleNodeHover(node.id)}
                 >
                   <span class="glyph" aria-hidden="true">{nodeIcon[node.type]}</span>
                   <span>{node.name}</span>
@@ -454,7 +468,7 @@
           <div class="tray-body">
             {#if activeTrayPanel === 'browser'}
               <WorkbenchPane title="Browser">
-                <ul class="tree">
+                <ul class="tree" on:mouseleave={clearNodeHover}>
                   {#each projectTree as node}
                     <li>
                       <button
@@ -463,6 +477,7 @@
                         class:hovered={node.id === hoveredNodeId}
                         style={`--depth:${node.depth}`}
                         on:click={() => handleNodeClick(node.id)}
+                        on:mouseenter={() => handleNodeHover(node.id)}
                       >
                         <span class="glyph" aria-hidden="true">{nodeIcon[node.type]}</span>
                         <span>{node.name}</span>
