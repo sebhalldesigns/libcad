@@ -16,6 +16,12 @@ in float vertex_corner_radius;
 in float vertex_dash;
 in float vertex_rotation;
 
+/* haze uniforms */
+uniform vec3 haze_color;
+uniform float haze_density;
+uniform float haze_near;
+uniform float haze_far;
+
 /* output */
 out vec4 frag_color;
 
@@ -101,6 +107,13 @@ bool angle_in_range(float angle, float start, float end)
         return angle >= start || angle <= end;
 }
 
+static float linearize_depth(float depth)
+{
+    float z = depth * 2.0 - 1.0;
+    float denom = haze_far + haze_near - z * (haze_far - haze_near);
+    return (2.0 * haze_near * haze_far) / max(denom, 1e-6);
+}
+
 /***************************************************************
 ** MAIN
 ***************************************************************/
@@ -161,25 +174,36 @@ void main()
             discard;
     }
 
-    /* calculate alpha based on stroke/fill */
+    /* calculate alpha for fill and stroke, then composite stroke over fill */
     float alpha = 0.0;
     float edge_aa = 1.0 / avg_scale;  /* 1 pixel antialiasing in world units */
+    float fill_alpha = 1.0 - smoothstep(-edge_aa, edge_aa, dist);
+    float stroke_alpha = 0.0;
+    vec4 fill_color = vertex_color;
+    vec4 stroke_color = vertex_color;
+
+    /* Special case: plane rectangles request white edge via fill flag */
+    if (vertex_fill < -0.5) {
+        stroke_color = vec4(1.0, 1.0, 1.0, 0.85);
+    }
 
     if (vertex_stroke_width > 0.0)
     {
-        /* stroke mode - distance from edge (stroke width is in pixels, convert to world units) */
+        /* stroke ring around the contour (stroke width is in pixels, convert to world units) */
         float half_stroke_world = vertex_stroke_width * 0.5 / avg_scale;
-        float stroke_dist = abs(dist) - half_stroke_world;
-        alpha = 1.0 - smoothstep(-edge_aa, edge_aa, stroke_dist);
-    }
-    else
-    {
-        /* fill mode */
-        alpha = 1.0 - smoothstep(-edge_aa, edge_aa, dist);
+        float stroke_inner = -half_stroke_world;
+        float stroke_outer = half_stroke_world;
+        float outer_mask = 1.0 - smoothstep(stroke_outer - edge_aa, stroke_outer + edge_aa, dist);
+        float inner_mask = smoothstep(stroke_inner - edge_aa, stroke_inner + edge_aa, dist);
+        stroke_alpha = inner_mask * outer_mask;
     }
 
+    float fill_a = fill_alpha * fill_color.a;
+    float stroke_a = stroke_alpha * stroke_color.a;
+    float out_a = stroke_a + fill_a * (1.0 - stroke_a);
+
     /* early discard for fully transparent pixels */
-    if (alpha <= 0.0)
+    if (out_a <= 0.0)
         discard;
 
     /* apply dashing for strokes */
@@ -207,6 +231,13 @@ void main()
         }
     }
 
-    /* output final color */
-    frag_color = vec4(color.rgb, color.a * alpha);
+    /* output final color (stroke composited over fill) */
+    vec3 out_rgb = (stroke_color.rgb * stroke_a + fill_color.rgb * fill_a * (1.0 - stroke_a)) / max(out_a, 1e-6);
+    frag_color = vec4(out_rgb, out_a);
+
+    /* distance haze (fade to scene haze color) */
+    float linear_depth = linearize_depth(gl_FragCoord.z);
+    float fog = 1.0 - exp(-haze_density * linear_depth);
+    fog = clamp(fog, 0.0, 1.0);
+    frag_color.rgb = mix(frag_color.rgb, haze_color, fog);
 }

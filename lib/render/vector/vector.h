@@ -109,6 +109,11 @@ bool vector_create_line(const vector_line_instance_t *data, vector_instance_t *o
 void vector_update_line(vector_instance_t instance, const vector_line_instance_t *data);
 void vector_destroy_line(vector_instance_t instance);
 
+/* axis overlay primitives (rendered in dedicated final pass) */
+bool vector_create_axis_line(const vector_line_instance_t *data, vector_instance_t *out_handle);
+void vector_update_axis_line(vector_instance_t instance, const vector_line_instance_t *data);
+void vector_destroy_axis_line(vector_instance_t instance);
+
 /* shape primitives (circles, ellipses, rectangles, polygons, arcs) */
 bool vector_create_shape(const vector_shape_instance_t *data, vector_instance_t *out_handle);
 void vector_update_shape(vector_instance_t instance, const vector_shape_instance_t *data);

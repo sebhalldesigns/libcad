@@ -59,6 +59,10 @@ typedef struct plane_t {
     vec4 color;       /* RGBA color for rendering the plane */
     bool visible;     /* Whether the plane should be rendered */
     float grid_size;  /* Size of grid squares for visualization */
+
+    /* Vector rendering handle */
+    uint32_t rectangle_handle;    /* Handle to rectangle shape (fill + stroke) */
+    float plane_size;             /* Size of the plane rectangle */
 } plane_t;
 
 /*

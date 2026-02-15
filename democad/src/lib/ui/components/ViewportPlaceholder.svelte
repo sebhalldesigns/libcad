@@ -24,6 +24,10 @@
     ) => void;
     _cad_render_viewport?: () => void;
     _cad_init_viewport?: () => void;
+    _cad_set_cursor_pos?: (x: number, y: number) => void;
+    _cad_set_cursor_button_state?: (button: number, pressed: boolean) => void;
+    _cad_set_modifier_state?: (modifier: number, state: boolean) => void;
+    _cad_axis_delta?: (axis: number, delta: number) => void;
     calledRun?: boolean;
   };
 
@@ -75,6 +79,66 @@
     canvasEl.style.height = cssHeight + 'px';
 
     updateCadViewport();
+  };
+
+  // Camera interaction handlers
+  const handleMouseMove = (event: MouseEvent): void => {
+    if (!cadModule?._cad_set_cursor_pos || !canvasEl) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const x = Math.floor(event.clientX - rect.left);
+    const y = Math.floor(event.clientY - rect.top);
+    cadModule._cad_set_cursor_pos(x, y);
+  };
+
+  const handleMouseDown = (event: MouseEvent): void => {
+    if (!cadModule?._cad_set_cursor_button_state) return;
+    // Map button: 0=left, 1=middle, 2=right -> 1=left, 2=middle, 3=right (libcad convention)
+    const buttonMap = [1, 2, 3];
+    const button = buttonMap[event.button] || 1;
+    cadModule._cad_set_cursor_button_state(button, true);
+  };
+
+  const handleMouseUp = (event: MouseEvent): void => {
+    if (!cadModule?._cad_set_cursor_button_state) return;
+    const buttonMap = [1, 2, 3];
+    const button = buttonMap[event.button] || 1;
+    cadModule._cad_set_cursor_button_state(button, false);
+  };
+
+  const handleWheel = (event: WheelEvent): void => {
+    if (!cadModule?._cad_axis_delta) return;
+    event.preventDefault();
+    // Normalize wheel delta and pass to CAD (positive = zoom in, negative = zoom out)
+    const delta = -Math.sign(event.deltaY);
+    cadModule._cad_axis_delta(0, delta);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!cadModule?._cad_set_modifier_state) return;
+    // Modifier constants: 1=Control, 2=Shift, 3=Alt
+    if (event.key === 'Shift') {
+      cadModule._cad_set_modifier_state(2, true);
+    } else if (event.key === 'Control') {
+      cadModule._cad_set_modifier_state(1, true);
+    } else if (event.key === 'Alt') {
+      cadModule._cad_set_modifier_state(3, true);
+    }
+  };
+
+  const handleKeyUp = (event: KeyboardEvent): void => {
+    if (!cadModule?._cad_set_modifier_state) return;
+    if (event.key === 'Shift') {
+      cadModule._cad_set_modifier_state(2, false);
+    } else if (event.key === 'Control') {
+      cadModule._cad_set_modifier_state(1, false);
+    } else if (event.key === 'Alt') {
+      cadModule._cad_set_modifier_state(3, false);
+    }
+  };
+
+  const handleContextMenu = (event: MouseEvent): void => {
+    // Prevent context menu on canvas to allow right-click for camera controls
+    event.preventDefault();
   };
 
   onMount(() => {
@@ -167,6 +231,19 @@
         cad._cad_init_viewport?.();
         updateCadViewport();
         startRenderLoop();
+
+        // Attach camera interaction event listeners
+        if (canvasEl) {
+          canvasEl.addEventListener('mousemove', handleMouseMove);
+          canvasEl.addEventListener('mousedown', handleMouseDown);
+          canvasEl.addEventListener('mouseup', handleMouseUp);
+          canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+          canvasEl.addEventListener('contextmenu', handleContextMenu);
+        }
+
+        // Attach keyboard listeners to window for modifier keys
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
       })
       .catch((error) => {
         console.error('[cad] WASM module load failed:', error);
@@ -174,6 +251,19 @@
   });
 
   onDestroy(() => {
+    // Remove camera interaction event listeners
+    if (canvasEl) {
+      canvasEl.removeEventListener('mousemove', handleMouseMove);
+      canvasEl.removeEventListener('mousedown', handleMouseDown);
+      canvasEl.removeEventListener('mouseup', handleMouseUp);
+      canvasEl.removeEventListener('wheel', handleWheel);
+      canvasEl.removeEventListener('contextmenu', handleContextMenu);
+    }
+
+    // Remove keyboard listeners
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keyup', handleKeyUp);
+
     resizeObserver?.disconnect();
     if (renderFrameId !== null) {
       window.cancelAnimationFrame(renderFrameId);

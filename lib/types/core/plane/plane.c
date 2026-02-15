@@ -20,6 +20,7 @@
 #include <math.h>
 
 #include <util/log/log.h>
+#include <render/vector/vector.h>
 
 #include "plane.h"
 
@@ -28,6 +29,8 @@
 ***************************************************************/
 
 static void plane_finalize(plane_t* self);
+static void plane_create_rectangle(plane_t* self);
+static void plane_destroy_rectangle(plane_t* self);
 
 /***************************************************************
 ** MARK: TYPE REGISTRATION
@@ -76,6 +79,13 @@ static void plane_init(plane_t* self)
     glm_vec4_copy((vec4){0.8f, 0.8f, 0.8f, 0.3f}, self->color);
     self->visible = true;
     self->grid_size = 1.0f;
+    self->plane_size = 20.0f;  /* 20x20 unit plane */
+
+    /* Initialize rectangle handles */
+    self->rectangle_handle = VECTOR_INVALID_INSTANCE;
+
+    /* Create rectangle */
+    plane_create_rectangle(self);
 }
 
 /***************************************************************
@@ -84,7 +94,9 @@ static void plane_init(plane_t* self)
 
 static void plane_finalize(plane_t* self)
 {
-    /* No plane-specific cleanup needed */
+    /* Destroy rectangle */
+    plane_destroy_rectangle(self);
+
     /* Parent finalization (including children) is automatic */
 }
 
@@ -95,6 +107,12 @@ static void plane_finalize(plane_t* self)
 void plane_set_transform(plane_t* self, vec3 origin, vec3 normal)
 {
     if (!self) return;
+
+    const char* name = object_get_name(PLANE_AS_OBJECT(self));
+    log_info("plane_set_transform: %s origin=(%.1f,%.1f,%.1f) normal=(%.1f,%.1f,%.1f)",
+             name ? name : "unnamed",
+             origin[0], origin[1], origin[2],
+             normal[0], normal[1], normal[2]);
 
     /* Copy origin */
     glm_vec3_copy(origin, self->origin);
@@ -117,6 +135,25 @@ void plane_set_transform(plane_t* self, vec3 origin, vec3 normal)
 
     /* v_axis = cross(normal, u_axis) */
     glm_vec3_cross(self->normal, self->u_axis, self->v_axis);
+
+    /* Update rectangle (fill + stroke) */
+    if (self->rectangle_handle != VECTOR_INVALID_INSTANCE) {
+        vector_shape_instance_t rect_fill = {
+            .center = {self->origin[0], self->origin[1], self->origin[2]},
+            .normal = {self->normal[0], self->normal[1], self->normal[2]},
+            .size = {self->plane_size, self->plane_size},
+            .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
+            .rotation = 0.0f,
+            .sides = 4.0f,
+            .start_angle = 0.0f,
+            .end_angle = 0.0f,
+            .fill = -1.0f, /* request white edge in shape shader */
+            .stroke_width = 2.0f,
+            .corner_radius = 0.0f,
+            .dash = 0.0f
+        };
+        vector_update_shape(self->rectangle_handle, &rect_fill);
+    }
 }
 
 void plane_get_transform_matrix(const plane_t* self, mat4 out_matrix)
@@ -198,6 +235,25 @@ void plane_set_display(plane_t* self, vec4 color, bool visible, float grid_size)
     glm_vec4_copy(color, self->color);
     self->visible = visible;
     self->grid_size = grid_size;
+
+    /* Update rectangle (fill + stroke) */
+    if (self->rectangle_handle != VECTOR_INVALID_INSTANCE) {
+        vector_shape_instance_t rect_fill = {
+            .center = {self->origin[0], self->origin[1], self->origin[2]},
+            .normal = {self->normal[0], self->normal[1], self->normal[2]},
+            .size = {self->plane_size, self->plane_size},
+            .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
+            .rotation = 0.0f,
+            .sides = 4.0f,
+            .start_angle = 0.0f,
+            .end_angle = 0.0f,
+            .fill = -1.0f, /* request white edge in shape shader */
+            .stroke_width = 2.0f,
+            .corner_radius = 0.0f,
+            .dash = 0.0f
+        };
+        vector_update_shape(self->rectangle_handle, &rect_fill);
+    }
 }
 
 /***************************************************************
@@ -251,4 +307,52 @@ json_t* plane_to_json(plane_t* self)
     json_object_set_new(json, "grid_size", json_real(self->grid_size));
 
     return json;
+}
+
+/***************************************************************
+** MARK: STATIC FUNCTIONS - Rectangle Management
+***************************************************************/
+
+static void plane_create_rectangle(plane_t* self)
+{
+    if (!self) return;
+
+    /* Create single rectangle shape (fill + stroke) */
+    vector_shape_instance_t rect_fill = {
+        .center = {self->origin[0], self->origin[1], self->origin[2]},
+        .normal = {self->normal[0], self->normal[1], self->normal[2]},
+        .size = {self->plane_size, self->plane_size},
+        .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
+        .rotation = 0.0f,
+        .sides = 4.0f,  /* Rectangle */
+        .start_angle = 0.0f,
+        .end_angle = 0.0f,
+        .fill = -1.0f, /* request white edge in shape shader */
+        .stroke_width = 2.0f,
+        .corner_radius = 0.0f,
+        .dash = 0.0f
+    };
+
+    if (!vector_create_shape(&rect_fill, &self->rectangle_handle)) {
+        log_error("Failed to create plane rectangle");
+        self->rectangle_handle = VECTOR_INVALID_INSTANCE;
+    }
+
+    const char* name = object_get_name(PLANE_AS_OBJECT(self));
+    log_info("Created plane: %s at (%.1f,%.1f,%.1f) normal=(%.1f,%.1f,%.1f)",
+             name ? name : "unnamed",
+             self->origin[0], self->origin[1], self->origin[2],
+             self->normal[0], self->normal[1], self->normal[2]);
+}
+
+static void plane_destroy_rectangle(plane_t* self)
+{
+    if (!self) return;
+
+    /* Destroy filled rectangle */
+    if (self->rectangle_handle != VECTOR_INVALID_INSTANCE) {
+        vector_destroy_shape(self->rectangle_handle);
+        self->rectangle_handle = VECTOR_INVALID_INSTANCE;
+    }
+
 }

@@ -18,6 +18,8 @@
 #include <libcad/libcad.h>
 #include <stdio.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <math.h>
 
 #include <cglm/cglm.h>
 
@@ -66,6 +68,12 @@ extern uint32_t resources_shaders_vector_line_es_vs_glsl_size;
 extern uint8_t resources_shaders_vector_line_es_fs_glsl[];
 extern uint32_t resources_shaders_vector_line_es_fs_glsl_size;
 
+extern uint8_t resources_shaders_vector_axis_es_vs_glsl[];
+extern uint32_t resources_shaders_vector_axis_es_vs_glsl_size;
+
+extern uint8_t resources_shaders_vector_axis_es_fs_glsl[];
+extern uint32_t resources_shaders_vector_axis_es_fs_glsl_size;
+
 extern uint8_t resources_shaders_vector_shape_es_vs_glsl[];
 extern uint32_t resources_shaders_vector_shape_es_vs_glsl_size;
 
@@ -83,6 +91,12 @@ extern uint32_t resources_shaders_vector_line_core_vs_glsl_size;
 
 extern uint8_t resources_shaders_vector_line_core_fs_glsl[];
 extern uint32_t resources_shaders_vector_line_core_fs_glsl_size;
+
+extern uint8_t resources_shaders_vector_axis_core_vs_glsl[];
+extern uint32_t resources_shaders_vector_axis_core_vs_glsl_size;
+
+extern uint8_t resources_shaders_vector_axis_core_fs_glsl[];
+extern uint32_t resources_shaders_vector_axis_core_fs_glsl_size;
 
 extern uint8_t resources_shaders_vector_shape_core_vs_glsl[];
 extern uint32_t resources_shaders_vector_shape_core_vs_glsl_size;
@@ -106,6 +120,7 @@ static const float quad_vertices[] =
 };
 
 static instance_arena_t line_arena;
+static instance_arena_t axis_arena;
 static instance_arena_t shape_arena;
 static instance_arena_t bezier_arena;
 static instance_arena_t glyph_arena;
@@ -117,6 +132,14 @@ static uniform_t line_shader_uniform_viewport;
 static vertex_array_t line_vertex_array;
 static buffer_t line_quad_buffer;
 static buffer_t line_instance_buffer;
+
+/* AXIS OVERLAY SHADER */
+static shader_t axis_shader;
+static uniform_t axis_shader_uniform_projection;
+static uniform_t axis_shader_uniform_viewport;
+static vertex_array_t axis_vertex_array;
+static buffer_t axis_quad_buffer;
+static buffer_t axis_instance_buffer;
 
 /* SHAPE SHADER */
 static shader_t shape_shader;
@@ -150,6 +173,14 @@ static bool instance_arena_update(instance_arena_t *arena, uint32_t handle, cons
 static void *instance_arena_get(instance_arena_t *arena, uint32_t handle);
 static void *instance_arena_data(instance_arena_t *arena);
 
+typedef struct
+{
+    float depth;
+    uint32_t index;
+} shape_sort_item_t;
+
+static int compare_shape_depth_desc(const void *a, const void *b);
+
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
 ***************************************************************/
@@ -159,6 +190,7 @@ bool vector_init()
 
     /* create arenas */
     instance_arena_init(&line_arena, sizeof(vector_line_instance_t), INITIAL_ARENA_SIZE);
+    instance_arena_init(&axis_arena, sizeof(vector_line_instance_t), INITIAL_ARENA_SIZE);
     instance_arena_init(&shape_arena, sizeof(vector_shape_instance_t), INITIAL_ARENA_SIZE);
     instance_arena_init(&glyph_arena, sizeof(vector_glyph_instance_t), INITIAL_ARENA_SIZE);
 
@@ -212,6 +244,58 @@ bool vector_init()
     gpu_upload_array_buffer_data(line_instance_buffer, NULL, 0, true); /* bind the buffer */
 
     /* set up per-instance vertex attributes */
+    gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, start), 1);
+    gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, end), 1);
+    gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, color), 1);
+    gpu_enable_vertex_attribute(4, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, stroke_width), 1);
+    gpu_enable_vertex_attribute(5, 1, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, dash), 1);
+
+    gpu_bind_vertex_array(0);
+
+    /* AXIS OVERLAY RENDERER SETUP */
+
+    if (!gpu_compile_shader(
+#if USE_GLES
+        (const char*)resources_shaders_vector_axis_es_vs_glsl,
+        resources_shaders_vector_axis_es_vs_glsl_size,
+        (const char*)resources_shaders_vector_axis_es_fs_glsl,
+        resources_shaders_vector_axis_es_fs_glsl_size,
+#else
+        (const char*)resources_shaders_vector_axis_core_vs_glsl,
+        resources_shaders_vector_axis_core_vs_glsl_size,
+        (const char*)resources_shaders_vector_axis_core_fs_glsl,
+        resources_shaders_vector_axis_core_fs_glsl_size,
+#endif
+        &axis_shader
+    ))
+    {
+        #ifdef DEBUG
+            log_error("Failed to compile axis shader.");
+        #endif
+        return false;
+    }
+
+    if (
+        !gpu_get_shader_uniform(axis_shader, "projection", &axis_shader_uniform_projection)
+    ||  !gpu_get_shader_uniform(axis_shader, "viewport", &axis_shader_uniform_viewport)
+    )
+    {
+        #ifdef DEBUG
+            log_error("Failed to get axis shader uniform.");
+        #endif
+        return false;
+    }
+
+    axis_vertex_array = gpu_create_vertex_array();
+    gpu_bind_vertex_array(axis_vertex_array);
+
+    axis_quad_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(axis_quad_buffer, quad_vertices, sizeof(quad_vertices), false);
+    gpu_enable_vertex_attribute(0, 2, GPU_TYPE_FLOAT, false, 2 * sizeof(float), 0, 0);
+
+    axis_instance_buffer = gpu_create_buffer();
+    gpu_upload_array_buffer_data(axis_instance_buffer, NULL, 0, true);
+
     gpu_enable_vertex_attribute(1, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, start), 1);
     gpu_enable_vertex_attribute(2, 3, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, end), 1);
     gpu_enable_vertex_attribute(3, 4, GPU_TYPE_FLOAT, false, sizeof(vector_line_instance_t), offsetof(vector_line_instance_t, color), 1);
@@ -355,12 +439,89 @@ void vector_render(int width, int height, mat4 projection)
     gpu_set_depth_test(true);
     gpu_set_depth_write(true);
 
-    /* render lines */
+    /* render shapes back-to-front for stable transparency */
+    size_t shape_count = instance_arena_count(&shape_arena);
+    if (shape_count > 0)
+    {
+        vector_shape_instance_t *shape_data = (vector_shape_instance_t *)instance_arena_data(&shape_arena);
+        shape_sort_item_t *sort_items = (shape_sort_item_t *)malloc(shape_count * sizeof(shape_sort_item_t));
+        vector_shape_instance_t *sorted_shapes = (vector_shape_instance_t *)malloc(shape_count * sizeof(vector_shape_instance_t));
+
+        if (shape_data && sort_items && sorted_shapes)
+        {
+            for (size_t i = 0; i < shape_count; i++)
+            {
+                vec4 clip;
+                glm_mat4_mulv(projection,
+                              (vec4){shape_data[i].center[0], shape_data[i].center[1], shape_data[i].center[2], 1.0f},
+                              clip);
+                float depth = (fabsf(clip[3]) > 1e-6f) ? (clip[2] / clip[3]) : 1.0f;
+                sort_items[i].depth = depth;
+                sort_items[i].index = (uint32_t)i;
+            }
+
+            qsort(sort_items, shape_count, sizeof(shape_sort_item_t), compare_shape_depth_desc);
+
+            for (size_t i = 0; i < shape_count; i++)
+            {
+                sorted_shapes[i] = shape_data[sort_items[i].index];
+            }
+
+            gpu_use_shader(shape_shader);
+            gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
+
+            vec2 viewport;
+            viewport[0] = (float)width;
+            viewport[1] = (float)height;
+            gpu_set_uniform_vec2(shape_shader_uniform_viewport, viewport);
+
+            gpu_set_depth_test(true);
+            gpu_set_depth_write(false);
+
+            gpu_bind_vertex_array(shape_vertex_array);
+            gpu_upload_array_buffer_data(shape_instance_buffer,
+                                         sorted_shapes,
+                                         shape_count * sizeof(vector_shape_instance_t),
+                                         true);
+            gpu_draw_instances(shape_vertex_array, 0, 4, shape_count);
+            gpu_bind_vertex_array(0);
+
+            gpu_set_depth_write(true);
+        }
+        else
+        {
+            /* Fallback to unsorted draw if allocation fails */
+            gpu_use_shader(shape_shader);
+            gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
+
+            vec2 viewport;
+            viewport[0] = (float)width;
+            viewport[1] = (float)height;
+            gpu_set_uniform_vec2(shape_shader_uniform_viewport, viewport);
+
+            gpu_set_depth_test(true);
+            gpu_set_depth_write(false);
+
+            gpu_bind_vertex_array(shape_vertex_array);
+            gpu_upload_array_buffer_data(shape_instance_buffer,
+                                         instance_arena_data(&shape_arena),
+                                         shape_arena.used,
+                                         true);
+            gpu_draw_instances(shape_vertex_array, 0, 4, shape_count);
+            gpu_bind_vertex_array(0);
+
+            gpu_set_depth_write(true);
+        }
+
+        free(sorted_shapes);
+        free(sort_items);
+    }
+
+    /* render lines as overlay (always on top) */
     size_t line_count = instance_arena_count(&line_arena);
     if (line_count > 0)
     {
         gpu_use_shader(line_shader);
-
         gpu_set_uniform_mat4(line_shader_uniform_projection, projection);
 
         vec2 viewport;
@@ -368,46 +529,19 @@ void vector_render(int width, int height, mat4 projection)
         viewport[1] = (float)height;
         gpu_set_uniform_vec2(line_shader_uniform_viewport, viewport);
 
-        /* bind vertex array and upload instance data */
+        gpu_set_depth_test(false);
+        gpu_set_depth_write(false);
+
         gpu_bind_vertex_array(line_vertex_array);
         gpu_upload_array_buffer_data(line_instance_buffer,
                                      instance_arena_data(&line_arena),
                                      line_arena.used,
                                      true);
-
-        /* draw all line instances */
         gpu_draw_instances(line_vertex_array, 0, 4, line_count);
-
-        /* unbind vertex array */
         gpu_bind_vertex_array(0);
-    }
 
-    /* render shapes */
-    size_t shape_count = instance_arena_count(&shape_arena);
-    log_info("Rendering %zu shapes", shape_count);
-    if (shape_count > 0)
-    {
-        gpu_use_shader(shape_shader);
-
-        gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
-
-        vec2 viewport;
-        viewport[0] = (float)width;
-        viewport[1] = (float)height;
-        gpu_set_uniform_vec2(shape_shader_uniform_viewport, viewport);
-
-        /* bind vertex array and upload instance data */
-        gpu_bind_vertex_array(shape_vertex_array);
-        gpu_upload_array_buffer_data(shape_instance_buffer,
-                                     instance_arena_data(&shape_arena),
-                                     shape_arena.used,
-                                     true);
-
-        /* draw all shape instances */
-        gpu_draw_instances(shape_vertex_array, 0, 4, shape_count);
-
-        /* unbind vertex array */
-        gpu_bind_vertex_array(0);
+        gpu_set_depth_test(true);
+        gpu_set_depth_write(true);
     }
 
     /* render glyphs */
@@ -437,6 +571,33 @@ void vector_render(int width, int height, mat4 projection)
 
         /* unbind vertex array */
         gpu_bind_vertex_array(0);
+    }
+
+    /* render axes in a dedicated final overlay pass with haze */
+    size_t axis_count = instance_arena_count(&axis_arena);
+    if (axis_count > 0)
+    {
+        gpu_use_shader(axis_shader);
+        gpu_set_uniform_mat4(axis_shader_uniform_projection, projection);
+
+        vec2 viewport;
+        viewport[0] = (float)width;
+        viewport[1] = (float)height;
+        gpu_set_uniform_vec2(axis_shader_uniform_viewport, viewport);
+
+        gpu_set_depth_test(false);
+        gpu_set_depth_write(false);
+
+        gpu_bind_vertex_array(axis_vertex_array);
+        gpu_upload_array_buffer_data(axis_instance_buffer,
+                                     instance_arena_data(&axis_arena),
+                                     axis_arena.used,
+                                     true);
+        gpu_draw_instances(axis_vertex_array, 0, 4, axis_count);
+        gpu_bind_vertex_array(0);
+
+        gpu_set_depth_test(true);
+        gpu_set_depth_write(true);
     }
 
     /* TODO: render beziers */
@@ -472,14 +633,37 @@ bool vector_create_line(const vector_line_instance_t *data, vector_instance_t *o
     return true;
 }
 
+bool vector_create_axis_line(const vector_line_instance_t *data, vector_instance_t *out_handle)
+{
+    if (!data || !out_handle)
+        return false;
+
+    uint32_t handle = instance_arena_add(&axis_arena, data);
+    if (handle == UINT32_MAX)
+        return false;
+
+    *out_handle = handle;
+    return true;
+}
+
 void vector_update_line(vector_instance_t instance, const vector_line_instance_t *data)
 {
     instance_arena_update(&line_arena, instance, data);
 }
 
+void vector_update_axis_line(vector_instance_t instance, const vector_line_instance_t *data)
+{
+    instance_arena_update(&axis_arena, instance, data);
+}
+
 void vector_destroy_line(vector_instance_t instance)
 {
     instance_arena_remove(&line_arena, instance);
+}
+
+void vector_destroy_axis_line(vector_instance_t instance)
+{
+    instance_arena_remove(&axis_arena, instance);
 }
 
 bool vector_create_shape(const vector_shape_instance_t *data, vector_instance_t *out_handle)
@@ -492,11 +676,30 @@ bool vector_create_shape(const vector_shape_instance_t *data, vector_instance_t 
         return false;
 
     *out_handle = handle;
+
+    #ifdef DEBUG
+    log_info("vector_create_shape: handle=%u center=(%.1f,%.1f,%.1f) normal=(%.1f,%.1f,%.1f) size=(%.1f,%.1f) color=(%.2f,%.2f,%.2f,%.2f) sides=%.0f stroke=%.1f",
+             handle,
+             data->center[0], data->center[1], data->center[2],
+             data->normal[0], data->normal[1], data->normal[2],
+             data->size[0], data->size[1],
+             data->color[0], data->color[1], data->color[2], data->color[3],
+             data->sides, data->stroke_width);
+    #endif
+
     return true;
 }
 
 void vector_update_shape(vector_instance_t instance, const vector_shape_instance_t *data)
 {
+    #ifdef DEBUG
+    log_info("vector_update_shape: handle=%u center=(%.1f,%.1f,%.1f) normal=(%.1f,%.1f,%.1f) color=(%.2f,%.2f,%.2f,%.2f)",
+             instance,
+             data->center[0], data->center[1], data->center[2],
+             data->normal[0], data->normal[1], data->normal[2],
+             data->color[0], data->color[1], data->color[2], data->color[3]);
+    #endif
+
     instance_arena_update(&shape_arena, instance, data);
 }
 
@@ -735,4 +938,13 @@ static void *instance_arena_get(instance_arena_t *arena, uint32_t handle)
 static void *instance_arena_data(instance_arena_t *arena)
 {
     return arena->data;
+}
+
+static int compare_shape_depth_desc(const void *a, const void *b)
+{
+    const shape_sort_item_t *sa = (const shape_sort_item_t *)a;
+    const shape_sort_item_t *sb = (const shape_sort_item_t *)b;
+    if (sa->depth < sb->depth) return 1;
+    if (sa->depth > sb->depth) return -1;
+    return 0;
 }

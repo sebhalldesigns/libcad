@@ -22,6 +22,8 @@
 #include <util/vector/vector.h>
 
 #include "document.h"
+#include <types/core/plane/plane.h>
+#include <types/core/axis/axis.h>
 
 /***************************************************************
 ** MARK: FORWARD DECLARATIONS
@@ -74,6 +76,72 @@ static void document_init(document_t* self)
 
     /* Initialize our fields */
     self->path = NULL;
+
+    /* Create 3 construction planes: XY, XZ, YZ */
+
+    /* XY Plane (horizontal, normal pointing up in +Z direction) - Blue */
+    plane_t* xy_plane = plane_new();
+    object_set_name(PLANE_AS_OBJECT(xy_plane), "XY Plane");
+    vec3 xy_origin = {0.0f, 0.0f, 0.0f};  /* At origin */
+    vec3 xy_normal = {0.0f, 0.0f, 1.0f};  /* Normal in +Z */
+    plane_set_transform(xy_plane, xy_origin, xy_normal);
+    vec4 xy_color = {0.2f, 0.2f, 0.8f, 0.4f};  /* Blue */
+    plane_set_display(xy_plane, xy_color, true, 10.0f);
+    object_add_child(DOCUMENT_AS_OBJECT(self), PLANE_AS_OBJECT(xy_plane));
+
+    /* XZ Plane (vertical, normal pointing in +Y direction) - Green */
+    plane_t* xz_plane = plane_new();
+    object_set_name(PLANE_AS_OBJECT(xz_plane), "XZ Plane");
+    vec3 xz_origin = {0.0f, 0.0f, 0.0f};  /* At origin */
+    vec3 xz_normal = {0.0f, 1.0f, 0.0f};  /* Normal in +Y */
+    plane_set_transform(xz_plane, xz_origin, xz_normal);
+    vec4 xz_color = {0.2f, 0.8f, 0.2f, 0.4f};  /* Green */
+    plane_set_display(xz_plane, xz_color, true, 10.0f);
+    object_add_child(DOCUMENT_AS_OBJECT(self), PLANE_AS_OBJECT(xz_plane));
+
+    /* YZ Plane (vertical, normal pointing in +X direction) - Red */
+    plane_t* yz_plane = plane_new();
+    object_set_name(PLANE_AS_OBJECT(yz_plane), "YZ Plane");
+    vec3 yz_origin = {0.0f, 0.0f, 0.0f};  /* At origin */
+    vec3 yz_normal = {1.0f, 0.0f, 0.0f};  /* Normal in +X */
+    plane_set_transform(yz_plane, yz_origin, yz_normal);
+    vec4 yz_color = {0.8f, 0.2f, 0.2f, 0.4f};  /* Red */
+    plane_set_display(yz_plane, yz_color, true, 10.0f);
+    object_add_child(DOCUMENT_AS_OBJECT(self), PLANE_AS_OBJECT(yz_plane));
+
+    /* Create 3 axes: X, Y, Z */
+
+    /* X Axis (red) */
+    axis_t* x_axis = axis_new();
+    object_set_name(AXIS_AS_OBJECT(x_axis), "X Axis");
+    vec3 x_origin = {0.0f, 0.0f, 0.0f};
+    vec3 x_direction = {1.0f, 0.0f, 0.0f};
+    axis_set_geometry(x_axis, x_origin, x_direction, 1000.0f);
+    vec4 x_color = {1.0f, 0.0f, 0.0f, 1.0f};  /* Red */
+    axis_set_display(x_axis, x_color, true, 2.0f, true);
+    object_add_child(DOCUMENT_AS_OBJECT(self), AXIS_AS_OBJECT(x_axis));
+
+    /* Y Axis (green) */
+    axis_t* y_axis = axis_new();
+    object_set_name(AXIS_AS_OBJECT(y_axis), "Y Axis");
+    vec3 y_origin = {0.0f, 0.0f, 0.0f};
+    vec3 y_direction = {0.0f, 1.0f, 0.0f};
+    axis_set_geometry(y_axis, y_origin, y_direction, 1000.0f);
+    vec4 y_color = {0.0f, 1.0f, 0.0f, 1.0f};  /* Green */
+    axis_set_display(y_axis, y_color, true, 2.0f, true);
+    object_add_child(DOCUMENT_AS_OBJECT(self), AXIS_AS_OBJECT(y_axis));
+
+    /* Z Axis (blue) */
+    axis_t* z_axis = axis_new();
+    object_set_name(AXIS_AS_OBJECT(z_axis), "Z Axis");
+    vec3 z_origin = {0.0f, 0.0f, 0.0f};
+    vec3 z_direction = {0.0f, 0.0f, 1.0f};
+    axis_set_geometry(z_axis, z_origin, z_direction, 1000.0f);
+    vec4 z_color = {0.0f, 0.0f, 1.0f, 1.0f};  /* Blue */
+    axis_set_display(z_axis, z_color, true, 2.0f, true);
+    object_add_child(DOCUMENT_AS_OBJECT(self), AXIS_AS_OBJECT(z_axis));
+
+    log_info("Document initialized with 3 planes and 3 axes");
 }
 
 /***************************************************************

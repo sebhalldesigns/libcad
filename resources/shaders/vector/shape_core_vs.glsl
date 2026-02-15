@@ -40,17 +40,10 @@ void main()
     /* Create tangent/bitangent basis from normal for proper 3D orientation */
     vec3 normal = normalize(instance_normal);
 
-    /* Create tangent (right) and bitangent (up) vectors perpendicular to normal */
-    vec3 tangent, bitangent;
-    if (abs(normal.z) > 0.999) {
-        /* Normal points along Z axis - use X and Y as tangent/bitangent */
-        tangent = vec3(1.0, 0.0, 0.0);
-        bitangent = vec3(0.0, 1.0, 0.0);
-    } else {
-        /* General case - create perpendicular vectors */
-        tangent = normalize(cross(vec3(0.0, 1.0, 0.0), normal));
-        bitangent = normalize(cross(normal, tangent));
-    }
+    /* Use a reference axis that is not parallel to the normal */
+    vec3 ref_axis = (abs(normal.y) < 0.999) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(ref_axis, normal));
+    vec3 bitangent = normalize(cross(normal, tangent));
 
     /* Apply rotation to tangent/bitangent basis (rotation in the plane) */
     if (instance_rotation != 0.0) {

@@ -31,7 +31,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(LIBCAD_BUILD_SHARED "Build shared libraries." ON)
 option(LIBCAD_BUILD_STATIC "Build static libraries." ON)
 option(LIBCAD_BUILD_DEMOCAD "Build the democad web application." ON)
-option(LIBCAD_BUILD_DEMOCAD_NATIVE "Build the native democad application." ON)
+option(LIBCAD_BUILD_DEMOCAD_NATIVE "Build the native democad application." OFF)
 option(LIBCAD_BUILD_WASM "Build libcad with Emscripten via ExternalProject." ON)
 set(LIBCAD_EMSCRIPTEN_TOOLCHAIN_FILE "" CACHE FILEPATH "Path to Emscripten.cmake toolchain file.")
 set(LIBCAD_EMSCRIPTEN_NINJA "" CACHE FILEPATH "Path to ninja executable used by the wasm ExternalProject.")
@@ -191,6 +191,8 @@ set(CAD_SRC
     lib/types/core/document/document.c
     lib/types/core/textfield/textfield.c
     lib/types/core/plane/plane.c
+    lib/types/core/axis/axis.c
+    lib/types/core/camera/camera.c
     lib/types/sketch/sketch/sketch.c
     lib/types/sketch/line/line.c
     lib/types/sketch/circle/circle.c
@@ -214,6 +216,8 @@ set(CAD_INCLUDE_DIRS
 set(GL_SHADERS
     resources/shaders/vector/line_core_vs.glsl
     resources/shaders/vector/line_core_fs.glsl
+    resources/shaders/vector/axis_core_vs.glsl
+    resources/shaders/vector/axis_core_fs.glsl
     resources/shaders/vector/shape_core_vs.glsl
     resources/shaders/vector/shape_core_fs.glsl
     resources/shaders/vector/glyph_core_vs.glsl
@@ -223,6 +227,8 @@ set(GL_SHADERS
 set(GLES_SHADERS
     resources/shaders/vector/line_es_vs.glsl
     resources/shaders/vector/line_es_fs.glsl
+    resources/shaders/vector/axis_es_vs.glsl
+    resources/shaders/vector/axis_es_fs.glsl
     resources/shaders/vector/shape_es_vs.glsl
     resources/shaders/vector/shape_es_fs.glsl
     resources/shaders/vector/glyph_es_vs.glsl
