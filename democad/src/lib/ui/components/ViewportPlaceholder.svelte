@@ -7,6 +7,29 @@
   export let mode: 'sketch' | 'scene' = 'scene';
   export let showHeader = true;
 
+  // Export function to get document JSON
+  export function getDocumentJSON(): any {
+    if (!cadModule?._cad_get_document_json || !cadModule?.UTF8ToString) {
+      return null;
+    }
+    const ptr = cadModule._cad_get_document_json();
+    const jsonStr = cadModule.UTF8ToString(ptr);
+    try {
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      console.error('[cad] Failed to parse document JSON:', e);
+      return null;
+    }
+  }
+
+  // Export function to select entity by ID
+  export function selectEntity(entityId: number): void {
+    if (!cadModule?._cad_set_selected_entity) return;
+    const normalized = normalizePickedEntityId(entityId);
+    cadModule._cad_set_selected_entity(normalized);
+    lastDispatchedSelectedEntityId = normalized;
+  }
+
   type CadModule = {
     onRuntimeInitialized?: () => void;
     locateFile?: (path: string) => string;
@@ -33,6 +56,13 @@
     _cad_camera_orbit?: (deltaX: number, deltaY: number) => void;
     _cad_camera_pan?: (deltaX: number, deltaY: number) => void;
     _cad_camera_zoom?: (delta: number) => void;
+    _cad_pick_entity?: (screenX: number, screenY: number) => number;
+    _cad_set_hovered_entity?: (entityId: number) => void;
+    _cad_get_hovered_entity?: () => number;
+    _cad_set_selected_entity?: (entityId: number) => void;
+    _cad_get_selected_entity?: () => number;
+    _cad_get_document_json?: () => number;
+    UTF8ToString?: (ptr: number) => string;
     calledRun?: boolean;
   };
 
@@ -56,8 +86,49 @@
   let pendingTouchUpdate = false;
   let pendingTouchData: { x: number; y: number; zoom?: number } | null = null;
 
+  // Click-to-select state
+  let mouseDownX = 0;
+  let mouseDownY = 0;
+  let mouseDownTime = 0;
+  const clickThreshold = 5; // pixels - max movement to still be considered a click
+  const clickTimeThreshold = 300; // milliseconds
+
   const panThreshold = 3; // pixels center must move before panning
   const zoomSensitivity = 0.04; // zoom speed multiplier (lower = slower)
+  const INVALID_ENTITY_ID = 0xFFFFFFFF;
+  let lastDispatchedHoverEntityId = INVALID_ENTITY_ID;
+  let lastDispatchedSelectedEntityId = INVALID_ENTITY_ID;
+
+  const normalizePickedEntityId = (entityId: number): number => {
+    const normalized = entityId >>> 0;
+    if (normalized === 0 || normalized === INVALID_ENTITY_ID) {
+      return INVALID_ENTITY_ID;
+    }
+    return normalized;
+  };
+
+  const dispatchHoveredEntity = (entityId: number): void => {
+    if (entityId === lastDispatchedHoverEntityId) return;
+    lastDispatchedHoverEntityId = entityId;
+    window.dispatchEvent(new CustomEvent('cad-entity-hovered', { detail: { entityId } }));
+  };
+
+  const dispatchSelectedEntity = (entityId: number): void => {
+    if (entityId === lastDispatchedSelectedEntityId) return;
+    lastDispatchedSelectedEntityId = entityId;
+    window.dispatchEvent(new CustomEvent('cad-entity-selected', { detail: { entityId } }));
+  };
+
+  const clearHoveredEntity = (): void => {
+    cadModule?._cad_set_hovered_entity?.(INVALID_ENTITY_ID);
+    dispatchHoveredEntity(INVALID_ENTITY_ID);
+  };
+
+  const dispatchDocumentUpdated = (): void => {
+    const docJson = getDocumentJSON();
+    if (!docJson) return;
+    window.dispatchEvent(new CustomEvent('cad-document-updated', { detail: { docJson } }));
+  };
 
   const updateCadViewport = (): void => {
     if (!canvasEl || !cadModule?._cad_set_viewport) return;
@@ -183,8 +254,10 @@
     hoverScheduled = false;
     if (!cadModule?._cad_pick_entity || !cadModule?._cad_set_hovered_entity) return;
 
-    const entityId = cadModule._cad_pick_entity(pendingHoverX, pendingHoverY);
+    const rawEntityId = cadModule._cad_pick_entity(pendingHoverX, pendingHoverY);
+    const entityId = normalizePickedEntityId(rawEntityId);
     cadModule._cad_set_hovered_entity(entityId);
+    dispatchHoveredEntity(entityId);
   };
 
   const scheduleHoverPick = (x: number, y: number): void => {
@@ -209,14 +282,45 @@
 
   const handleMouseDown = (event: MouseEvent): void => {
     if (!cadModule?._cad_set_cursor_button_state) return;
+
+    // Track mouse down position and time for click detection
+    if (event.button === 0) { // Left click only
+      mouseDownX = event.clientX;
+      mouseDownY = event.clientY;
+      mouseDownTime = Date.now();
+    }
+
     // Map button: 0=left, 1=middle, 2=right -> 1=left, 2=middle, 3=right (libcad convention)
     const buttonMap = [1, 2, 3];
     const button = buttonMap[event.button] || 1;
     cadModule._cad_set_cursor_button_state(button, true);
   };
 
+  const handleMouseLeave = (): void => {
+    clearHoveredEntity();
+  };
+
   const handleMouseUp = (event: MouseEvent): void => {
     if (!cadModule?._cad_set_cursor_button_state) return;
+
+    // Check if this was a click (not a drag)
+    if (event.button === 0) { // Left click only
+      const deltaX = Math.abs(event.clientX - mouseDownX);
+      const deltaY = Math.abs(event.clientY - mouseDownY);
+      const deltaTime = Date.now() - mouseDownTime;
+
+      if (deltaX < clickThreshold && deltaY < clickThreshold && deltaTime < clickTimeThreshold) {
+        // This was a click! Pick and select the entity
+        if (cadModule._cad_pick_entity && cadModule._cad_set_selected_entity) {
+          const pixelPoint = getCanvasPixelPoint(event.clientX, event.clientY);
+          const rawEntityId = cadModule._cad_pick_entity(pixelPoint.x, pixelPoint.y);
+          const entityId = normalizePickedEntityId(rawEntityId);
+          cadModule._cad_set_selected_entity(entityId);
+          dispatchSelectedEntity(entityId);
+        }
+      }
+    }
+
     const buttonMap = [1, 2, 3];
     const button = buttonMap[event.button] || 1;
     cadModule._cad_set_cursor_button_state(button, false);
@@ -261,15 +365,21 @@
   const handleTouchStart = (event: TouchEvent): void => {
     if (!cadModule || !canvasEl) return;
     if (event.cancelable) event.preventDefault();
+    clearHoveredEntity();
 
     const touchCount = event.touches.length;
     if (touchCount === 1) {
-      // Single finger = orbit
+      // Single finger = orbit (or tap for selection)
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
       touchMode = 'orbit';
       lastTouchX = p.x;
       lastTouchY = p.y;
       lastPinchDistance = 0;
+
+      // Track touch start for tap detection
+      mouseDownX = event.touches[0].clientX;
+      mouseDownY = event.touches[0].clientY;
+      mouseDownTime = Date.now();
     } else if (touchCount >= 2) {
       // Two fingers = pan + zoom (with thresholds)
       const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
@@ -348,7 +458,25 @@
 
     const touchCount = event.touches.length;
     if (touchCount === 0) {
-      // All fingers lifted
+      // All fingers lifted - check if this was a tap
+      if (touchMode === 'orbit' && event.changedTouches.length > 0) {
+        const touch = event.changedTouches[0];
+        const deltaX = Math.abs(touch.clientX - mouseDownX);
+        const deltaY = Math.abs(touch.clientY - mouseDownY);
+        const deltaTime = Date.now() - mouseDownTime;
+
+        if (deltaX < clickThreshold && deltaY < clickThreshold && deltaTime < clickTimeThreshold) {
+          // This was a tap! Pick and select the entity
+          if (cadModule._cad_pick_entity && cadModule._cad_set_selected_entity) {
+            const pixelPoint = getCanvasPixelPoint(touch.clientX, touch.clientY);
+            const rawEntityId = cadModule._cad_pick_entity(pixelPoint.x, pixelPoint.y);
+            const entityId = normalizePickedEntityId(rawEntityId);
+            cadModule._cad_set_selected_entity(entityId);
+            dispatchSelectedEntity(entityId);
+          }
+        }
+      }
+
       touchMode = 'none';
       lastPinchDistance = 0;
       pendingTouchData = null;
@@ -510,12 +638,14 @@
 
         updateCadViewport();
         startRenderLoop();
+        dispatchDocumentUpdated();
 
         // Attach camera interaction event listeners
         if (canvasEl) {
           canvasEl.addEventListener('mousemove', handleMouseMove);
           canvasEl.addEventListener('mousedown', handleMouseDown);
           canvasEl.addEventListener('mouseup', handleMouseUp);
+          canvasEl.addEventListener('mouseleave', handleMouseLeave);
           canvasEl.addEventListener('wheel', handleWheel, { passive: false });
           canvasEl.addEventListener('contextmenu', handleContextMenu);
           canvasEl.addEventListener('touchstart', handleTouchStart, { passive: false });
@@ -539,6 +669,7 @@
       canvasEl.removeEventListener('mousemove', handleMouseMove);
       canvasEl.removeEventListener('mousedown', handleMouseDown);
       canvasEl.removeEventListener('mouseup', handleMouseUp);
+      canvasEl.removeEventListener('mouseleave', handleMouseLeave);
       canvasEl.removeEventListener('wheel', handleWheel);
       canvasEl.removeEventListener('contextmenu', handleContextMenu);
       canvasEl.removeEventListener('touchstart', handleTouchStart);

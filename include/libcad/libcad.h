@@ -72,6 +72,10 @@ EXPORT void         cad_init_viewport();
 
 EXPORT uint32_t     cad_pick_entity(int screen_x, int screen_y);
 EXPORT void         cad_set_hovered_entity(uint32_t entity_id);
+EXPORT uint32_t     cad_get_hovered_entity();
+EXPORT void         cad_set_selected_entity(uint32_t entity_id);
+EXPORT uint32_t     cad_get_selected_entity();
+EXPORT const char*  cad_get_document_json();
 
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();

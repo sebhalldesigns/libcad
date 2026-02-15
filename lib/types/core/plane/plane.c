@@ -306,6 +306,13 @@ json_t* plane_to_json(plane_t* self)
     json_object_set_new(json, "visible", json_boolean(self->visible));
     json_object_set_new(json, "grid_size", json_real(self->grid_size));
 
+    /* Match vector picking ID encoding: type(0x2) in top 4 bits + shape handle. */
+    uint32_t entity_id = VECTOR_INVALID_INSTANCE;
+    if (self->rectangle_handle != VECTOR_INVALID_INSTANCE) {
+        entity_id = 0x20000000u | (self->rectangle_handle & 0x0FFFFFFFu);
+    }
+    json_object_set_new(json, "entity_id", json_integer((json_int_t)entity_id));
+
     return json;
 }
 

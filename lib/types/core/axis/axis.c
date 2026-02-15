@@ -266,5 +266,12 @@ json_t* axis_to_json(axis_t* self)
     json_object_set_new(json, "thickness", json_real(self->thickness));
     json_object_set_new(json, "show_arrow", json_boolean(self->show_arrow));
 
+    /* Match vector picking ID encoding: type(0x1) in top 4 bits + axis handle. */
+    uint32_t entity_id = VECTOR_INVALID_INSTANCE;
+    if (self->vector_line_handle != VECTOR_INVALID_INSTANCE) {
+        entity_id = 0x10000000u | (self->vector_line_handle & 0x0FFFFFFFu);
+    }
+    json_object_set_new(json, "entity_id", json_integer((json_int_t)entity_id));
+
     return json;
 }

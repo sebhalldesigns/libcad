@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <jansson.h>
 
 #include "types/core/object/object.h"
 #include "types/core/document/document.h"
@@ -256,6 +257,44 @@ uint32_t cad_pick_entity(int screen_x, int screen_y)
 void cad_set_hovered_entity(uint32_t entity_id)
 {
     vector_set_hovered_entity(entity_id);
+}
+
+uint32_t cad_get_hovered_entity()
+{
+    return vector_get_hovered_entity();
+}
+
+void cad_set_selected_entity(uint32_t entity_id)
+{
+    vector_set_selected_entity(entity_id);
+}
+
+uint32_t cad_get_selected_entity()
+{
+    return vector_get_selected_entity();
+}
+
+const char* cad_get_document_json()
+{
+    if (!current_document) {
+        return "{}";
+    }
+
+    /* Convert document to JSON */
+    json_t* json = document_to_json(current_document);
+    if (!json) {
+        return "{}";
+    }
+
+    /* Convert JSON to string (JSON_COMPACT for smaller output) */
+    static char* json_string = NULL;
+    if (json_string) {
+        free(json_string);
+    }
+    json_string = json_dumps(json, JSON_COMPACT);
+    json_decref(json);
+
+    return json_string ? json_string : "{}";
 }
 
 void cad_axis_delta(int axis, float delta)

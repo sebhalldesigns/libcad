@@ -6,14 +6,22 @@
   import {
     consoleMessages,
     inspectorFields,
-    projectTree,
     ribbonTabs,
+    convertDocumentToTree,
     type ProjectNode
   } from './lib/ui/model';
 
   let activeTabId = ribbonTabs[0].id;
-  let selectedNodeId = projectTree.find((node) => node.active)?.id ?? projectTree[0].id;
+  let projectTree: ProjectNode[] = [];
+  let selectedNodeId = '';
+  let hoveredNodeId: string | null = null;
+  const INVALID_ENTITY_ID = 0xFFFFFFFF;
+  let selectedEntityId = INVALID_ENTITY_ID;
+  let hoveredEntityId = INVALID_ENTITY_ID;
+  let nodeIdToEntity = new Map<string, number>();
+  let entityToNodeId = new Map<number, string>();
   let workspaceEl: HTMLElement | null = null;
+  let viewportRef: any = null;
   const appLinks = [
     { label: 'Settings' },
     { label: 'Help' }
@@ -176,13 +184,105 @@
     mobileTrayHeight = clamp(mobileTrayHeight, minTrayHeight, maxTrayHeight);
   }
 
+  function normalizeEntityId(raw: unknown): number {
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return INVALID_ENTITY_ID;
+    const value = raw >>> 0;
+    if (value === 0 || value === INVALID_ENTITY_ID) return INVALID_ENTITY_ID;
+    return value;
+  }
+
+  function rebuildEntityMaps(): void {
+    const nextNodeToEntity = new Map<string, number>();
+    const nextEntityToNode = new Map<number, string>();
+
+    for (const node of projectTree) {
+      if (typeof node.entityId === 'number') {
+        const entityId = normalizeEntityId(node.entityId);
+        if (entityId !== INVALID_ENTITY_ID) {
+          nextNodeToEntity.set(node.id, entityId);
+          nextEntityToNode.set(entityId, node.id);
+        }
+      }
+    }
+
+    nodeIdToEntity = nextNodeToEntity;
+    entityToNodeId = nextEntityToNode;
+
+    if (selectedEntityId !== INVALID_ENTITY_ID) {
+      selectedNodeId = entityToNodeId.get(selectedEntityId) ?? selectedNodeId;
+    } else if (selectedNodeId && !projectTree.some((node) => node.id === selectedNodeId)) {
+      selectedNodeId = projectTree[0]?.id ?? '';
+    } else if (!selectedNodeId && projectTree.length > 0) {
+      selectedNodeId = projectTree[0].id;
+    }
+
+    if (hoveredEntityId !== INVALID_ENTITY_ID) {
+      hoveredNodeId = entityToNodeId.get(hoveredEntityId) ?? null;
+    } else {
+      hoveredNodeId = null;
+    }
+  }
+
   $: if (!consoleVisible && activeTrayPanel === 'console') {
     activeTrayPanel = 'browser';
   }
 
+  function updateProjectTree(): void {
+    if (!viewportRef?.getDocumentJSON) return;
+    const docJson = viewportRef.getDocumentJSON();
+    applyDocumentJson(docJson);
+  }
+
+  function applyDocumentJson(docJson: unknown): void {
+    if (!docJson) return;
+    const newTree = convertDocumentToTree(docJson);
+    if (newTree.length > 0) {
+      projectTree = newTree;
+      rebuildEntityMaps();
+    }
+  }
+
+  function handleNodeClick(nodeId: string): void {
+    selectedNodeId = nodeId;
+    const entityId = nodeIdToEntity.get(nodeId) ?? INVALID_ENTITY_ID;
+    selectedEntityId = entityId;
+    viewportRef?.selectEntity?.(entityId);
+  }
+
+  function handleEntitySelected(event: CustomEvent): void {
+    const entityId = normalizeEntityId(event.detail?.entityId);
+    selectedEntityId = entityId;
+    if (entityId === INVALID_ENTITY_ID) {
+      selectedNodeId = '';
+      return;
+    }
+    selectedNodeId = entityToNodeId.get(entityId) ?? selectedNodeId;
+  }
+
+  function handleEntityHovered(event: CustomEvent): void {
+    const entityId = normalizeEntityId(event.detail?.entityId);
+    hoveredEntityId = entityId;
+    hoveredNodeId = entityId === INVALID_ENTITY_ID ? null : (entityToNodeId.get(entityId) ?? null);
+  }
+
+  function handleDocumentUpdated(event: CustomEvent): void {
+    applyDocumentJson(event.detail?.docJson);
+  }
+
   onMount(() => {
+    rebuildEntityMaps();
     clampMobileTrayHeight();
     window.addEventListener('resize', clampMobileTrayHeight);
+
+    // Listen for entity hover/selection events from viewport
+    window.addEventListener('cad-entity-selected', handleEntitySelected as EventListener);
+    window.addEventListener('cad-entity-hovered', handleEntityHovered as EventListener);
+    window.addEventListener('cad-document-updated', handleDocumentUpdated as EventListener);
+
+    // Update project tree after a delay to ensure WASM is loaded
+    setTimeout(updateProjectTree, 1000);
+    // Poll for updates (temporary - should be event-driven in production)
+    const interval = setInterval(updateProjectTree, 5000);
 
     smallViewportQuery = window.matchMedia('(max-width: 860px)');
     const handleSmallViewportChange = (event: MediaQueryListEvent | MediaQueryList): void => {
@@ -197,6 +297,10 @@
     smallViewportQuery.addEventListener('change', handleSmallViewportChange);
 
     return () => {
+      clearInterval(interval);
+      window.removeEventListener('cad-entity-selected', handleEntitySelected as EventListener);
+      window.removeEventListener('cad-entity-hovered', handleEntityHovered as EventListener);
+      window.removeEventListener('cad-document-updated', handleDocumentUpdated as EventListener);
       smallViewportQuery?.removeEventListener('change', handleSmallViewportChange);
       window.removeEventListener('resize', clampMobileTrayHeight);
     };
@@ -226,6 +330,7 @@
     >
       <div class="panel-center">
         <ViewportPlaceholder
+          bind:this={viewportRef}
           title="Workspace View"
           subtitle="Sketch + Scene Context"
           mode="scene"
@@ -241,8 +346,9 @@
                 <button
                   class="tree-node"
                   class:selected={node.id === selectedNodeId}
+                  class:hovered={node.id === hoveredNodeId}
                   style={`--depth:${node.depth}`}
-                  on:click={() => (selectedNodeId = node.id)}
+                  on:click={() => handleNodeClick(node.id)}
                 >
                   <span class="glyph" aria-hidden="true">{nodeIcon[node.type]}</span>
                   <span>{node.name}</span>
@@ -354,8 +460,9 @@
                       <button
                         class="tree-node"
                         class:selected={node.id === selectedNodeId}
+                        class:hovered={node.id === hoveredNodeId}
                         style={`--depth:${node.depth}`}
-                        on:click={() => (selectedNodeId = node.id)}
+                        on:click={() => handleNodeClick(node.id)}
                       >
                         <span class="glyph" aria-hidden="true">{nodeIcon[node.type]}</span>
                         <span>{node.name}</span>

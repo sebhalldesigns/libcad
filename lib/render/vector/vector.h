@@ -104,6 +104,9 @@ void vector_set_dpi_scale(float scale);
 /* picking */
 uint32_t vector_pick_entity(int screen_x, int screen_y, int width, int height, mat4 projection);
 void vector_set_hovered_entity(uint32_t entity_id);
+uint32_t vector_get_hovered_entity(void);
+void vector_set_selected_entity(uint32_t entity_id);
+uint32_t vector_get_selected_entity(void);
 
 /* helper functions for encoding parameters */
 float vector_build_dash(float period, float ratio);

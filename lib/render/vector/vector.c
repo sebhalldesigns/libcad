@@ -143,6 +143,7 @@ static float dpi_scale = 1.0f;
 
 /* Hover state */
 static uint32_t hovered_entity_id = VECTOR_INVALID_INSTANCE;
+static uint32_t selected_entity_id = VECTOR_INVALID_INSTANCE;
 
 /* LINE SHADER */
 static shader_t line_shader;
@@ -247,8 +248,8 @@ typedef struct
 static int compare_shape_depth_desc(const void *a, const void *b);
 static void scale_line_stroke_widths(const vector_line_instance_t *src, vector_line_instance_t *dst, size_t count, float scale);
 static void scale_shape_stroke_widths(const vector_shape_instance_t *src, vector_shape_instance_t *dst, size_t count, float scale);
-static void apply_line_hover(vector_line_instance_t *instances, size_t count, uint32_t hover_id, uint32_t type_bits);
-static void apply_shape_hover(vector_shape_instance_t *instances, size_t count, uint32_t hover_id);
+static void apply_line_hover(vector_line_instance_t *instances, size_t count, uint32_t hover_id, uint32_t select_id, uint32_t type_bits);
+static void apply_shape_hover(vector_shape_instance_t *instances, size_t count, uint32_t hover_id, uint32_t select_id);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -508,6 +509,21 @@ void vector_set_dpi_scale(float scale)
 void vector_set_hovered_entity(uint32_t entity_id)
 {
     hovered_entity_id = entity_id;
+}
+
+uint32_t vector_get_hovered_entity(void)
+{
+    return hovered_entity_id;
+}
+
+void vector_set_selected_entity(uint32_t entity_id)
+{
+    selected_entity_id = entity_id;
+}
+
+uint32_t vector_get_selected_entity(void)
+{
+    return selected_entity_id;
 }
 
 /***************************************************************
@@ -912,8 +928,8 @@ void vector_render(int width, int height, mat4 projection)
             /* Scale stroke widths by DPI */
             scale_shape_stroke_widths(sorted_shapes, scaled_shapes, shape_count, dpi_scale);
 
-            /* Apply hover highlighting */
-            apply_shape_hover(scaled_shapes, shape_count, hovered_entity_id);
+            /* Apply hover and selection highlighting */
+            apply_shape_hover(scaled_shapes, shape_count, hovered_entity_id, selected_entity_id);
 
             gpu_use_shader(shape_shader);
             gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
@@ -1006,7 +1022,7 @@ void vector_render(int width, int height, mat4 projection)
         if (scaled_lines)
         {
             scale_line_stroke_widths(line_data, scaled_lines, line_count, dpi_scale);
-            apply_line_hover(scaled_lines, line_count, hovered_entity_id, 0x00000000);
+            apply_line_hover(scaled_lines, line_count, hovered_entity_id, selected_entity_id, 0x00000000);
             gpu_upload_array_buffer_data(line_instance_buffer,
                                          scaled_lines,
                                          line_count * sizeof(vector_line_instance_t),
@@ -1081,7 +1097,7 @@ void vector_render(int width, int height, mat4 projection)
         if (scaled_axes)
         {
             scale_line_stroke_widths(axis_data, scaled_axes, axis_count, dpi_scale);
-            apply_line_hover(scaled_axes, axis_count, hovered_entity_id, 0x10000000);
+            apply_line_hover(scaled_axes, axis_count, hovered_entity_id, selected_entity_id, 0x10000000);
             gpu_upload_array_buffer_data(axis_instance_buffer,
                                          scaled_axes,
                                          axis_count * sizeof(vector_line_instance_t),
@@ -1478,41 +1494,69 @@ static void scale_shape_stroke_widths(const vector_shape_instance_t *src, vector
     }
 }
 
-/* Apply hover highlighting to lines */
-static void apply_line_hover(vector_line_instance_t *instances, size_t count, uint32_t hover_id, uint32_t type_bits)
+/* Apply hover and selection highlighting to lines */
+static void apply_line_hover(vector_line_instance_t *instances, size_t count, uint32_t hover_id, uint32_t select_id, uint32_t type_bits)
 {
-    if (hover_id == VECTOR_INVALID_INSTANCE) return;
-
-    uint32_t hover_type = (hover_id >> 28) & 0xF;
-    uint32_t hover_index = hover_id & 0x0FFFFFFF;
     uint32_t expected_type = (type_bits >> 28) & 0xF;
 
-    if (hover_type != expected_type) return;
-    if (hover_index >= count) return;
+    /* Apply selection highlighting (orange) */
+    if (select_id != VECTOR_INVALID_INSTANCE) {
+        uint32_t select_type = (select_id >> 28) & 0xF;
+        uint32_t select_index = select_id & 0x0FFFFFFF;
 
-    /* Apply cyan color and thicker stroke */
-    instances[hover_index].color[0] = 0.0f;
-    instances[hover_index].color[1] = 1.0f;
-    instances[hover_index].color[2] = 1.0f;
-    instances[hover_index].color[3] = 1.0f;
-    instances[hover_index].stroke_width *= 2.0f;
+        if (select_type == expected_type && select_index < count) {
+            instances[select_index].color[0] = 1.0f;  /* Orange for selection */
+            instances[select_index].color[1] = 0.6f;
+            instances[select_index].color[2] = 0.0f;
+            instances[select_index].color[3] = 1.0f;
+            instances[select_index].stroke_width *= 2.0f;
+        }
+    }
+
+    /* Apply hover highlighting (cyan) - overrides selection if hovering over selected item */
+    if (hover_id != VECTOR_INVALID_INSTANCE) {
+        uint32_t hover_type = (hover_id >> 28) & 0xF;
+        uint32_t hover_index = hover_id & 0x0FFFFFFF;
+
+        if (hover_type == expected_type && hover_index < count) {
+            instances[hover_index].color[0] = 0.0f;  /* Cyan for hover */
+            instances[hover_index].color[1] = 1.0f;
+            instances[hover_index].color[2] = 1.0f;
+            instances[hover_index].color[3] = 1.0f;
+            instances[hover_index].stroke_width *= 2.0f;
+        }
+    }
 }
 
-/* Apply hover highlighting to shapes */
-static void apply_shape_hover(vector_shape_instance_t *instances, size_t count, uint32_t hover_id)
+/* Apply hover and selection highlighting to shapes */
+static void apply_shape_hover(vector_shape_instance_t *instances, size_t count, uint32_t hover_id, uint32_t select_id)
 {
-    if (hover_id == VECTOR_INVALID_INSTANCE) return;
+    /* Apply selection highlighting (orange) */
+    if (select_id != VECTOR_INVALID_INSTANCE) {
+        uint32_t select_type = (select_id >> 28) & 0xF;
+        uint32_t select_index = select_id & 0x0FFFFFFF;
 
-    uint32_t hover_type = (hover_id >> 28) & 0xF;
-    uint32_t hover_index = hover_id & 0x0FFFFFFF;
+        if (select_type == 0x2 && select_index < count) {  /* Shape type */
+            instances[select_index].color[0] = 1.0f;  /* Orange for selection */
+            instances[select_index].color[1] = 0.6f;
+            instances[select_index].color[2] = 0.0f;
+            instances[select_index].color[3] = 0.8f;
+            instances[select_index].stroke_width *= 2.0f;
+        }
+    }
 
-    if (hover_type != 0x2) return;  /* Shape type */
-    if (hover_index >= count) return;
+    /* Apply hover highlighting (cyan) - overrides selection if hovering over selected item */
+    if (hover_id != VECTOR_INVALID_INSTANCE) {
+        uint32_t hover_type = (hover_id >> 28) & 0xF;
+        uint32_t hover_index = hover_id & 0x0FFFFFFF;
 
-    /* Apply cyan color and thicker stroke */
-    instances[hover_index].color[0] = 0.0f;
-    instances[hover_index].color[1] = 1.0f;
-    instances[hover_index].color[2] = 1.0f;
-    instances[hover_index].color[3] = 0.8f;  /* Semi-transparent fill */
-    instances[hover_index].stroke_width *= 2.0f;
+        if (hover_type == 0x2 && hover_index < count) {  /* Shape type */
+            /* Apply cyan color and thicker stroke */
+            instances[hover_index].color[0] = 0.0f;
+            instances[hover_index].color[1] = 1.0f;
+            instances[hover_index].color[2] = 1.0f;
+            instances[hover_index].color[3] = 0.8f;
+            instances[hover_index].stroke_width *= 2.0f;
+        }
+    }
 }

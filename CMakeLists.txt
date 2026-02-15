@@ -140,6 +140,7 @@ elseif (EMSCRIPTEN)
         "-s ALLOW_MEMORY_GROWTH=1"
         "-s USE_ZLIB=1"
         "-s ASSERTIONS=2"
+        "-s EXPORTED_RUNTIME_METHODS=['UTF8ToString']"
     )
 
     set(USE_GLES TRUE)

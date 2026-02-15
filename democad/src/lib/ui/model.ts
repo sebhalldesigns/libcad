@@ -26,6 +26,7 @@ export interface ProjectNode {
   name: string;
   type: 'folder' | 'sketch' | 'solid' | 'operation';
   depth: number;
+  entityId?: number;
   active?: boolean;
 }
 
@@ -38,6 +39,7 @@ export interface InspectorField {
 export interface ConsoleMessage {
   level: 'info' | 'warn' | 'ok';
   text: string;
+  time: string;
 }
 
 const BI_BASE = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/icons';
@@ -181,5 +183,52 @@ export const consoleMessages = writable<ConsoleMessage[]>([
 ]);
 
 export function addConsoleMessage(level: 'info' | 'warn' | 'ok', text: string): void {
-  consoleMessages.update(messages => [...messages.slice(-199), { level, text }]);  // Keep last 200 messages
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  consoleMessages.update(messages => [...messages.slice(-199), { level, text, time }]);  // Keep last 200 messages
+}
+
+// Helper to convert CAD document JSON to ProjectNode tree
+export function convertDocumentToTree(docJson: any): ProjectNode[] {
+  if (!docJson) return [];
+
+  const nodes: ProjectNode[] = [];
+  const normalizeEntityId = (raw: unknown): number | undefined => {
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+    const value = raw >>> 0;
+    if (value === 0 || value === 0xFFFFFFFF) return undefined;
+    return value;
+  };
+
+  function addNode(obj: any, depth: number, path: string): void {
+    if (!obj) return;
+
+    // Map CAD types to UI types
+    let nodeType: ProjectNode['type'] = 'folder';
+    if (obj.type === 'plane_t') nodeType = 'folder'; // Planes are construction elements
+    else if (obj.type === 'axis_t') nodeType = 'folder'; // Axes are construction elements
+    else if (obj.type === 'sketch_t') nodeType = 'sketch';
+    else if (obj.type === 'solid_t') nodeType = 'solid';
+    else if (obj.type === 'document_t') nodeType = 'folder';
+
+    const entityId = normalizeEntityId(obj.entity_id);
+    const stableId = entityId !== undefined ? `entity-${entityId.toString(16)}` : `path-${path}`;
+
+    nodes.push({
+      id: stableId,
+      name: obj.name || obj.type || 'Unnamed',
+      type: nodeType,
+      depth: depth,
+      entityId
+    });
+
+    // Recursively add children
+    if (obj.children && Array.isArray(obj.children)) {
+      for (let i = 0; i < obj.children.length; i++) {
+        addNode(obj.children[i], depth + 1, `${path}-${i}`);
+      }
+    }
+  }
+
+  addNode(docJson, 0, '0');
+  return nodes;
 }
