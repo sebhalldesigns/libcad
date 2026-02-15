@@ -89,8 +89,8 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'sketch-session',
         label: 'Sketch',
         actions: [
-          { id: 'sketch-apply', label: 'Apply', icon: bi('check2-circle'), hint: 'Apply sketch changes', size: 'large' },
-          { id: 'sketch-close', label: 'Close', icon: bi('x-circle'), hint: 'Close active sketch session', size: 'large' }
+          { id: 'sketch-edit', label: 'Edit', icon: bi('pencil-square'), hint: 'Edit selected sketch', size: 'large' },
+          { id: 'sketch-apply', label: 'Apply', icon: bi('check2-circle'), hint: 'Apply and close active sketch session', size: 'large' }
         ]
       },
       {

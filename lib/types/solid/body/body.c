@@ -453,16 +453,16 @@ static void body_generate_box_mesh(body_t* self, vec3 center, vec3 half_extents,
 
     float hw = half_extents[0]; /* half width along u */
     float hh = half_extents[1]; /* half height along v */
-    float hd = half_extents[2]; /* half depth along normal */
+    float depth = half_extents[2] * 2.0f; /* full depth along normal */
 
-    /* Compute 8 corners of the box */
-    /* Bottom 4 corners (at center - hd*normal) */
-    /* Top 4 corners (at center + hd*normal) */
+    /* Compute 8 corners of the box.
+    ** Bottom 4 sit on the sketch plane (sn=0).
+    ** Top 4 are offset by depth along the plane normal. */
     vec3 corners[8];
     for (int i = 0; i < 8; i++) {
         float su = (i & 1) ? hw : -hw;
         float sv = (i & 2) ? hh : -hh;
-        float sn = (i & 4) ? hd : -hd;
+        float sn = (i & 4) ? depth : 0.0f;
 
         corners[i][0] = center[0] + su * u_axis[0] + sv * v_axis[0] + sn * n_axis[0];
         corners[i][1] = center[1] + su * u_axis[1] + sv * v_axis[1] + sn * n_axis[1];
@@ -471,8 +471,8 @@ static void body_generate_box_mesh(body_t* self, vec3 center, vec3 half_extents,
 
     /*
     ** Corner indices (bit pattern: bit0=u, bit1=v, bit2=n):
-    **   0: (-u, -v, -n)   1: (+u, -v, -n)
-    **   2: (-u, +v, -n)   3: (+u, +v, -n)
+    **   0: (-u, -v, 0)    1: (+u, -v, 0)
+    **   2: (-u, +v, 0)    3: (+u, +v, 0)
     **   4: (-u, -v, +n)   5: (+u, -v, +n)
     **   6: (-u, +v, +n)   7: (+u, +v, +n)
     */

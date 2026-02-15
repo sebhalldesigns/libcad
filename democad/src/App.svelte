@@ -98,13 +98,39 @@
       return;
     }
 
-    if (actionId === 'sketch-close') {
+    if (actionId === 'sketch-edit') {
+      // Find the selected node's object and check if it's a sketch with a reference plane
+      const selectedObject = selectedNodeId ? nodeIdToObject.get(selectedNodeId) : null;
+      if (!selectedObject || selectedObject.type !== 'sketch_t') {
+        addConsoleMessage('warn', 'Select a sketch in the browser, then click Edit.');
+        return;
+      }
+
+      const planeEntityId = normalizeEntityId(selectedObject.reference_plane_entity_id);
+      if (planeEntityId === INVALID_ENTITY_ID) {
+        addConsoleMessage('warn', 'Selected sketch has no reference plane.');
+        return;
+      }
+
+      const entered = viewportRef?.enterSketchMode?.(planeEntityId);
+      if (entered) {
+        viewportMode = 'sketch';
+        activeTabId = 'sketch';
+        addConsoleMessage('ok', 'Entered sketch edit mode.');
+        updateProjectTree();
+      } else {
+        addConsoleMessage('warn', 'Failed to enter sketch mode.');
+      }
+      return;
+    }
+
+    if (actionId === 'sketch-apply') {
       const exited = viewportRef?.exitSketchMode?.();
       if (exited) {
         viewportMode = 'scene';
         activeSketchTool = 'none';
         activeTabId = 'home';
-        addConsoleMessage('ok', 'Closed sketch mode.');
+        addConsoleMessage('ok', 'Applied and closed sketch mode.');
         updateProjectTree();
       } else {
         addConsoleMessage('warn', 'Failed to close sketch mode.');
@@ -458,11 +484,6 @@
   }
 
   function handleNodeClick(nodeId: string): void {
-    const selectedObject = nodeIdToObject.get(nodeId);
-    if (selectedObject?.visible === false) {
-      return;
-    }
-
     selectedNodeId = nodeId;
     const entityId = nodeIdToEntity.get(nodeId) ?? INVALID_ENTITY_ID;
     selectedEntityId = entityId;
@@ -471,11 +492,6 @@
   }
 
   function handleNodeHover(nodeId: string): void {
-    const hoveredObject = nodeIdToObject.get(nodeId);
-    if (hoveredObject?.visible === false) {
-      return;
-    }
-
     hoveredNodeId = nodeId;
     const entityId = nodeIdToEntity.get(nodeId) ?? INVALID_ENTITY_ID;
     hoveredEntityId = entityId;

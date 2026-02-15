@@ -1358,7 +1358,7 @@ bool cad_extrude_selected(void)
     }
 
     body_t* body = NULL;
-    const float default_height = 1.0f;
+    const float default_height = 10.0f;
 
     if (found_circle) {
         body = body_new_from_circle(found_circle, found_plane, default_height);
