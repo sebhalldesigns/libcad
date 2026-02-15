@@ -959,6 +959,8 @@ body {
 .console-log {
   font-size: 0.72rem;
   line-height: 1.25;
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .console-log li {

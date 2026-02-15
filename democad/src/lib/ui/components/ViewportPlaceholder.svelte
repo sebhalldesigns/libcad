@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { addConsoleMessage } from '../model';
 
   export let title = 'Viewport';
   export let subtitle = '';
@@ -22,12 +23,16 @@
       windowWidth: number,
       windowHeight: number
     ) => void;
+    _cad_set_dpi_scale?: (scale: number) => void;
     _cad_render_viewport?: () => void;
     _cad_init_viewport?: () => void;
     _cad_set_cursor_pos?: (x: number, y: number) => void;
     _cad_set_cursor_button_state?: (button: number, pressed: boolean) => void;
     _cad_set_modifier_state?: (modifier: number, state: boolean) => void;
     _cad_axis_delta?: (axis: number, delta: number) => void;
+    _cad_camera_orbit?: (deltaX: number, deltaY: number) => void;
+    _cad_camera_pan?: (deltaX: number, deltaY: number) => void;
+    _cad_camera_zoom?: (delta: number) => void;
     calledRun?: boolean;
   };
 
@@ -37,13 +42,22 @@
   let cadCtx: number | null = null;
   let cadModule: CadModule | null = null;
   let renderFrameId: number | null = null;
-  let touchMode: 'none' | 'orbit' | 'pan' = 'none';
-  let touchMiddleDown = false;
-  let touchShiftDown = false;
-  let lastPinchDistance = 0;
-  let pinchDistanceRemainder = 0;
 
-  const pinchStepPixels = 14;
+  // Cached bounding rect for performance
+  let cachedRect: DOMRect | null = null;
+
+  // Touch state
+  let touchMode: 'none' | 'orbit' | 'pan' = 'none';
+  let lastTouchX = 0;
+  let lastTouchY = 0;
+  let lastPinchDistance = 0;
+
+  // RAF throttling for touch events
+  let pendingTouchUpdate = false;
+  let pendingTouchData: { x: number; y: number; zoom?: number } | null = null;
+
+  const panThreshold = 3; // pixels center must move before panning
+  const zoomSensitivity = 0.04; // zoom speed multiplier (lower = slower)
 
   const updateCadViewport = (): void => {
     if (!canvasEl || !cadModule?._cad_set_viewport) return;
@@ -67,6 +81,11 @@
     renderFrameId = window.requestAnimationFrame(frame);
   };
 
+  const updateCachedRect = (): void => {
+    if (!canvasEl) return;
+    cachedRect = canvasEl.getBoundingClientRect();
+  };
+
   const resizeCanvas = (): void => {
     if (!canvasEl || !containerEl) return;
     const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -86,68 +105,56 @@
     canvasEl.style.height = cssHeight + 'px';
 
     updateCadViewport();
+    updateCachedRect();
   };
 
   const getCanvasPoint = (clientX: number, clientY: number): { x: number; y: number } => {
-    if (!canvasEl) return { x: 0, y: 0 };
-    const rect = canvasEl.getBoundingClientRect();
+    if (!cachedRect) return { x: 0, y: 0 };
     return {
-      x: Math.floor(clientX - rect.left),
-      y: Math.floor(clientY - rect.top)
+      x: Math.floor(clientX - cachedRect.left),
+      y: Math.floor(clientY - cachedRect.top)
     };
   };
 
-  const distanceBetweenPoints = (
-    a: { x: number; y: number },
-    b: { x: number; y: number }
-  ): number => {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return Math.hypot(dx, dy);
-  };
+  const applyTouchUpdate = (): void => {
+    if (!pendingTouchData || !cadModule) return;
 
-  const middlePoint = (
-    a: { x: number; y: number },
-    b: { x: number; y: number }
-  ): { x: number; y: number } => ({
-    x: Math.floor((a.x + b.x) * 0.5),
-    y: Math.floor((a.y + b.y) * 0.5)
-  });
+    const data = pendingTouchData;
+    pendingTouchData = null;
+    pendingTouchUpdate = false;
 
-  const setMiddleButtonState = (pressed: boolean): void => {
-    if (!cadModule?._cad_set_cursor_button_state) return;
-    cadModule._cad_set_cursor_button_state(2, pressed);
-    touchMiddleDown = pressed;
-  };
+    // Calculate deltas from last position
+    const deltaX = data.x - lastTouchX;
+    const deltaY = data.y - lastTouchY;
 
-  const setShiftState = (pressed: boolean): void => {
-    if (!cadModule?._cad_set_modifier_state) return;
-    cadModule._cad_set_modifier_state(2, pressed);
-    touchShiftDown = pressed;
-  };
+    // Apply camera movement based on mode
+    if (touchMode === 'orbit' && (deltaX !== 0 || deltaY !== 0)) {
+      cadModule._cad_camera_orbit?.(deltaX, deltaY);
+    } else if (touchMode === 'pan') {
+      // Apply pan only if movement exceeds threshold
+      const movement = Math.hypot(deltaX, deltaY);
+      if (movement >= panThreshold) {
+        cadModule._cad_camera_pan?.(deltaX, deltaY);
+      }
 
-  const beginTouchCameraDrag = (x: number, y: number, pan: boolean): void => {
-    if (!cadModule?._cad_set_cursor_pos) return;
-
-    if (touchMiddleDown) {
-      setMiddleButtonState(false);
+      // Apply zoom if present and exceeds threshold (can happen simultaneously)
+      if (data.zoom !== undefined && data.zoom !== 0) {
+        cadModule._cad_camera_zoom?.(data.zoom);
+      }
     }
 
-    setShiftState(pan);
-    cadModule._cad_set_cursor_pos(x, y);
-    setMiddleButtonState(true);
+    // Update last position
+    lastTouchX = data.x;
+    lastTouchY = data.y;
   };
 
-  const stopTouchCameraDrag = (): void => {
-    if (touchMiddleDown) {
-      setMiddleButtonState(false);
+  const scheduleTouchUpdate = (x: number, y: number, zoom?: number): void => {
+    pendingTouchData = { x, y, zoom };
+
+    if (!pendingTouchUpdate) {
+      pendingTouchUpdate = true;
+      requestAnimationFrame(applyTouchUpdate);
     }
-    if (touchShiftDown) {
-      setShiftState(false);
-    }
-    touchMode = 'none';
-    lastPinchDistance = 0;
-    pinchDistanceRemainder = 0;
   };
 
   // Camera interaction handlers
@@ -214,67 +221,81 @@
 
     const touchCount = event.touches.length;
     if (touchCount === 1) {
+      // Single finger = orbit
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
       touchMode = 'orbit';
+      lastTouchX = p.x;
+      lastTouchY = p.y;
       lastPinchDistance = 0;
-      pinchDistanceRemainder = 0;
-      beginTouchCameraDrag(p.x, p.y, false);
-      return;
-    }
-
-    if (touchCount >= 2) {
+    } else if (touchCount >= 2) {
+      // Two fingers = pan + zoom (with thresholds)
       const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
       const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
-      const center = middlePoint(p0, p1);
+
+      const centerX = Math.floor((p0.x + p1.x) * 0.5);
+      const centerY = Math.floor((p0.y + p1.y) * 0.5);
+
       touchMode = 'pan';
-      lastPinchDistance = distanceBetweenPoints(p0, p1);
-      pinchDistanceRemainder = 0;
-      beginTouchCameraDrag(center.x, center.y, true);
+      lastTouchX = centerX;
+      lastTouchY = centerY;
+
+      const dx = p0.x - p1.x;
+      const dy = p0.y - p1.y;
+      lastPinchDistance = Math.hypot(dx, dy);
     }
   };
 
   const handleTouchMove = (event: TouchEvent): void => {
-    if (!cadModule?._cad_set_cursor_pos || !canvasEl) return;
+    if (!cadModule || !canvasEl) return;
     if (event.cancelable) event.preventDefault();
 
     const touchCount = event.touches.length;
     if (touchCount === 1) {
+      // Single finger orbit
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+
       if (touchMode !== 'orbit') {
         touchMode = 'orbit';
+        lastTouchX = p.x;
+        lastTouchY = p.y;
         lastPinchDistance = 0;
-        pinchDistanceRemainder = 0;
-        beginTouchCameraDrag(p.x, p.y, false);
+        return;
       }
-      cadModule._cad_set_cursor_pos(p.x, p.y);
-      return;
-    }
 
-    if (touchCount >= 2) {
+      scheduleTouchUpdate(p.x, p.y);
+    } else if (touchCount >= 2) {
+      // Two finger pan + zoom with smooth continuous zoom
       const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
       const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
-      const center = middlePoint(p0, p1);
-      const distance = distanceBetweenPoints(p0, p1);
+
+      const centerX = Math.floor((p0.x + p1.x) * 0.5);
+      const centerY = Math.floor((p0.y + p1.y) * 0.5);
+
+      const dx = p0.x - p1.x;
+      const dy = p0.y - p1.y;
+      const distance = Math.hypot(dx, dy);
 
       if (touchMode !== 'pan') {
         touchMode = 'pan';
-        pinchDistanceRemainder = 0;
-        beginTouchCameraDrag(center.x, center.y, true);
+        lastTouchX = centerX;
+        lastTouchY = centerY;
+        lastPinchDistance = distance;
+        return;
       }
 
-      cadModule._cad_set_cursor_pos(center.x, center.y);
-
-      if (cadModule._cad_axis_delta && lastPinchDistance > 0) {
-        pinchDistanceRemainder += distance - lastPinchDistance;
-
-        while (Math.abs(pinchDistanceRemainder) >= pinchStepPixels) {
-          const zoomDelta = pinchDistanceRemainder > 0 ? 1 : -1;
-          cadModule._cad_axis_delta(0, zoomDelta);
-          pinchDistanceRemainder -= zoomDelta * pinchStepPixels;
-        }
+      // Calculate smooth continuous zoom
+      let zoomDelta = 0;
+      if (lastPinchDistance > 0) {
+        const distanceChange = distance - lastPinchDistance;
+        // Convert pixel change to smooth zoom delta
+        zoomDelta = distanceChange * zoomSensitivity;
+        lastPinchDistance = distance;
+      } else {
+        lastPinchDistance = distance;
       }
 
-      lastPinchDistance = distance;
+      // Schedule update with both pan (if exceeds threshold) and zoom
+      scheduleTouchUpdate(centerX, centerY, zoomDelta);
     }
   };
 
@@ -284,31 +305,42 @@
 
     const touchCount = event.touches.length;
     if (touchCount === 0) {
-      stopTouchCameraDrag();
-      return;
-    }
-
-    if (touchCount === 1) {
+      // All fingers lifted
+      touchMode = 'none';
+      lastPinchDistance = 0;
+      pendingTouchData = null;
+      pendingTouchUpdate = false;
+    } else if (touchCount === 1) {
+      // Transition back to single finger orbit
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
       touchMode = 'orbit';
+      lastTouchX = p.x;
+      lastTouchY = p.y;
       lastPinchDistance = 0;
-      pinchDistanceRemainder = 0;
-      beginTouchCameraDrag(p.x, p.y, false);
-      return;
-    }
+    } else {
+      // Still have 2+ fingers, reset pan/zoom state
+      const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
 
-    const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
-    const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
-    const center = middlePoint(p0, p1);
-    touchMode = 'pan';
-    lastPinchDistance = distanceBetweenPoints(p0, p1);
-    pinchDistanceRemainder = 0;
-    beginTouchCameraDrag(center.x, center.y, true);
+      const centerX = Math.floor((p0.x + p1.x) * 0.5);
+      const centerY = Math.floor((p0.y + p1.y) * 0.5);
+
+      touchMode = 'pan';
+      lastTouchX = centerX;
+      lastTouchY = centerY;
+
+      const dx = p0.x - p1.x;
+      const dy = p0.y - p1.y;
+      lastPinchDistance = Math.hypot(dx, dy);
+    }
   };
 
   const handleTouchCancel = (event: TouchEvent): void => {
     if (event.cancelable) event.preventDefault();
-    stopTouchCameraDrag();
+    touchMode = 'none';
+    lastPinchDistance = 0;
+    pendingTouchData = null;
+    pendingTouchUpdate = false;
   };
 
   onMount(() => {
@@ -328,12 +360,31 @@
       resizeObserver.observe(containerEl);
     }
 
+    // Update cached rect on scroll/resize
+    window.addEventListener('scroll', updateCachedRect, { passive: true });
+    window.addEventListener('resize', updateCachedRect, { passive: true });
+
     const win = window as Window & { Module?: CadModule };
     const loadCadModule = (): Promise<CadModule> => new Promise((resolve, reject) => {
       const moduleObject: CadModule = {
         canvas: canvasEl!,
-        print: (text: string) => console.log('[cad]', text),
-        printErr: (text: string) => console.error('[cad]', text)
+        print: (text: string) => {
+          console.log('[cad]', text);
+          if (text.toLowerCase().includes('error')) {
+            addConsoleMessage('warn', text);
+          }
+          else if (text.toLowerCase().includes('warning')) {
+            addConsoleMessage('info', text);
+          }
+          else
+          {
+            addConsoleMessage('ok', text);
+          }
+        },
+        printErr: (text: string) => {
+          console.error('[cad]', text);
+          addConsoleMessage('warn', text);
+        }
       };
       moduleObject.onRuntimeInitialized = () => {
         console.log('[cad] Runtime initialized');
@@ -346,7 +397,7 @@
       const scriptCandidates = import.meta.env.DEV
         ? ['/dist/cad.js', '/cad.js']
         : ['/cad.js', '/dist/cad.js'];
-      const cacheBust = `?t=${Date.now()}`;
+      const cacheBust = `?v=${Date.now()}_${Math.random()}`;
       const tryLoad = (index: number): void => {
         if (index >= scriptCandidates.length) {
           reject(new Error('Failed to load cad.js from /cad.js or /dist/cad.js'));
@@ -397,8 +448,23 @@
       .then((cad) => {
         cadModule = cad;
         if (!cad._cad_create_context) return;
+
         cadCtx = cad._cad_create_context();
         cad._cad_init_viewport?.();
+
+        // Set DPI scale after context is created
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const scale = dpr; // Use DPI directly for consistent line thickness across devices
+
+        addConsoleMessage('info', `DPI: ${dpr}, setting scale to ${scale}`);
+
+        if (typeof cad._cad_set_dpi_scale === 'function') {
+          cad._cad_set_dpi_scale(scale);
+          addConsoleMessage('ok', `Set DPI scale to ${scale}`);
+        } else {
+          addConsoleMessage('warn', `_cad_set_dpi_scale not found (type: ${typeof cad._cad_set_dpi_scale})`);
+        }
+
         updateCadViewport();
         startRenderLoop();
 
@@ -442,7 +508,14 @@
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
 
-    stopTouchCameraDrag();
+    // Remove cached rect update listeners
+    window.removeEventListener('scroll', updateCachedRect);
+    window.removeEventListener('resize', updateCachedRect);
+
+    // Clear touch state
+    touchMode = 'none';
+    pendingTouchData = null;
+    pendingTouchUpdate = false;
 
     resizeObserver?.disconnect();
     if (renderFrameId !== null) {

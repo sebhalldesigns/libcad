@@ -99,6 +99,7 @@ typedef struct
 /* initialization and rendering */
 bool vector_init(void);
 void vector_render(int width, int height, mat4 projection);
+void vector_set_dpi_scale(float scale);
 
 /* helper functions for encoding parameters */
 float vector_build_dash(float period, float ratio);

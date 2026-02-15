@@ -92,6 +92,7 @@ def _setup_function_signatures(lib):
 
     # Viewport
     setup_func('cad_set_viewport', [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int], None)
+    setup_func('cad_set_dpi_scale', [ctypes.c_float], None)
     setup_func('cad_render_viewport', [], None)
     setup_func('cad_init_viewport', [], None)
 
@@ -210,6 +211,11 @@ def render_viewport():
 def init_viewport():
     """Initialize the viewport."""
     _get_lib().cad_init_viewport()
+
+
+def set_dpi_scale(scale: float):
+    """Set the DPI scale for line thickness."""
+    _get_lib().cad_set_dpi_scale(scale)
 
 
 # Input handling functions

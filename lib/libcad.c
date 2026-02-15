@@ -184,6 +184,13 @@ void cad_set_viewport(int x, int y, int vpw, int vph, int w, int h)
     }
 }
 
+void cad_set_dpi_scale(float scale)
+{
+    printf("CAD set dpi scale: %.2f\n", scale);
+
+    vector_set_dpi_scale(scale);
+}
+
 void cad_render_viewport()
 {
 

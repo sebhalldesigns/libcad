@@ -125,6 +125,9 @@ static instance_arena_t shape_arena;
 static instance_arena_t bezier_arena;
 static instance_arena_t glyph_arena;
 
+/* DPI scale for line thickness */
+static float dpi_scale = 1.0f;
+
 /* LINE SHADER */
 static shader_t line_shader;
 static uniform_t line_shader_uniform_projection;
@@ -180,6 +183,8 @@ typedef struct
 } shape_sort_item_t;
 
 static int compare_shape_depth_desc(const void *a, const void *b);
+static void scale_line_stroke_widths(const vector_line_instance_t *src, vector_line_instance_t *dst, size_t count, float scale);
+static void scale_shape_stroke_widths(const vector_shape_instance_t *src, vector_shape_instance_t *dst, size_t count, float scale);
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -430,8 +435,20 @@ bool vector_init()
     return true;
 }
 
+void vector_set_dpi_scale(float scale)
+{
+    dpi_scale = fmaxf(scale, 0.1f); /* Clamp to minimum 0.1 */
+    printf("vector_set_dpi_scale: scale=%.2f, dpi_scale=%.2f\n", scale, dpi_scale);
+}
+
 void vector_render(int width, int height, mat4 projection)
 {
+    static int frame_count = 0;
+    if (frame_count % 60 == 0) {
+        printf("vector_render: frame %d, dpi_scale=%.2f\n", frame_count, dpi_scale);
+    }
+    frame_count++;
+
     gpu_set_blending(true);
     gpu_set_viewport(width, height);
 
@@ -446,8 +463,9 @@ void vector_render(int width, int height, mat4 projection)
         vector_shape_instance_t *shape_data = (vector_shape_instance_t *)instance_arena_data(&shape_arena);
         shape_sort_item_t *sort_items = (shape_sort_item_t *)malloc(shape_count * sizeof(shape_sort_item_t));
         vector_shape_instance_t *sorted_shapes = (vector_shape_instance_t *)malloc(shape_count * sizeof(vector_shape_instance_t));
+        vector_shape_instance_t *scaled_shapes = (vector_shape_instance_t *)malloc(shape_count * sizeof(vector_shape_instance_t));
 
-        if (shape_data && sort_items && sorted_shapes)
+        if (shape_data && sort_items && sorted_shapes && scaled_shapes)
         {
             for (size_t i = 0; i < shape_count; i++)
             {
@@ -467,6 +485,9 @@ void vector_render(int width, int height, mat4 projection)
                 sorted_shapes[i] = shape_data[sort_items[i].index];
             }
 
+            /* Scale stroke widths by DPI */
+            scale_shape_stroke_widths(sorted_shapes, scaled_shapes, shape_count, dpi_scale);
+
             gpu_use_shader(shape_shader);
             gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
 
@@ -480,7 +501,7 @@ void vector_render(int width, int height, mat4 projection)
 
             gpu_bind_vertex_array(shape_vertex_array);
             gpu_upload_array_buffer_data(shape_instance_buffer,
-                                         sorted_shapes,
+                                         scaled_shapes,
                                          shape_count * sizeof(vector_shape_instance_t),
                                          true);
             gpu_draw_instances(shape_vertex_array, 0, 4, shape_count);
@@ -491,6 +512,8 @@ void vector_render(int width, int height, mat4 projection)
         else
         {
             /* Fallback to unsorted draw if allocation fails */
+            vector_shape_instance_t *scaled_shapes_fallback = (vector_shape_instance_t *)malloc(shape_count * sizeof(vector_shape_instance_t));
+
             gpu_use_shader(shape_shader);
             gpu_set_uniform_mat4(shape_shader_uniform_projection, projection);
 
@@ -503,16 +526,32 @@ void vector_render(int width, int height, mat4 projection)
             gpu_set_depth_write(false);
 
             gpu_bind_vertex_array(shape_vertex_array);
-            gpu_upload_array_buffer_data(shape_instance_buffer,
-                                         instance_arena_data(&shape_arena),
-                                         shape_arena.used,
-                                         true);
+
+            if (scaled_shapes_fallback)
+            {
+                scale_shape_stroke_widths(shape_data, scaled_shapes_fallback, shape_count, dpi_scale);
+                gpu_upload_array_buffer_data(shape_instance_buffer,
+                                             scaled_shapes_fallback,
+                                             shape_count * sizeof(vector_shape_instance_t),
+                                             true);
+                free(scaled_shapes_fallback);
+            }
+            else
+            {
+                /* Last resort: upload without scaling */
+                gpu_upload_array_buffer_data(shape_instance_buffer,
+                                             instance_arena_data(&shape_arena),
+                                             shape_arena.used,
+                                             true);
+            }
+
             gpu_draw_instances(shape_vertex_array, 0, 4, shape_count);
             gpu_bind_vertex_array(0);
 
             gpu_set_depth_write(true);
         }
 
+        free(scaled_shapes);
         free(sorted_shapes);
         free(sort_items);
     }
@@ -521,6 +560,9 @@ void vector_render(int width, int height, mat4 projection)
     size_t line_count = instance_arena_count(&line_arena);
     if (line_count > 0)
     {
+        vector_line_instance_t *line_data = (vector_line_instance_t *)instance_arena_data(&line_arena);
+        vector_line_instance_t *scaled_lines = (vector_line_instance_t *)malloc(line_count * sizeof(vector_line_instance_t));
+
         gpu_use_shader(line_shader);
         gpu_set_uniform_mat4(line_shader_uniform_projection, projection);
 
@@ -533,10 +575,25 @@ void vector_render(int width, int height, mat4 projection)
         gpu_set_depth_write(false);
 
         gpu_bind_vertex_array(line_vertex_array);
-        gpu_upload_array_buffer_data(line_instance_buffer,
-                                     instance_arena_data(&line_arena),
-                                     line_arena.used,
-                                     true);
+
+        if (scaled_lines)
+        {
+            scale_line_stroke_widths(line_data, scaled_lines, line_count, dpi_scale);
+            gpu_upload_array_buffer_data(line_instance_buffer,
+                                         scaled_lines,
+                                         line_count * sizeof(vector_line_instance_t),
+                                         true);
+            free(scaled_lines);
+        }
+        else
+        {
+            /* Fallback: upload without scaling */
+            gpu_upload_array_buffer_data(line_instance_buffer,
+                                         line_data,
+                                         line_arena.used,
+                                         true);
+        }
+
         gpu_draw_instances(line_vertex_array, 0, 4, line_count);
         gpu_bind_vertex_array(0);
 
@@ -577,6 +634,9 @@ void vector_render(int width, int height, mat4 projection)
     size_t axis_count = instance_arena_count(&axis_arena);
     if (axis_count > 0)
     {
+        vector_line_instance_t *axis_data = (vector_line_instance_t *)instance_arena_data(&axis_arena);
+        vector_line_instance_t *scaled_axes = (vector_line_instance_t *)malloc(axis_count * sizeof(vector_line_instance_t));
+
         gpu_use_shader(axis_shader);
         gpu_set_uniform_mat4(axis_shader_uniform_projection, projection);
 
@@ -589,10 +649,25 @@ void vector_render(int width, int height, mat4 projection)
         gpu_set_depth_write(false);
 
         gpu_bind_vertex_array(axis_vertex_array);
-        gpu_upload_array_buffer_data(axis_instance_buffer,
-                                     instance_arena_data(&axis_arena),
-                                     axis_arena.used,
-                                     true);
+
+        if (scaled_axes)
+        {
+            scale_line_stroke_widths(axis_data, scaled_axes, axis_count, dpi_scale);
+            gpu_upload_array_buffer_data(axis_instance_buffer,
+                                         scaled_axes,
+                                         axis_count * sizeof(vector_line_instance_t),
+                                         true);
+            free(scaled_axes);
+        }
+        else
+        {
+            /* Fallback: upload without scaling */
+            gpu_upload_array_buffer_data(axis_instance_buffer,
+                                         axis_data,
+                                         axis_arena.used,
+                                         true);
+        }
+
         gpu_draw_instances(axis_vertex_array, 0, 4, axis_count);
         gpu_bind_vertex_array(0);
 
@@ -947,4 +1022,29 @@ static int compare_shape_depth_desc(const void *a, const void *b)
     if (sa->depth < sb->depth) return 1;
     if (sa->depth > sb->depth) return -1;
     return 0;
+}
+
+static void scale_line_stroke_widths(const vector_line_instance_t *src, vector_line_instance_t *dst, size_t count, float scale)
+{
+    static int log_once = 0;
+    if (log_once < 3 && count > 0) {
+        printf("scale_line_stroke_widths: count=%zu, scale=%.2f, original_width=%.2f, scaled_width=%.2f\n",
+               count, scale, src[0].stroke_width, src[0].stroke_width * scale);
+        log_once++;
+    }
+
+    for (size_t i = 0; i < count; i++)
+    {
+        dst[i] = src[i];
+        dst[i].stroke_width *= scale;
+    }
+}
+
+static void scale_shape_stroke_widths(const vector_shape_instance_t *src, vector_shape_instance_t *dst, size_t count, float scale)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        dst[i] = src[i];
+        dst[i].stroke_width *= scale;
+    }
 }

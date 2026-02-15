@@ -66,6 +66,7 @@ EXPORT bool         cad_write_model_file(cad_ctx_t ctx, cad_model_t model, const
 EXPORT bool         cad_write_model_data(cad_ctx_t ctx, cad_model_t model, const char* format, uint8_t** p_data, size_t* p_size);
 
 EXPORT void         cad_set_viewport(int x, int y, int width, int height, int window_width, int window_height);
+EXPORT void         cad_set_dpi_scale(float scale);
 EXPORT void         cad_render_viewport();
 EXPORT void         cad_init_viewport();
 

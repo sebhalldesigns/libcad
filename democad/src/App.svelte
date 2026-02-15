@@ -28,9 +28,9 @@
   let leftPaneWidth = 250;
   let rightPaneWidth = 292;
   let consoleHeight = 148;
-  let consoleVisible = false;
+  let consoleVisible = true;
   let activeTrayPanel: 'browser' | 'inspector' | 'console' = 'browser';
-  let mobileTrayVisible = true;
+  let mobileTrayVisible = false;
   let mobileTrayHeight = 320;
   let coverWindow: 'settings' | 'help' | null = null;
   let settingsTab: 'general' | 'appearance' | 'debug' = 'general';
@@ -187,8 +187,9 @@
     smallViewportQuery = window.matchMedia('(max-width: 860px)');
     const handleSmallViewportChange = (event: MediaQueryListEvent | MediaQueryList): void => {
       if (event.matches) {
+        // Keep console visible on mobile for debugging
         mobileTrayVisible = false;
-        setConsoleVisible(false);
+        // Don't hide console: setConsoleVisible(false);
       }
     };
 
@@ -269,7 +270,7 @@
         <section class="panel-bottom panel-floating desktop-panel">
           <WorkbenchPane title="Console" compact={true}>
             <ul class="console-log">
-              {#each consoleMessages as entry}
+              {#each $consoleMessages as entry}
                 <li class={`level-${entry.level}`}>
                   <span class="time">[{entry.time}]</span>
                   <span>{entry.text}</span>
@@ -377,9 +378,8 @@
             {:else if consoleVisible}
               <WorkbenchPane title="Console" compact={true}>
                 <ul class="console-log">
-                  {#each consoleMessages as entry}
+                  {#each $consoleMessages as entry}
                     <li class={`level-${entry.level}`}>
-                      <span class="time">[{entry.time}]</span>
                       <span>{entry.text}</span>
                     </li>
                   {/each}

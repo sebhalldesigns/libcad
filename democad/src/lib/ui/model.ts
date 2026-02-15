@@ -38,7 +38,6 @@ export interface InspectorField {
 export interface ConsoleMessage {
   level: 'info' | 'warn' | 'ok';
   text: string;
-  time: string;
 }
 
 const BI_BASE = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/icons';
@@ -175,8 +174,12 @@ export const inspectorFields: InspectorField[] = [
   { label: 'Solver Status', value: 'Healthy (0 underconstrained)' }
 ];
 
-export const consoleMessages: ConsoleMessage[] = [
-  { level: 'info', text: 'Session initialized. CAD kernel not attached.', time: '09:41:02' },
-  { level: 'ok', text: 'UI workbench ready. Waiting for first sketch.', time: '09:41:09' },
-  { level: 'warn', text: 'Renderer placeholder active. Canvas context will be provided by WASM module.', time: '09:41:13' }
-];
+import { writable } from 'svelte/store';
+
+export const consoleMessages = writable<ConsoleMessage[]>([
+
+]);
+
+export function addConsoleMessage(level: 'info' | 'warn' | 'ok', text: string): void {
+  consoleMessages.update(messages => [...messages.slice(-199), { level, text }]);  // Keep last 200 messages
+}
