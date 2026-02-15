@@ -19,6 +19,8 @@
 #include <util/log/log.h>
 
 #include "sketch.h"
+#include <types/core/plane/plane.h>
+#include <render/vector/vector.h>
 
 /***************************************************************
 ** MARK: FORWARD DECLARATIONS
@@ -61,6 +63,7 @@ static void sketch_init(sketch_t* self)
 
     /* Initialize sketch-specific fields */
     self->active = false;
+    self->reference_plane = NULL;
 }
 
 /***************************************************************
@@ -88,6 +91,30 @@ bool sketch_is_active(const sketch_t* self)
     return self ? self->active : false;
 }
 
+void sketch_set_reference_plane(sketch_t* self, plane_t* plane)
+{
+    if (!self) return;
+    self->reference_plane = plane;
+}
+
+plane_t* sketch_get_reference_plane(const sketch_t* self)
+{
+    return self ? self->reference_plane : NULL;
+}
+
+uint32_t sketch_get_reference_plane_entity_id(const sketch_t* self)
+{
+    if (!self || !self->reference_plane) {
+        return VECTOR_INVALID_INSTANCE;
+    }
+
+    if (self->reference_plane->rectangle_handle == VECTOR_INVALID_INSTANCE) {
+        return VECTOR_INVALID_INSTANCE;
+    }
+
+    return 0x20000000u | (self->reference_plane->rectangle_handle & 0x0FFFFFFFu);
+}
+
 /***************************************************************
 ** MARK: OVERRIDDEN METHODS
 ***************************************************************/
@@ -97,10 +124,12 @@ void sketch_debug_print(sketch_t* self)
     if (!self) return;
 
     const char* name = object_get_name(SKETCH_AS_OBJECT(self));
+    const uint32_t plane_entity_id = sketch_get_reference_plane_entity_id(self);
 
-    log_info("sketch_t: name='%s', active=%s, entities=%zu",
+    log_info("sketch_t: name='%s', active=%s, plane=0x%08X, entities=%zu",
              name ? name : "(null)",
              self->active ? "true" : "false",
+             plane_entity_id,
              object_get_child_count(SKETCH_AS_OBJECT(self)));
 }
 
@@ -116,6 +145,11 @@ json_t* sketch_to_json(sketch_t* self)
 
     /* Add sketch-specific fields */
     json_object_set_new(json, "active", json_boolean(self->active));
+    json_object_set_new(
+        json,
+        "reference_plane_entity_id",
+        json_integer((json_int_t)sketch_get_reference_plane_entity_id(self))
+    );
 
     return json;
 }

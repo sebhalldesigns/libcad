@@ -38,6 +38,19 @@
     lastDispatchedHoverEntityId = normalized;
   }
 
+  // Export function to create a sketch on a specific plane entity ID
+  export function createSketchOnPlane(planeEntityId: number): boolean {
+    if (!cadModule?._cad_create_sketch_on_plane) return false;
+    const normalized = normalizePickedEntityId(planeEntityId);
+    if (normalized === INVALID_ENTITY_ID) return false;
+
+    const result = cadModule._cad_create_sketch_on_plane(normalized);
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
   type CadModule = {
     onRuntimeInitialized?: () => void;
     locateFile?: (path: string) => string;
@@ -70,6 +83,7 @@
     _cad_set_selected_entity?: (entityId: number) => void;
     _cad_get_selected_entity?: () => number;
     _cad_get_document_json?: () => number;
+    _cad_create_sketch_on_plane?: (planeEntityId: number) => number;
     UTF8ToString?: (ptr: number) => string;
     calledRun?: boolean;
   };

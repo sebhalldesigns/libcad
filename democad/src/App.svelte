@@ -4,6 +4,7 @@
   import WorkbenchPane from './lib/ui/components/WorkbenchPane.svelte';
   import ViewportPlaceholder from './lib/ui/components/ViewportPlaceholder.svelte';
   import {
+    addConsoleMessage,
     consoleMessages,
     inspectorFields,
     ribbonTabs,
@@ -16,6 +17,8 @@
   let selectedNodeId = '';
   let hoveredNodeId: string | null = null;
   const INVALID_ENTITY_ID = 0xFFFFFFFF;
+  const PLANE_ENTITY_TYPE_MASK = 0xF0000000;
+  const PLANE_ENTITY_TYPE_VALUE = 0x20000000;
   let selectedEntityId = INVALID_ENTITY_ID;
   let hoveredEntityId = INVALID_ENTITY_ID;
   let nodeIdToEntity = new Map<string, number>();
@@ -62,8 +65,22 @@
   };
 
   function handleRibbonAction(actionId: string): void {
-    // Initial shell behavior: logging keeps the interaction flow testable
-    // before command routing + WASM-backed operations are integrated.
+    if (actionId === 'create-sketch') {
+      if (!isPlaneEntityId(selectedEntityId)) {
+        addConsoleMessage('warn', 'Select a plane in the scene or browser, then click Sketch.');
+        return;
+      }
+
+      const created = viewportRef?.createSketchOnPlane?.(selectedEntityId);
+      if (created) {
+        addConsoleMessage('ok', 'Created sketch on selected plane.');
+        updateProjectTree();
+      } else {
+        addConsoleMessage('warn', 'Failed to create sketch on selected plane.');
+      }
+      return;
+    }
+
     console.info(`[ribbon] action selected: ${actionId}`);
   }
 
@@ -189,6 +206,11 @@
     const value = raw >>> 0;
     if (value === 0 || value === INVALID_ENTITY_ID) return INVALID_ENTITY_ID;
     return value;
+  }
+
+  function isPlaneEntityId(entityId: number): boolean {
+    if (entityId === INVALID_ENTITY_ID) return false;
+    return (entityId & PLANE_ENTITY_TYPE_MASK) === PLANE_ENTITY_TYPE_VALUE;
   }
 
   function rebuildEntityMaps(): void {

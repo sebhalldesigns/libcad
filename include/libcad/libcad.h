@@ -76,6 +76,7 @@ EXPORT uint32_t     cad_get_hovered_entity();
 EXPORT void         cad_set_selected_entity(uint32_t entity_id);
 EXPORT uint32_t     cad_get_selected_entity();
 EXPORT const char*  cad_get_document_json();
+EXPORT bool         cad_create_sketch_on_plane(uint32_t plane_entity_id);
 
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <jansson.h>
+#include <util/log/log.h>
 
 #include "types/core/object/object.h"
 #include "types/core/document/document.h"
@@ -27,6 +28,7 @@
 #include "types/core/plane/plane.h"
 #include "types/core/axis/axis.h"
 #include "types/core/camera/camera.h"
+#include "types/sketch/sketch/sketch.h"
 
 
 #include <render/gpu/gpu.h>
@@ -62,6 +64,47 @@ static bool shift_modifier = false;
 /***************************************************************
 ** MARK: STATIC FUNCTION DEFS
 ***************************************************************/
+
+static uint32_t cad_plane_entity_id_from_plane(const plane_t* plane)
+{
+    if (!plane || plane->rectangle_handle == VECTOR_INVALID_INSTANCE) {
+        return VECTOR_INVALID_INSTANCE;
+    }
+
+    return 0x20000000u | (plane->rectangle_handle & 0x0FFFFFFFu);
+}
+
+static plane_t* cad_find_plane_by_entity_id(uint32_t plane_entity_id)
+{
+    if (!current_document) {
+        return NULL;
+    }
+
+    if (plane_entity_id == 0u || plane_entity_id == VECTOR_INVALID_INSTANCE) {
+        return NULL;
+    }
+
+    if ((plane_entity_id & 0xF0000000u) != 0x20000000u) {
+        return NULL;
+    }
+
+    object_t* root = DOCUMENT_AS_OBJECT(current_document);
+    const size_t child_count = object_get_child_count(root);
+
+    for (size_t i = 0; i < child_count; i++) {
+        object_t* child = object_get_child(root, i);
+        if (!child || !type_is_a((type_handle_t)LIBCAD_GET_CLASS(child), plane_get_type())) {
+            continue;
+        }
+
+        plane_t* plane = PLANE(child);
+        if (cad_plane_entity_id_from_plane(plane) == plane_entity_id) {
+            return plane;
+        }
+    }
+
+    return NULL;
+}
 
 /***************************************************************
 ** MARK: PUBLIC FUNCTIONS
@@ -295,6 +338,44 @@ const char* cad_get_document_json()
     json_decref(json);
 
     return json_string ? json_string : "{}";
+}
+
+bool cad_create_sketch_on_plane(uint32_t plane_entity_id)
+{
+    if (!current_document) {
+        log_error("cad_create_sketch_on_plane: no active document");
+        return false;
+    }
+
+    plane_t* plane = cad_find_plane_by_entity_id(plane_entity_id);
+    if (!plane) {
+        log_warning("cad_create_sketch_on_plane: plane entity 0x%08X not found", plane_entity_id);
+        return false;
+    }
+
+    sketch_t* sketch = sketch_new();
+    if (!sketch) {
+        log_error("cad_create_sketch_on_plane: failed to allocate sketch");
+        return false;
+    }
+
+    const size_t sketch_index = object_get_child_count(PLANE_AS_OBJECT(plane)) + 1;
+    char sketch_name[64];
+    snprintf(sketch_name, sizeof(sketch_name), "Sketch %03zu", sketch_index);
+
+    object_set_name(SKETCH_AS_OBJECT(sketch), sketch_name);
+    sketch_set_reference_plane(sketch, plane);
+    object_add_child(PLANE_AS_OBJECT(plane), SKETCH_AS_OBJECT(sketch));
+
+    const char* plane_name = object_get_name(PLANE_AS_OBJECT(plane));
+    log_info(
+        "Created sketch '%s' on plane '%s' (entity=0x%08X)",
+        sketch_name,
+        plane_name ? plane_name : "unnamed",
+        plane_entity_id
+    );
+
+    return true;
 }
 
 void cad_axis_delta(int axis, float delta)

@@ -23,6 +23,7 @@ extern "C" {
 ***************************************************************/
 
 #include <types/core/object/object.h>
+#include <stdint.h>
 
 /***************************************************************
 ** MARK: FORWARD DECLARATIONS
@@ -30,6 +31,7 @@ extern "C" {
 
 typedef struct sketch_t sketch_t;
 typedef struct sketch_class_t sketch_class_t;
+typedef struct plane_t plane_t;
 
 /***************************************************************
 ** MARK: TYPE DEFINITIONS
@@ -49,6 +51,7 @@ typedef struct sketch_t {
 
     /* Sketch state */
     bool active;      /* Whether this sketch is currently being edited */
+    plane_t* reference_plane; /* Non-owning pointer to sketch reference plane */
 } sketch_t;
 
 /*
@@ -84,6 +87,11 @@ void sketch_set_active(sketch_t* self, bool active);
 
 /* Check if sketch is active */
 bool sketch_is_active(const sketch_t* self);
+
+/* Set/get the sketch reference plane (non-owning) */
+void sketch_set_reference_plane(sketch_t* self, plane_t* plane);
+plane_t* sketch_get_reference_plane(const sketch_t* self);
+uint32_t sketch_get_reference_plane_entity_id(const sketch_t* self);
 
 /***************************************************************
 ** MARK: OVERRIDDEN METHODS
