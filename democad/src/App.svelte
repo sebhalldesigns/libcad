@@ -148,6 +148,17 @@
       return;
     }
 
+    if (actionId === 'create-extrude' || actionId === 'sketch-extrude') {
+      const extruded = viewportRef?.extrudeSelected?.();
+      if (extruded) {
+        addConsoleMessage('ok', 'Created extrude body from selected profile.');
+        updateProjectTree();
+      } else {
+        addConsoleMessage('warn', 'Select a circle or rectangle first, then click Extrude.');
+      }
+      return;
+    }
+
     console.info(`[ribbon] action selected: ${actionId}`);
   }
 

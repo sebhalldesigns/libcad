@@ -103,6 +103,18 @@ void gpu_framebuffer_attach_texture(framebuffer_t fbo, texture_t texture, bool d
 bool gpu_check_framebuffer_complete(framebuffer_t fbo);
 void gpu_read_pixels(int x, int y, int width, int height, void *data);
 
+/* Indexed drawing for mesh triangles */
+void gpu_upload_index_buffer_data(buffer_t buffer, void *data, size_t data_size, bool dynamic);
+void gpu_draw_elements(vertex_array_t vertex_array, uint32_t index_count);
+void gpu_draw_lines(vertex_array_t vertex_array, uint32_t first, uint32_t count);
+
+/* Polygon offset for z-fighting prevention */
+void gpu_set_polygon_offset(bool enable, float factor, float units);
+
+/* Additional uniform setters */
+void gpu_set_uniform_float(uniform_t uniform_handle, float value);
+void gpu_set_uniform_vec3(uniform_t uniform_handle, vec3 value);
+
 #ifdef __cplusplus
 }
 #endif

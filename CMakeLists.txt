@@ -198,6 +198,8 @@ set(CAD_SRC
     lib/types/sketch/line/line.c
     lib/types/sketch/circle/circle.c
     lib/types/sketch/rectangle/rectangle.c
+    lib/types/solid/body/body.c
+    lib/render/mesh/mesh.c
     ${PLATFORM_SRC}
 )
 
@@ -227,6 +229,10 @@ set(GL_SHADERS
     resources/shaders/vector/shape_pick_core_fs.glsl
     resources/shaders/vector/glyph_core_vs.glsl
     resources/shaders/vector/glyph_core_fs.glsl
+    resources/shaders/mesh/body_fill_core_vs.glsl
+    resources/shaders/mesh/body_fill_core_fs.glsl
+    resources/shaders/mesh/body_edge_core_vs.glsl
+    resources/shaders/mesh/body_edge_core_fs.glsl
 )
 
 set(GLES_SHADERS
@@ -242,6 +248,10 @@ set(GLES_SHADERS
     resources/shaders/vector/shape_pick_es_fs.glsl
     resources/shaders/vector/glyph_es_vs.glsl
     resources/shaders/vector/glyph_es_fs.glsl
+    resources/shaders/mesh/body_fill_es_vs.glsl
+    resources/shaders/mesh/body_fill_es_fs.glsl
+    resources/shaders/mesh/body_edge_es_vs.glsl
+    resources/shaders/mesh/body_edge_es_fs.glsl
 )
 
 if(LIBCAD_BUILD_SHARED OR EMSCRIPTEN)

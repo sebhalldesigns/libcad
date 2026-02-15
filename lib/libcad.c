@@ -35,10 +35,11 @@
 #include "types/sketch/line/line.h"
 #include "types/sketch/circle/circle.h"
 #include "types/sketch/rectangle/rectangle.h"
-
+#include "types/solid/body/body.h"
 
 #include <render/gpu/gpu.h>
 #include <render/vector/vector.h>
+#include <render/mesh/mesh.h>
 #include <render/window/window.h>
 
 /***************************************************************
@@ -218,17 +219,23 @@ static size_t cad_count_children_of_type(const object_t* parent, type_handle_t t
 
 static sketch_t* cad_find_latest_sketch_on_plane(plane_t* plane)
 {
-    if (!plane) {
+    if (!plane || !current_document) {
         return NULL;
     }
 
-    object_t* plane_object = PLANE_AS_OBJECT(plane);
-    size_t child_count = object_get_child_count(plane_object);
+    /* Sketches are stored at document root; pick the latest one referencing this plane. */
+    object_t* root = DOCUMENT_AS_OBJECT(current_document);
+    size_t child_count = object_get_child_count(root);
     while (child_count > 0) {
         child_count--;
-        object_t* child = object_get_child(plane_object, child_count);
-        if (child && type_is_a((type_handle_t)LIBCAD_GET_CLASS(child), sketch_get_type())) {
-            return SKETCH(child);
+        object_t* child = object_get_child(root, child_count);
+        if (!child || !type_is_a((type_handle_t)LIBCAD_GET_CLASS(child), sketch_get_type())) {
+            continue;
+        }
+
+        sketch_t* sketch = SKETCH(child);
+        if (sketch_get_reference_plane(sketch) == plane) {
+            return sketch;
         }
     }
 
@@ -352,6 +359,12 @@ static void cad_sync_runtime_visibility(object_t* object)
     if (type_is_a(object_type, rectangle_get_type())) {
         rectangle_t* rect = RECTANGLE(object);
         rectangle_set_style(rect, rect->color, rect->thickness, rect->filled, rect->construction);
+        return;
+    }
+
+    if (type_is_a(object_type, body_get_type())) {
+        /* Bodies are always visible via mesh renderer; visibility is handled at the object level */
+        return;
     }
 }
 
@@ -647,8 +660,12 @@ cad_ctx_t  cad_create_context()
     axis_get_type();
     camera_get_type();
 
+    /* Register solid types */
+    body_get_type();
+
     gpu_init();
     vector_init();
+    mesh_init();
 
     start_time = (double)clock() / CLOCKS_PER_SEC;
 
@@ -799,7 +816,10 @@ void cad_render_viewport()
         glm_mat4_identity(vp);
     }
 
-    /* Render with camera's view-projection matrix */
+    /* Render bodies first (opaque, depth write ON) so sketch entities appear on top */
+    mesh_render((int)size[0], (int)size[1], vp);
+
+    /* Render sketch entities (shapes, lines, axes) */
     vector_render((int)size[0], (int)size[1], vp);
 }
 
@@ -900,13 +920,14 @@ bool cad_create_sketch_on_plane(uint32_t plane_entity_id)
         return false;
     }
 
-    const size_t sketch_index = object_get_child_count(PLANE_AS_OBJECT(plane)) + 1;
+    object_t* root = DOCUMENT_AS_OBJECT(current_document);
+    const size_t sketch_index = cad_count_children_of_type(root, sketch_get_type()) + 1;
     char sketch_name[64];
     snprintf(sketch_name, sizeof(sketch_name), "Sketch %03zu", sketch_index);
 
     object_set_name(SKETCH_AS_OBJECT(sketch), sketch_name);
     sketch_set_reference_plane(sketch, plane);
-    object_add_child(PLANE_AS_OBJECT(plane), SKETCH_AS_OBJECT(sketch));
+    object_add_child(root, SKETCH_AS_OBJECT(sketch));
     cad_set_active_sketch(sketch);
 
     const char* plane_name = object_get_name(PLANE_AS_OBJECT(plane));
@@ -1271,6 +1292,99 @@ void cad_start_modal_tool(int tool_id)
 void cad_clear_modal_tool()
 {
     cad_exit_sketch_mode();
+}
+
+bool cad_extrude_selected(void)
+{
+    if (!current_document) {
+        log_warning("cad_extrude_selected: no document");
+        return false;
+    }
+
+    uint32_t entity_id = vector_get_selected_entity();
+    if (entity_id == VECTOR_INVALID_INSTANCE || entity_id == 0u) {
+        log_warning("cad_extrude_selected: no entity selected");
+        return false;
+    }
+
+    /* Walk the document tree to find the selected circle or rectangle */
+    object_t* root = DOCUMENT_AS_OBJECT(current_document);
+    object_t* stack[1024];
+    size_t sp = 0;
+    stack[sp++] = root;
+
+    circle_t* found_circle = NULL;
+    rectangle_t* found_rect = NULL;
+    plane_t* found_plane = NULL;
+
+    const uint32_t type_bits = entity_id & 0xF0000000u;
+    const uint32_t index = entity_id & 0x0FFFFFFFu;
+
+    while (sp > 0) {
+        object_t* object = stack[--sp];
+        if (!object) continue;
+
+        const type_handle_t object_type = (type_handle_t)LIBCAD_GET_CLASS(object);
+
+        if (type_bits == 0x20000000u && type_is_a(object_type, circle_get_type())) {
+            circle_t* circle = CIRCLE(object);
+            if (circle->vector_shape_handle == index) {
+                found_circle = circle;
+                found_plane = circle->reference_plane;
+                break;
+            }
+        }
+
+        if (type_bits == 0x20000000u && type_is_a(object_type, rectangle_get_type())) {
+            rectangle_t* rect = RECTANGLE(object);
+            if (rect->vector_shape_handle == index) {
+                found_rect = rect;
+                found_plane = rect->reference_plane;
+                break;
+            }
+        }
+
+        const size_t child_count = object_get_child_count(object);
+        for (size_t i = 0; i < child_count; i++) {
+            if (sp < (sizeof(stack) / sizeof(stack[0]))) {
+                stack[sp++] = object_get_child(object, i);
+            }
+        }
+    }
+
+    if (!found_plane) {
+        log_warning("cad_extrude_selected: selected entity has no reference plane");
+        return false;
+    }
+
+    body_t* body = NULL;
+    const float default_height = 1.0f;
+
+    if (found_circle) {
+        body = body_new_from_circle(found_circle, found_plane, default_height);
+    } else if (found_rect) {
+        body = body_new_from_rectangle(found_rect, found_plane, default_height);
+    } else {
+        log_warning("cad_extrude_selected: selected entity is not a circle or rectangle");
+        return false;
+    }
+
+    if (!body) {
+        log_error("cad_extrude_selected: failed to create body");
+        return false;
+    }
+
+    /* Name the body */
+    const size_t body_index = cad_count_children_of_type(root, body_get_type()) + 1;
+    char body_name[64];
+    snprintf(body_name, sizeof(body_name), "Extrude %03zu", body_index);
+    object_set_name(BODY_AS_OBJECT(body), body_name);
+
+    /* Add to document root */
+    object_add_child(root, BODY_AS_OBJECT(body));
+
+    log_info("Created '%s' (height=%.2f)", body_name, default_height);
+    return true;
 }
 
 void cad_save_json(const char *path)

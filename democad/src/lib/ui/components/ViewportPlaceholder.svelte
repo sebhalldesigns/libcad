@@ -116,6 +116,15 @@
     return !!result;
   }
 
+  export function extrudeSelected(): boolean {
+    if (!cadModule?._cad_extrude_selected) return false;
+    const result = cadModule._cad_extrude_selected();
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
   type CadModule = {
     onRuntimeInitialized?: () => void;
     locateFile?: (path: string) => string;
@@ -158,6 +167,7 @@
     _cad_create_line_in_active_sketch_screen?: (sx0: number, sy0: number, sx1: number, sy1: number) => number;
     _cad_create_circle_in_active_sketch_screen?: (sx0: number, sy0: number, sx1: number, sy1: number) => number;
     _cad_create_corner_rectangle_in_active_sketch_screen?: (sx0: number, sy0: number, sx1: number, sy1: number) => number;
+    _cad_extrude_selected?: () => number;
     UTF8ToString?: (ptr: number) => string;
     calledRun?: boolean;
   };

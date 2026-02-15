@@ -209,6 +209,7 @@ export function convertDocumentToTree(docJson: any): ProjectNode[] {
     else if (obj.type === 'axis_t') nodeType = 'folder'; // Axes are construction elements
     else if (obj.type === 'sketch_t') nodeType = 'sketch';
     else if (obj.type === 'line_t' || obj.type === 'circle_t' || obj.type === 'rectangle_t') nodeType = 'operation';
+    else if (obj.type === 'body_t') nodeType = 'solid';
     else if (obj.type === 'solid_t') nodeType = 'solid';
     else if (obj.type === 'document_t') nodeType = 'folder';
 

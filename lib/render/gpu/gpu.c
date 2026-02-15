@@ -387,6 +387,51 @@ void gpu_read_pixels(int x, int y, int width, int height, void *data)
 }
 
 /***************************************************************
+** MARK: INDEX BUFFER & MESH DRAWING
+***************************************************************/
+
+void gpu_upload_index_buffer_data(buffer_t buffer, void *data, size_t data_size, bool dynamic)
+{
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, data_size, data, dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+}
+
+void gpu_draw_elements(vertex_array_t vertex_array, uint32_t index_count)
+{
+    glBindVertexArray(vertex_array);
+    glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, 0);
+}
+
+void gpu_draw_lines(vertex_array_t vertex_array, uint32_t first, uint32_t count)
+{
+    glBindVertexArray(vertex_array);
+    glDrawArrays(GL_LINES, first, count);
+}
+
+void gpu_set_polygon_offset(bool enable, float factor, float units)
+{
+    if (enable)
+    {
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(factor, units);
+    }
+    else
+    {
+        glDisable(GL_POLYGON_OFFSET_FILL);
+    }
+}
+
+void gpu_set_uniform_float(uniform_t uniform_handle, float value)
+{
+    glUniform1f(uniform_handle, value);
+}
+
+void gpu_set_uniform_vec3(uniform_t uniform_handle, vec3 value)
+{
+    glUniform3f(uniform_handle, value[0], value[1], value[2]);
+}
+
+/***************************************************************
 ** MARK: STATIC FUNCTIONS
 ***************************************************************/
 

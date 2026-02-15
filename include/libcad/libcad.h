@@ -86,6 +86,7 @@ EXPORT bool         cad_create_corner_rectangle_in_active_sketch(void);
 EXPORT bool         cad_create_line_in_active_sketch_screen(int sx0, int sy0, int sx1, int sy1);
 EXPORT bool         cad_create_circle_in_active_sketch_screen(int sx0, int sy0, int sx1, int sy1);
 EXPORT bool         cad_create_corner_rectangle_in_active_sketch_screen(int sx0, int sy0, int sx1, int sy1);
+EXPORT bool         cad_extrude_selected(void);
 
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();
