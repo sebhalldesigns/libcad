@@ -916,6 +916,7 @@ body {
   height: 100%;
   display: block;
   z-index: 0;
+  touch-action: none;
   background: rgb(26, 26, 26); /* Match WASM clear color (0.1 * 255) */
 }
 

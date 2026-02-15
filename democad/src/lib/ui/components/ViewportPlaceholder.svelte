@@ -37,6 +37,13 @@
   let cadCtx: number | null = null;
   let cadModule: CadModule | null = null;
   let renderFrameId: number | null = null;
+  let touchMode: 'none' | 'orbit' | 'pan' = 'none';
+  let touchMiddleDown = false;
+  let touchShiftDown = false;
+  let lastPinchDistance = 0;
+  let pinchDistanceRemainder = 0;
+
+  const pinchStepPixels = 14;
 
   const updateCadViewport = (): void => {
     if (!canvasEl || !cadModule?._cad_set_viewport) return;
@@ -81,12 +88,72 @@
     updateCadViewport();
   };
 
+  const getCanvasPoint = (clientX: number, clientY: number): { x: number; y: number } => {
+    if (!canvasEl) return { x: 0, y: 0 };
+    const rect = canvasEl.getBoundingClientRect();
+    return {
+      x: Math.floor(clientX - rect.left),
+      y: Math.floor(clientY - rect.top)
+    };
+  };
+
+  const distanceBetweenPoints = (
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+  ): number => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.hypot(dx, dy);
+  };
+
+  const middlePoint = (
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+  ): { x: number; y: number } => ({
+    x: Math.floor((a.x + b.x) * 0.5),
+    y: Math.floor((a.y + b.y) * 0.5)
+  });
+
+  const setMiddleButtonState = (pressed: boolean): void => {
+    if (!cadModule?._cad_set_cursor_button_state) return;
+    cadModule._cad_set_cursor_button_state(2, pressed);
+    touchMiddleDown = pressed;
+  };
+
+  const setShiftState = (pressed: boolean): void => {
+    if (!cadModule?._cad_set_modifier_state) return;
+    cadModule._cad_set_modifier_state(2, pressed);
+    touchShiftDown = pressed;
+  };
+
+  const beginTouchCameraDrag = (x: number, y: number, pan: boolean): void => {
+    if (!cadModule?._cad_set_cursor_pos) return;
+
+    if (touchMiddleDown) {
+      setMiddleButtonState(false);
+    }
+
+    setShiftState(pan);
+    cadModule._cad_set_cursor_pos(x, y);
+    setMiddleButtonState(true);
+  };
+
+  const stopTouchCameraDrag = (): void => {
+    if (touchMiddleDown) {
+      setMiddleButtonState(false);
+    }
+    if (touchShiftDown) {
+      setShiftState(false);
+    }
+    touchMode = 'none';
+    lastPinchDistance = 0;
+    pinchDistanceRemainder = 0;
+  };
+
   // Camera interaction handlers
   const handleMouseMove = (event: MouseEvent): void => {
     if (!cadModule?._cad_set_cursor_pos || !canvasEl) return;
-    const rect = canvasEl.getBoundingClientRect();
-    const x = Math.floor(event.clientX - rect.left);
-    const y = Math.floor(event.clientY - rect.top);
+    const { x, y } = getCanvasPoint(event.clientX, event.clientY);
     cadModule._cad_set_cursor_pos(x, y);
   };
 
@@ -139,6 +206,109 @@
   const handleContextMenu = (event: MouseEvent): void => {
     // Prevent context menu on canvas to allow right-click for camera controls
     event.preventDefault();
+  };
+
+  const handleTouchStart = (event: TouchEvent): void => {
+    if (!cadModule || !canvasEl) return;
+    if (event.cancelable) event.preventDefault();
+
+    const touchCount = event.touches.length;
+    if (touchCount === 1) {
+      const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      touchMode = 'orbit';
+      lastPinchDistance = 0;
+      pinchDistanceRemainder = 0;
+      beginTouchCameraDrag(p.x, p.y, false);
+      return;
+    }
+
+    if (touchCount >= 2) {
+      const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
+      const center = middlePoint(p0, p1);
+      touchMode = 'pan';
+      lastPinchDistance = distanceBetweenPoints(p0, p1);
+      pinchDistanceRemainder = 0;
+      beginTouchCameraDrag(center.x, center.y, true);
+    }
+  };
+
+  const handleTouchMove = (event: TouchEvent): void => {
+    if (!cadModule?._cad_set_cursor_pos || !canvasEl) return;
+    if (event.cancelable) event.preventDefault();
+
+    const touchCount = event.touches.length;
+    if (touchCount === 1) {
+      const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      if (touchMode !== 'orbit') {
+        touchMode = 'orbit';
+        lastPinchDistance = 0;
+        pinchDistanceRemainder = 0;
+        beginTouchCameraDrag(p.x, p.y, false);
+      }
+      cadModule._cad_set_cursor_pos(p.x, p.y);
+      return;
+    }
+
+    if (touchCount >= 2) {
+      const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
+      const center = middlePoint(p0, p1);
+      const distance = distanceBetweenPoints(p0, p1);
+
+      if (touchMode !== 'pan') {
+        touchMode = 'pan';
+        pinchDistanceRemainder = 0;
+        beginTouchCameraDrag(center.x, center.y, true);
+      }
+
+      cadModule._cad_set_cursor_pos(center.x, center.y);
+
+      if (cadModule._cad_axis_delta && lastPinchDistance > 0) {
+        pinchDistanceRemainder += distance - lastPinchDistance;
+
+        while (Math.abs(pinchDistanceRemainder) >= pinchStepPixels) {
+          const zoomDelta = pinchDistanceRemainder > 0 ? 1 : -1;
+          cadModule._cad_axis_delta(0, zoomDelta);
+          pinchDistanceRemainder -= zoomDelta * pinchStepPixels;
+        }
+      }
+
+      lastPinchDistance = distance;
+    }
+  };
+
+  const handleTouchEnd = (event: TouchEvent): void => {
+    if (!cadModule || !canvasEl) return;
+    if (event.cancelable) event.preventDefault();
+
+    const touchCount = event.touches.length;
+    if (touchCount === 0) {
+      stopTouchCameraDrag();
+      return;
+    }
+
+    if (touchCount === 1) {
+      const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      touchMode = 'orbit';
+      lastPinchDistance = 0;
+      pinchDistanceRemainder = 0;
+      beginTouchCameraDrag(p.x, p.y, false);
+      return;
+    }
+
+    const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+    const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
+    const center = middlePoint(p0, p1);
+    touchMode = 'pan';
+    lastPinchDistance = distanceBetweenPoints(p0, p1);
+    pinchDistanceRemainder = 0;
+    beginTouchCameraDrag(center.x, center.y, true);
+  };
+
+  const handleTouchCancel = (event: TouchEvent): void => {
+    if (event.cancelable) event.preventDefault();
+    stopTouchCameraDrag();
   };
 
   onMount(() => {
@@ -239,6 +409,10 @@
           canvasEl.addEventListener('mouseup', handleMouseUp);
           canvasEl.addEventListener('wheel', handleWheel, { passive: false });
           canvasEl.addEventListener('contextmenu', handleContextMenu);
+          canvasEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+          canvasEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+          canvasEl.addEventListener('touchend', handleTouchEnd, { passive: false });
+          canvasEl.addEventListener('touchcancel', handleTouchCancel, { passive: false });
         }
 
         // Attach keyboard listeners to window for modifier keys
@@ -258,11 +432,17 @@
       canvasEl.removeEventListener('mouseup', handleMouseUp);
       canvasEl.removeEventListener('wheel', handleWheel);
       canvasEl.removeEventListener('contextmenu', handleContextMenu);
+      canvasEl.removeEventListener('touchstart', handleTouchStart);
+      canvasEl.removeEventListener('touchmove', handleTouchMove);
+      canvasEl.removeEventListener('touchend', handleTouchEnd);
+      canvasEl.removeEventListener('touchcancel', handleTouchCancel);
     }
 
     // Remove keyboard listeners
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
+
+    stopTouchCameraDrag();
 
     resizeObserver?.disconnect();
     if (renderFrameId !== null) {

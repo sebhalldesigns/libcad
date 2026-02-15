@@ -209,8 +209,8 @@ void camera_zoom(camera_t* self, float delta)
 {
     if (!self) return;
 
-    /* Determine zoom direction (positive = zoom in, negative = zoom out) */
-    float factor = (delta > 0.0f) ? (1.0f - self->zoom_speed) : (1.0f + self->zoom_speed);
+    /* Continuous zoom scale: positive delta zooms in, negative zooms out */
+    float factor = expf(-delta * self->zoom_speed);
 
     /* Get current distance */
     float current_distance = camera_get_distance(self);

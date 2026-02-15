@@ -229,10 +229,28 @@ void cad_init_viewport()
 void cad_axis_delta(int axis, float delta)
 {
     /* Assuming axis 0 is the scroll wheel (or vertical axis) */
-    if (axis == 0 && current_camera) {
+    if (axis == 0) {
         /* Scroll wheel controls zoom */
-        camera_zoom(current_camera, delta);
+        cad_camera_zoom(delta);
     }
+}
+
+void cad_camera_orbit(float delta_x, float delta_y)
+{
+    if (!current_camera) return;
+    camera_orbit(current_camera, delta_x, delta_y);
+}
+
+void cad_camera_pan(float delta_x, float delta_y)
+{
+    if (!current_camera) return;
+    camera_pan(current_camera, delta_x, delta_y);
+}
+
+void cad_camera_zoom(float delta)
+{
+    if (!current_camera) return;
+    camera_zoom(current_camera, delta);
 }
 
 int cad_get_cursor_type()

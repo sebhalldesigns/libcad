@@ -74,6 +74,9 @@ EXPORT void         cad_cursor_lost();
 EXPORT void         cad_set_cursor_button_state(int button, bool pressed);
 EXPORT void         cad_set_modifier_state(int modifier, bool state);
 EXPORT void         cad_axis_delta(int axis, float delta);
+EXPORT void         cad_camera_orbit(float delta_x, float delta_y);
+EXPORT void         cad_camera_pan(float delta_x, float delta_y);
+EXPORT void         cad_camera_zoom(float delta);
 
 EXPORT void         cad_start_modal_tool(int tool_id);
 EXPORT void         cad_clear_modal_tool();

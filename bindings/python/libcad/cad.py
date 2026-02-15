@@ -101,6 +101,9 @@ def _setup_function_signatures(lib):
     setup_func('cad_set_cursor_button_state', [ctypes.c_int, ctypes.c_bool], None)
     setup_func('cad_set_modifier_state', [ctypes.c_int, ctypes.c_bool], None)
     setup_func('cad_axis_delta', [ctypes.c_int, ctypes.c_float], None)
+    setup_func('cad_camera_orbit', [ctypes.c_float, ctypes.c_float], None)
+    setup_func('cad_camera_pan', [ctypes.c_float, ctypes.c_float], None)
+    setup_func('cad_camera_zoom', [ctypes.c_float], None)
 
     # Tools
     setup_func('cad_start_modal_tool', [ctypes.c_int], None)
@@ -233,6 +236,21 @@ def set_modifier_state(modifier: int, state: bool):
 def axis_delta(axis: int, delta: float):
     """Report axis movement (e.g., mouse wheel)."""
     _get_lib().cad_axis_delta(axis, delta)
+
+
+def camera_orbit(delta_x: float, delta_y: float):
+    """Orbit the camera directly using input deltas."""
+    _get_lib().cad_camera_orbit(delta_x, delta_y)
+
+
+def camera_pan(delta_x: float, delta_y: float):
+    """Pan the camera directly using input deltas."""
+    _get_lib().cad_camera_pan(delta_x, delta_y)
+
+
+def camera_zoom(delta: float):
+    """Zoom the camera directly using a continuous delta value."""
+    _get_lib().cad_camera_zoom(delta)
 
 
 # Tool functions
