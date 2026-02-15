@@ -1074,7 +1074,7 @@ void vector_render(int width, int height, mat4 projection)
         gpu_bind_vertex_array(0);
     }
 
-    /* render axes in a dedicated final overlay pass with haze */
+    /* render axes in a dedicated final overlay pass (depth tested to be occluded by bodies) */
     size_t axis_count = instance_arena_count(&axis_arena);
     if (axis_count > 0)
     {
@@ -1089,7 +1089,7 @@ void vector_render(int width, int height, mat4 projection)
         viewport[1] = (float)height;
         gpu_set_uniform_vec2(axis_shader_uniform_viewport, viewport);
 
-        gpu_set_depth_test(false);
+        gpu_set_depth_test(true);
         gpu_set_depth_write(false);
 
         gpu_bind_vertex_array(axis_vertex_array);

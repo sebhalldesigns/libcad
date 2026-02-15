@@ -56,11 +56,22 @@ typedef struct {
 ***************************************************************/
 
 bool mesh_init(void);
+void mesh_set_dpi_scale(float scale);
 void mesh_render(int width, int height, mat4 view_projection);
 
 uint32_t mesh_create(const mesh_instance_t* instance);
 void mesh_update(uint32_t handle, const mesh_instance_t* instance);
 void mesh_destroy(uint32_t handle);
+void mesh_set_visible(uint32_t handle, bool visible);
+
+/* Picking */
+uint32_t mesh_pick_entity(int screen_x, int screen_y, int width, int height, mat4 view_projection);
+
+/* Hover / selection */
+void mesh_set_hovered_entity(uint32_t entity_id);
+uint32_t mesh_get_hovered_entity(void);
+void mesh_set_selected_entity(uint32_t entity_id);
+uint32_t mesh_get_selected_entity(void);
 
 #ifdef __cplusplus
 }

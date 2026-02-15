@@ -189,6 +189,11 @@ static bool cad_is_entity_selectable(uint32_t entity_id)
             if (line->vector_line_handle == index) return object_is_visible(object);
         }
 
+        if (type_bits == 0x30000000u && type_is_a(object_type, body_get_type())) {
+            body_t* body = BODY(object);
+            if (body->mesh_handle == index) return object_is_visible(object);
+        }
+
         const size_t child_count = object_get_child_count(object);
         for (size_t i = 0; i < child_count; i++) {
             if (sp < (sizeof(stack) / sizeof(stack[0]))) {
@@ -363,7 +368,10 @@ static void cad_sync_runtime_visibility(object_t* object)
     }
 
     if (type_is_a(object_type, body_get_type())) {
-        /* Bodies are always visible via mesh renderer; visibility is handled at the object level */
+        body_t* body = BODY(object);
+        if (body->mesh_handle != MESH_INVALID_HANDLE) {
+            mesh_set_visible(body->mesh_handle, visible);
+        }
         return;
     }
 }
@@ -784,6 +792,7 @@ void cad_set_dpi_scale(float scale)
     //printf("CAD set dpi scale: %.2f\n", scale);
 
     vector_set_dpi_scale(scale);
+    mesh_set_dpi_scale(scale);
 }
 
 void cad_render_viewport()
@@ -840,12 +849,24 @@ uint32_t cad_pick_entity(int screen_x, int screen_y)
     mat4 view_projection;
     cad_get_active_view_projection(view_projection);
 
-    /* Call vector renderer picking */
-    uint32_t entity_id = vector_pick_entity(screen_x, screen_y,
-                                           viewport_width, viewport_height,
-                                           view_projection);
-    if (!cad_is_entity_selectable(entity_id)) {
-        entity_id = VECTOR_INVALID_INSTANCE;
+    /* Try mesh picking first (3D bodies occlude 2D entities) */
+    uint32_t entity_id = VECTOR_INVALID_INSTANCE;
+
+    uint32_t mesh_entity = mesh_pick_entity(screen_x, screen_y,
+                                            viewport_width, viewport_height,
+                                            view_projection);
+    if (mesh_entity != MESH_INVALID_HANDLE && cad_is_entity_selectable(mesh_entity)) {
+        entity_id = mesh_entity;
+    }
+
+    /* If no body was hit, try vector picking for 2D sketch entities */
+    if (entity_id == VECTOR_INVALID_INSTANCE) {
+        uint32_t vec_entity = vector_pick_entity(screen_x, screen_y,
+                                                viewport_width, viewport_height,
+                                                view_projection);
+        if (cad_is_entity_selectable(vec_entity)) {
+            entity_id = vec_entity;
+        }
     }
 
     printf("cad_pick_entity: (%d,%d) -> 0x%08X\n", screen_x, screen_y, entity_id);
@@ -858,6 +879,7 @@ void cad_set_hovered_entity(uint32_t entity_id)
         entity_id = VECTOR_INVALID_INSTANCE;
     }
     vector_set_hovered_entity(entity_id);
+    mesh_set_hovered_entity(entity_id);
 }
 
 uint32_t cad_get_hovered_entity()
@@ -871,6 +893,7 @@ void cad_set_selected_entity(uint32_t entity_id)
         entity_id = VECTOR_INVALID_INSTANCE;
     }
     vector_set_selected_entity(entity_id);
+    mesh_set_selected_entity(entity_id);
 }
 
 uint32_t cad_get_selected_entity()

@@ -421,6 +421,11 @@ void gpu_set_polygon_offset(bool enable, float factor, float units)
     }
 }
 
+void gpu_set_line_width(float width)
+{
+    glLineWidth(width);
+}
+
 void gpu_set_uniform_float(uniform_t uniform_handle, float value)
 {
     glUniform1f(uniform_handle, value);

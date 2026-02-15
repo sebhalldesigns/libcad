@@ -81,7 +81,7 @@ static void body_init(body_t* self)
     glm_vec3_copy((vec3){0.0f, 0.0f, 1.0f}, self->direction);
 
     glm_vec4_copy((vec4){0.6f, 0.65f, 0.75f, 1.0f}, self->fill_color);
-    glm_vec4_copy((vec4){0.15f, 0.15f, 0.15f, 1.0f}, self->edge_color);
+    glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, self->edge_color);
 
     self->mesh_vertices = NULL;
     self->mesh_indices = NULL;
@@ -122,6 +122,12 @@ json_t* body_to_json(body_t* self)
     json_t* json = object_to_json(BODY_AS_OBJECT(self));
     json_object_set_new(json, "type", json_string("body_t"));
     json_object_set_new(json, "height", json_real(self->height));
+
+    /* Entity ID for picking: type bits 0x30000000 | mesh_handle */
+    if (self->mesh_handle != MESH_INVALID_HANDLE) {
+        uint32_t eid = 0x30000000u | (self->mesh_handle & 0x0FFFFFFFu);
+        json_object_set_new(json, "entity_id", json_integer((json_int_t)eid));
+    }
 
     json_t* fill_array = json_array();
     json_array_append_new(fill_array, json_real(self->fill_color[0]));

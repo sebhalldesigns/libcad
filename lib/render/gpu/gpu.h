@@ -111,6 +111,9 @@ void gpu_draw_lines(vertex_array_t vertex_array, uint32_t first, uint32_t count)
 /* Polygon offset for z-fighting prevention */
 void gpu_set_polygon_offset(bool enable, float factor, float units);
 
+/* Line width */
+void gpu_set_line_width(float width);
+
 /* Additional uniform setters */
 void gpu_set_uniform_float(uniform_t uniform_handle, float value);
 void gpu_set_uniform_vec3(uniform_t uniform_handle, vec3 value);
