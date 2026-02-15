@@ -961,6 +961,19 @@ body {
   cursor: pointer;
 }
 
+.value-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+  cursor: pointer;
+}
+
+.value-toggle input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
 .console-log {
   font-size: 0.72rem;
   line-height: 1.25;

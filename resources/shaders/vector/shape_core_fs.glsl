@@ -198,7 +198,8 @@ void main()
         stroke_alpha = inner_mask * outer_mask;
     }
 
-    float fill_a = fill_alpha * fill_color.a;
+    float fill_control = (vertex_fill < -0.5) ? 1.0 : clamp(vertex_fill, 0.0, 1.0);
+    float fill_a = fill_alpha * fill_color.a * fill_control;
     float stroke_a = stroke_alpha * stroke_color.a;
     float out_a = stroke_a + fill_a * (1.0 - stroke_a);
 

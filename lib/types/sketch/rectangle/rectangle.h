@@ -31,6 +31,7 @@ extern "C" {
 
 typedef struct rectangle_t rectangle_t;
 typedef struct rectangle_class_t rectangle_class_t;
+typedef struct plane_t plane_t;
 
 /***************************************************************
 ** MARK: TYPE DEFINITIONS
@@ -56,6 +57,10 @@ typedef struct rectangle_t {
     float thickness;  /* Line thickness */
     bool filled;      /* Whether rectangle is filled */
     bool construction; /* Is this a construction rectangle? */
+
+    /* Sketch plane reference + render handle */
+    plane_t* reference_plane;    /* Non-owning */
+    uint32_t vector_shape_handle;
 } rectangle_t;
 
 /*
@@ -105,6 +110,7 @@ float rectangle_area(const rectangle_t* self);
 
 /* Set visual properties */
 void rectangle_set_style(rectangle_t* self, vec4 color, float thickness, bool filled, bool construction);
+void rectangle_set_reference_plane(rectangle_t* self, plane_t* plane);
 
 /***************************************************************
 ** MARK: OVERRIDDEN METHODS

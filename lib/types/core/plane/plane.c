@@ -31,6 +31,7 @@
 static void plane_finalize(plane_t* self);
 static void plane_create_rectangle(plane_t* self);
 static void plane_destroy_rectangle(plane_t* self);
+static void plane_build_render_instance(const plane_t* self, vector_shape_instance_t* out_rect);
 
 /***************************************************************
 ** MARK: TYPE REGISTRATION
@@ -100,6 +101,30 @@ static void plane_finalize(plane_t* self)
     /* Parent finalization (including children) is automatic */
 }
 
+static void plane_build_render_instance(const plane_t* self, vector_shape_instance_t* out_rect)
+{
+    if (!self || !out_rect) return;
+
+    const float effective_alpha = self->visible ? self->color[3] : 0.0f;
+    const float effective_size = self->visible ? self->plane_size : 0.0f;
+    const float effective_stroke = self->visible ? 2.0f : 0.0f;
+
+    *out_rect = (vector_shape_instance_t){
+        .center = {self->origin[0], self->origin[1], self->origin[2]},
+        .normal = {self->normal[0], self->normal[1], self->normal[2]},
+        .size = {effective_size, effective_size},
+        .color = {self->color[0], self->color[1], self->color[2], effective_alpha},
+        .rotation = 0.0f,
+        .sides = 4.0f,
+        .start_angle = 0.0f,
+        .end_angle = 0.0f,
+        .fill = -1.0f, /* request white edge in shape shader */
+        .stroke_width = effective_stroke,
+        .corner_radius = 0.0f,
+        .dash = 0.0f
+    };
+}
+
 /***************************************************************
 ** MARK: PUBLIC API - Geometry
 ***************************************************************/
@@ -138,20 +163,8 @@ void plane_set_transform(plane_t* self, vec3 origin, vec3 normal)
 
     /* Update rectangle (fill + stroke) */
     if (self->rectangle_handle != VECTOR_INVALID_INSTANCE) {
-        vector_shape_instance_t rect_fill = {
-            .center = {self->origin[0], self->origin[1], self->origin[2]},
-            .normal = {self->normal[0], self->normal[1], self->normal[2]},
-            .size = {self->plane_size, self->plane_size},
-            .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
-            .rotation = 0.0f,
-            .sides = 4.0f,
-            .start_angle = 0.0f,
-            .end_angle = 0.0f,
-            .fill = -1.0f, /* request white edge in shape shader */
-            .stroke_width = 2.0f,
-            .corner_radius = 0.0f,
-            .dash = 0.0f
-        };
+        vector_shape_instance_t rect_fill;
+        plane_build_render_instance(self, &rect_fill);
         vector_update_shape(self->rectangle_handle, &rect_fill);
     }
 }
@@ -234,24 +247,13 @@ void plane_set_display(plane_t* self, vec4 color, bool visible, float grid_size)
 
     glm_vec4_copy(color, self->color);
     self->visible = visible;
+    object_set_visible(PLANE_AS_OBJECT(self), visible);
     self->grid_size = grid_size;
 
     /* Update rectangle (fill + stroke) */
     if (self->rectangle_handle != VECTOR_INVALID_INSTANCE) {
-        vector_shape_instance_t rect_fill = {
-            .center = {self->origin[0], self->origin[1], self->origin[2]},
-            .normal = {self->normal[0], self->normal[1], self->normal[2]},
-            .size = {self->plane_size, self->plane_size},
-            .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
-            .rotation = 0.0f,
-            .sides = 4.0f,
-            .start_angle = 0.0f,
-            .end_angle = 0.0f,
-            .fill = -1.0f, /* request white edge in shape shader */
-            .stroke_width = 2.0f,
-            .corner_radius = 0.0f,
-            .dash = 0.0f
-        };
+        vector_shape_instance_t rect_fill;
+        plane_build_render_instance(self, &rect_fill);
         vector_update_shape(self->rectangle_handle, &rect_fill);
     }
 }
@@ -325,20 +327,8 @@ static void plane_create_rectangle(plane_t* self)
     if (!self) return;
 
     /* Create single rectangle shape (fill + stroke) */
-    vector_shape_instance_t rect_fill = {
-        .center = {self->origin[0], self->origin[1], self->origin[2]},
-        .normal = {self->normal[0], self->normal[1], self->normal[2]},
-        .size = {self->plane_size, self->plane_size},
-        .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
-        .rotation = 0.0f,
-        .sides = 4.0f,  /* Rectangle */
-        .start_angle = 0.0f,
-        .end_angle = 0.0f,
-        .fill = -1.0f, /* request white edge in shape shader */
-        .stroke_width = 2.0f,
-        .corner_radius = 0.0f,
-        .dash = 0.0f
-    };
+    vector_shape_instance_t rect_fill;
+    plane_build_render_instance(self, &rect_fill);
 
     if (!vector_create_shape(&rect_fill, &self->rectangle_handle)) {
         log_error("Failed to create plane rectangle");

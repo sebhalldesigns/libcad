@@ -31,6 +31,7 @@ extern "C" {
 
 typedef struct circle_t circle_t;
 typedef struct circle_class_t circle_class_t;
+typedef struct plane_t plane_t;
 
 /***************************************************************
 ** MARK: TYPE DEFINITIONS
@@ -54,6 +55,10 @@ typedef struct circle_t {
     vec4 color;       /* RGBA color for rendering */
     float thickness;  /* Line thickness */
     bool construction; /* Is this a construction circle? */
+
+    /* Sketch plane reference + render handle */
+    plane_t* reference_plane;    /* Non-owning */
+    uint32_t vector_shape_handle;
 } circle_t;
 
 /*
@@ -100,6 +105,7 @@ float circle_circumference(const circle_t* self);
 
 /* Set visual properties */
 void circle_set_style(circle_t* self, vec4 color, float thickness, bool construction);
+void circle_set_reference_plane(circle_t* self, plane_t* plane);
 
 /***************************************************************
 ** MARK: OVERRIDDEN METHODS

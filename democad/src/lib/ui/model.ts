@@ -106,6 +106,7 @@ export const ribbonTabs: RibbonTab[] = [
         id: 'draw',
         label: 'Draw',
         actions: [
+          { id: 'draw-none', label: 'None', icon: bi('cursor'), hint: 'Exit active draw tool', size: 'large' },
           { id: 'draw-line', label: 'Line', icon: bi('slash-lg'), hint: '2-point line tool', size: 'large', emphasized: true },
           { id: 'draw-circle', label: 'Circle', icon: bi('circle'), hint: 'Center-point circle tool', size: 'small' },
           { id: 'draw-arc', label: 'Arc', icon: bi('pie-chart'), hint: '3-point arc tool', size: 'small' },
@@ -207,6 +208,7 @@ export function convertDocumentToTree(docJson: any): ProjectNode[] {
     if (obj.type === 'plane_t') nodeType = 'folder'; // Planes are construction elements
     else if (obj.type === 'axis_t') nodeType = 'folder'; // Axes are construction elements
     else if (obj.type === 'sketch_t') nodeType = 'sketch';
+    else if (obj.type === 'line_t' || obj.type === 'circle_t' || obj.type === 'rectangle_t') nodeType = 'operation';
     else if (obj.type === 'solid_t') nodeType = 'solid';
     else if (obj.type === 'document_t') nodeType = 'folder';
 

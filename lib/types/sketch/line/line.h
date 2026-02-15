@@ -31,6 +31,7 @@ extern "C" {
 
 typedef struct line_t line_t;
 typedef struct line_class_t line_class_t;
+typedef struct plane_t plane_t;
 
 /***************************************************************
 ** MARK: TYPE DEFINITIONS
@@ -54,6 +55,10 @@ typedef struct line_t {
     vec4 color;       /* RGBA color for rendering */
     float thickness;  /* Line thickness */
     bool construction; /* Is this a construction line? */
+
+    /* Sketch plane reference + render handle */
+    plane_t* reference_plane;    /* Non-owning */
+    uint32_t vector_line_handle;
 } line_t;
 
 /*
@@ -98,6 +103,7 @@ float line_length(const line_t* self);
 
 /* Set visual properties */
 void line_set_style(line_t* self, vec4 color, float thickness, bool construction);
+void line_set_reference_plane(line_t* self, plane_t* plane);
 
 /***************************************************************
 ** MARK: OVERRIDDEN METHODS

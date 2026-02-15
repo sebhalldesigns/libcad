@@ -5,6 +5,8 @@
   export let title = 'Viewport';
   export let subtitle = '';
   export let mode: 'sketch' | 'scene' = 'scene';
+  type SketchTool = 'none' | 'line' | 'circle' | 'corner-rectangle';
+  export let sketchTool: SketchTool = 'none';
   export let showHeader = true;
 
   // Export function to get document JSON
@@ -51,6 +53,69 @@
     return !!result;
   }
 
+  // Export function to set object visibility by object ID
+  export function setObjectVisibility(objectId: number, visible: boolean): boolean {
+    if (!cadModule?._cad_set_object_visibility) return false;
+    if (!Number.isFinite(objectId) || objectId <= 0) return false;
+
+    const normalizedObjectId = Math.floor(objectId);
+    const result = cadModule._cad_set_object_visibility(normalizedObjectId, visible ? 1 : 0);
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
+  // Export function to enter sketch mode for a selected plane
+  export function enterSketchMode(planeEntityId: number): boolean {
+    if (!cadModule?._cad_enter_sketch_mode) return false;
+    const normalized = normalizePickedEntityId(planeEntityId);
+    if (normalized === INVALID_ENTITY_ID) return false;
+
+    const result = cadModule._cad_enter_sketch_mode(normalized);
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
+  // Export function to exit sketch mode
+  export function exitSketchMode(): boolean {
+    if (!cadModule?._cad_exit_sketch_mode) return false;
+    const result = cadModule._cad_exit_sketch_mode();
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
+  export function createLineInActiveSketch(): boolean {
+    if (!cadModule?._cad_create_line_in_active_sketch) return false;
+    const result = cadModule._cad_create_line_in_active_sketch();
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
+  export function createCircleInActiveSketch(): boolean {
+    if (!cadModule?._cad_create_circle_in_active_sketch) return false;
+    const result = cadModule._cad_create_circle_in_active_sketch();
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
+  export function createCornerRectangleInActiveSketch(): boolean {
+    if (!cadModule?._cad_create_corner_rectangle_in_active_sketch) return false;
+    const result = cadModule._cad_create_corner_rectangle_in_active_sketch();
+    if (result) {
+      dispatchDocumentUpdated();
+    }
+    return !!result;
+  }
+
   type CadModule = {
     onRuntimeInitialized?: () => void;
     locateFile?: (path: string) => string;
@@ -84,6 +149,15 @@
     _cad_get_selected_entity?: () => number;
     _cad_get_document_json?: () => number;
     _cad_create_sketch_on_plane?: (planeEntityId: number) => number;
+    _cad_set_object_visibility?: (objectId: number, visible: number) => number;
+    _cad_enter_sketch_mode?: (planeEntityId: number) => number;
+    _cad_exit_sketch_mode?: () => number;
+    _cad_create_line_in_active_sketch?: () => number;
+    _cad_create_circle_in_active_sketch?: () => number;
+    _cad_create_corner_rectangle_in_active_sketch?: () => number;
+    _cad_create_line_in_active_sketch_screen?: (sx0: number, sy0: number, sx1: number, sy1: number) => number;
+    _cad_create_circle_in_active_sketch_screen?: (sx0: number, sy0: number, sx1: number, sy1: number) => number;
+    _cad_create_corner_rectangle_in_active_sketch_screen?: (sx0: number, sy0: number, sx1: number, sy1: number) => number;
     UTF8ToString?: (ptr: number) => string;
     calledRun?: boolean;
   };
@@ -103,6 +177,7 @@
   let lastTouchX = 0;
   let lastTouchY = 0;
   let lastPinchDistance = 0;
+  let singleTouchActive = false;
 
   // RAF throttling for touch events
   let pendingTouchUpdate = false;
@@ -120,6 +195,9 @@
   const INVALID_ENTITY_ID = 0xFFFFFFFF;
   let lastDispatchedHoverEntityId = INVALID_ENTITY_ID;
   let lastDispatchedSelectedEntityId = INVALID_ENTITY_ID;
+  let pendingSketchStartPixel: { x: number; y: number } | null = null;
+  let lastSketchTool: SketchTool = sketchTool;
+  let lastMode: 'sketch' | 'scene' = mode;
 
   const normalizePickedEntityId = (entityId: number): number => {
     const normalized = entityId >>> 0;
@@ -150,6 +228,41 @@
     const docJson = getDocumentJSON();
     if (!docJson) return;
     window.dispatchEvent(new CustomEvent('cad-document-updated', { detail: { docJson } }));
+  };
+
+  const dispatchSketchEntityCreated = (tool: Exclude<SketchTool, 'none'>, success: boolean): void => {
+    window.dispatchEvent(new CustomEvent('cad-sketch-entity-created', { detail: { tool, success } }));
+  };
+
+  const handleSketchToolTap = (pixelX: number, pixelY: number): boolean => {
+    if (!cadModule || mode !== 'sketch' || sketchTool === 'none') {
+      return false;
+    }
+
+    const tool = sketchTool;
+    if (!pendingSketchStartPixel) {
+      pendingSketchStartPixel = { x: pixelX, y: pixelY };
+      addConsoleMessage('info', `${tool}: first point set.`);
+      return true;
+    }
+
+    const start = pendingSketchStartPixel;
+    pendingSketchStartPixel = null;
+    let success = false;
+
+    if (tool === 'line') {
+      success = !!cadModule._cad_create_line_in_active_sketch_screen?.(start.x, start.y, pixelX, pixelY);
+    } else if (tool === 'circle') {
+      success = !!cadModule._cad_create_circle_in_active_sketch_screen?.(start.x, start.y, pixelX, pixelY);
+    } else if (tool === 'corner-rectangle') {
+      success = !!cadModule._cad_create_corner_rectangle_in_active_sketch_screen?.(start.x, start.y, pixelX, pixelY);
+    }
+
+    if (success) {
+      dispatchDocumentUpdated();
+    }
+    dispatchSketchEntityCreated(tool, success);
+    return true;
   };
 
   const updateCadViewport = (): void => {
@@ -332,13 +445,18 @@
       const deltaTime = Date.now() - mouseDownTime;
 
       if (deltaX < clickThreshold && deltaY < clickThreshold && deltaTime < clickTimeThreshold) {
-        // This was a click! Pick and select the entity
-        if (cadModule._cad_pick_entity && cadModule._cad_set_selected_entity) {
-          const pixelPoint = getCanvasPixelPoint(event.clientX, event.clientY);
-          const rawEntityId = cadModule._cad_pick_entity(pixelPoint.x, pixelPoint.y);
-          const entityId = normalizePickedEntityId(rawEntityId);
-          cadModule._cad_set_selected_entity(entityId);
-          dispatchSelectedEntity(entityId);
+        const pixelPoint = getCanvasPixelPoint(event.clientX, event.clientY);
+
+        if (!(mode === 'sketch' && sketchTool !== 'none')) {
+          // This was a click! Pick and select the entity
+          if (cadModule._cad_pick_entity && cadModule._cad_set_selected_entity) {
+            const rawEntityId = cadModule._cad_pick_entity(pixelPoint.x, pixelPoint.y);
+            const entityId = normalizePickedEntityId(rawEntityId);
+            cadModule._cad_set_selected_entity(entityId);
+            dispatchSelectedEntity(entityId);
+          }
+        } else {
+          handleSketchToolTap(pixelPoint.x, pixelPoint.y);
         }
       }
     }
@@ -393,10 +511,11 @@
     if (touchCount === 1) {
       // Single finger = orbit (or tap for selection)
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
-      touchMode = 'orbit';
+      touchMode = mode === 'sketch' ? 'pan' : 'orbit';
       lastTouchX = p.x;
       lastTouchY = p.y;
       lastPinchDistance = 0;
+      singleTouchActive = true;
 
       // Track touch start for tap detection
       mouseDownX = event.touches[0].clientX;
@@ -413,6 +532,7 @@
       touchMode = 'pan';
       lastTouchX = centerX;
       lastTouchY = centerY;
+      singleTouchActive = false;
 
       const dx = p0.x - p1.x;
       const dy = p0.y - p1.y;
@@ -426,11 +546,12 @@
 
     const touchCount = event.touches.length;
     if (touchCount === 1) {
-      // Single finger orbit
+      // Single finger orbit (scene) or pan (sketch)
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
+      const desiredMode: 'orbit' | 'pan' = mode === 'sketch' ? 'pan' : 'orbit';
 
-      if (touchMode !== 'orbit') {
-        touchMode = 'orbit';
+      if (touchMode !== desiredMode) {
+        touchMode = desiredMode;
         lastTouchX = p.x;
         lastTouchY = p.y;
         lastPinchDistance = 0;
@@ -440,6 +561,7 @@
       scheduleTouchUpdate(p.x, p.y);
     } else if (touchCount >= 2) {
       // Two finger pan + zoom with smooth continuous zoom
+      singleTouchActive = false;
       const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
       const p1 = getCanvasPoint(event.touches[1].clientX, event.touches[1].clientY);
 
@@ -481,20 +603,24 @@
     const touchCount = event.touches.length;
     if (touchCount === 0) {
       // All fingers lifted - check if this was a tap
-      if (touchMode === 'orbit' && event.changedTouches.length > 0) {
+      if (singleTouchActive && event.changedTouches.length > 0) {
         const touch = event.changedTouches[0];
         const deltaX = Math.abs(touch.clientX - mouseDownX);
         const deltaY = Math.abs(touch.clientY - mouseDownY);
         const deltaTime = Date.now() - mouseDownTime;
 
         if (deltaX < clickThreshold && deltaY < clickThreshold && deltaTime < clickTimeThreshold) {
-          // This was a tap! Pick and select the entity
-          if (cadModule._cad_pick_entity && cadModule._cad_set_selected_entity) {
-            const pixelPoint = getCanvasPixelPoint(touch.clientX, touch.clientY);
-            const rawEntityId = cadModule._cad_pick_entity(pixelPoint.x, pixelPoint.y);
-            const entityId = normalizePickedEntityId(rawEntityId);
-            cadModule._cad_set_selected_entity(entityId);
-            dispatchSelectedEntity(entityId);
+          const pixelPoint = getCanvasPixelPoint(touch.clientX, touch.clientY);
+          if (!(mode === 'sketch' && sketchTool !== 'none')) {
+            // This was a tap! Pick and select the entity
+            if (cadModule._cad_pick_entity && cadModule._cad_set_selected_entity) {
+              const rawEntityId = cadModule._cad_pick_entity(pixelPoint.x, pixelPoint.y);
+              const entityId = normalizePickedEntityId(rawEntityId);
+              cadModule._cad_set_selected_entity(entityId);
+              dispatchSelectedEntity(entityId);
+            }
+          } else {
+            handleSketchToolTap(pixelPoint.x, pixelPoint.y);
           }
         }
       }
@@ -503,13 +629,15 @@
       lastPinchDistance = 0;
       pendingTouchData = null;
       pendingTouchUpdate = false;
+      singleTouchActive = false;
     } else if (touchCount === 1) {
       // Transition back to single finger orbit
       const p = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
-      touchMode = 'orbit';
+      touchMode = mode === 'sketch' ? 'pan' : 'orbit';
       lastTouchX = p.x;
       lastTouchY = p.y;
       lastPinchDistance = 0;
+      singleTouchActive = false;
     } else {
       // Still have 2+ fingers, reset pan/zoom state
       const p0 = getCanvasPoint(event.touches[0].clientX, event.touches[0].clientY);
@@ -521,6 +649,7 @@
       touchMode = 'pan';
       lastTouchX = centerX;
       lastTouchY = centerY;
+      singleTouchActive = false;
 
       const dx = p0.x - p1.x;
       const dy = p0.y - p1.y;
@@ -534,7 +663,16 @@
     lastPinchDistance = 0;
     pendingTouchData = null;
     pendingTouchUpdate = false;
+    singleTouchActive = false;
   };
+
+  $: {
+    if (sketchTool !== lastSketchTool || mode !== lastMode) {
+      pendingSketchStartPixel = null;
+      lastSketchTool = sketchTool;
+      lastMode = mode;
+    }
+  }
 
   onMount(() => {
     if (!canvasEl) {
@@ -712,6 +850,7 @@
     touchMode = 'none';
     pendingTouchData = null;
     pendingTouchUpdate = false;
+    singleTouchActive = false;
 
     resizeObserver?.disconnect();
     if (renderFrameId !== null) {

@@ -6,7 +6,6 @@
   import {
     addConsoleMessage,
     consoleMessages,
-    inspectorFields,
     ribbonTabs,
     convertDocumentToTree,
     type ProjectNode
@@ -23,6 +22,17 @@
   let hoveredEntityId = INVALID_ENTITY_ID;
   let nodeIdToEntity = new Map<string, number>();
   let entityToNodeId = new Map<number, string>();
+  let nodeIdToObject = new Map<string, any>();
+  let viewportMode: 'scene' | 'sketch' = 'scene';
+  let activeSketchTool: 'none' | 'line' | 'circle' | 'corner-rectangle' = 'none';
+  let inspectorDisplayFields: Array<{
+    label: string;
+    value: string;
+    editable?: boolean;
+    kind?: 'text' | 'visibility';
+    checked?: boolean;
+    objectId?: number;
+  }> = [{ label: 'Selection', value: 'No object selected' }];
   let workspaceEl: HTMLElement | null = null;
   let viewportRef: any = null;
   const appLinks = [
@@ -73,11 +83,68 @@
 
       const created = viewportRef?.createSketchOnPlane?.(selectedEntityId);
       if (created) {
-        addConsoleMessage('ok', 'Created sketch on selected plane.');
+        const entered = viewportRef?.enterSketchMode?.(selectedEntityId);
+        if (entered) {
+          viewportMode = 'sketch';
+          activeTabId = 'sketch';
+          addConsoleMessage('ok', 'Created sketch and entered sketch mode.');
+        } else {
+          addConsoleMessage('warn', 'Sketch created, but failed to enter sketch mode.');
+        }
         updateProjectTree();
       } else {
         addConsoleMessage('warn', 'Failed to create sketch on selected plane.');
       }
+      return;
+    }
+
+    if (actionId === 'sketch-close') {
+      const exited = viewportRef?.exitSketchMode?.();
+      if (exited) {
+        viewportMode = 'scene';
+        activeSketchTool = 'none';
+        activeTabId = 'home';
+        addConsoleMessage('ok', 'Closed sketch mode.');
+        updateProjectTree();
+      } else {
+        addConsoleMessage('warn', 'Failed to close sketch mode.');
+      }
+      return;
+    }
+
+    if (actionId === 'draw-line') {
+      if (viewportMode !== 'sketch') {
+        addConsoleMessage('warn', 'Enter sketch mode first.');
+        return;
+      }
+      activeSketchTool = activeSketchTool === 'line' ? 'none' : 'line';
+      addConsoleMessage('info', activeSketchTool === 'line' ? 'Line tool: tap start, tap end.' : 'Line tool cancelled.');
+      return;
+    }
+
+    if (actionId === 'draw-none') {
+      activeSketchTool = 'none';
+      addConsoleMessage('info', 'Sketch tool set to none.');
+      return;
+    }
+
+    if (actionId === 'draw-circle') {
+      if (viewportMode !== 'sketch') {
+        addConsoleMessage('warn', 'Enter sketch mode first.');
+        return;
+      }
+      activeSketchTool = activeSketchTool === 'circle' ? 'none' : 'circle';
+      addConsoleMessage('info', activeSketchTool === 'circle' ? 'Circle tool: tap center, tap radius.' : 'Circle tool cancelled.');
+      return;
+    }
+
+    if (actionId === 'draw-corner-rectangle') {
+      if (viewportMode !== 'sketch') {
+        addConsoleMessage('warn', 'Enter sketch mode first.');
+        return;
+      }
+      activeSketchTool = activeSketchTool === 'corner-rectangle' ? 'none' : 'corner-rectangle';
+      addConsoleMessage('info', activeSketchTool === 'corner-rectangle' ? 'Corner rectangle tool: tap corner 1, tap corner 2.' : 'Corner rectangle tool cancelled.');
       return;
     }
 
@@ -213,6 +280,119 @@
     return (entityId & PLANE_ENTITY_TYPE_MASK) === PLANE_ENTITY_TYPE_VALUE;
   }
 
+  function normalizeObjectId(raw: unknown): number | null {
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+    const value = Math.trunc(raw);
+    return value > 0 ? value : null;
+  }
+
+  function getNodeIdForObject(obj: any, path: string): string {
+    const entityId = normalizeEntityId(obj?.entity_id);
+    return entityId !== INVALID_ENTITY_ID ? `entity-${entityId.toString(16)}` : `path-${path}`;
+  }
+
+  function rebuildObjectMaps(docJson: any): void {
+    const nextNodeToObject = new Map<string, any>();
+
+    function visit(obj: any, path: string): void {
+      if (!obj) return;
+      const nodeId = getNodeIdForObject(obj, path);
+      nextNodeToObject.set(nodeId, obj);
+
+      if (Array.isArray(obj.children)) {
+        for (let i = 0; i < obj.children.length; i++) {
+          visit(obj.children[i], `${path}-${i}`);
+        }
+      }
+    }
+
+    visit(docJson, '0');
+    nodeIdToObject = nextNodeToObject;
+  }
+
+  function formatInspectorValue(value: unknown): string {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => formatInspectorValue(item)).join(', ')}]`;
+    }
+    if (typeof value === 'number') {
+      return Number.isInteger(value) ? `${value}` : value.toFixed(4);
+    }
+    if (typeof value === 'boolean') {
+      return value ? 'true' : 'false';
+    }
+    if (value === null || value === undefined) {
+      return 'null';
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[object]';
+      }
+    }
+    return String(value);
+  }
+
+  function rebuildInspectorFields(): void {
+    const selectedObject = selectedNodeId ? nodeIdToObject.get(selectedNodeId) : null;
+    const selectedObjectId = normalizeObjectId(selectedObject?.object_id);
+
+    if (!selectedObject) {
+      inspectorDisplayFields = [{ label: 'Selection', value: 'No object selected' }];
+      return;
+    }
+
+    const fields: typeof inspectorDisplayFields = [
+      { label: 'Name', value: formatInspectorValue(selectedObject.name ?? '(unnamed)') },
+      { label: 'Type', value: formatInspectorValue(selectedObject.type ?? '(unknown)') }
+    ];
+
+    if (selectedObjectId !== null) {
+      fields.push({ label: 'Object ID', value: `${selectedObjectId}` });
+    }
+
+    const entityId = normalizeEntityId(selectedObject.entity_id);
+    if (entityId !== INVALID_ENTITY_ID) {
+      fields.push({ label: 'Entity ID', value: `0x${entityId.toString(16).toUpperCase()}` });
+    }
+
+    if (typeof selectedObject.visible === 'boolean' && selectedObjectId !== null) {
+      fields.push({
+        label: 'Visible',
+        value: selectedObject.visible ? 'true' : 'false',
+        editable: true,
+        kind: 'visibility',
+        checked: selectedObject.visible,
+        objectId: selectedObjectId
+      });
+    }
+
+    const hiddenKeys = new Set(['name', 'type', 'children', 'entity_id', 'object_id', 'visible']);
+    for (const [key, value] of Object.entries(selectedObject)) {
+      if (hiddenKeys.has(key)) continue;
+      fields.push({ label: key, value: formatInspectorValue(value) });
+    }
+
+    inspectorDisplayFields = fields;
+  }
+
+  function handleVisibilityFieldChange(event: Event, objectId: number): void {
+    const target = event.currentTarget as HTMLInputElement | null;
+    if (!target) return;
+
+    const visible = target.checked;
+    const updated = viewportRef?.setObjectVisibility?.(objectId, visible);
+
+    if (!updated) {
+      target.checked = !visible;
+      addConsoleMessage('warn', 'Failed to update object visibility.');
+      return;
+    }
+
+    addConsoleMessage('ok', `Object visibility set to ${visible ? 'visible' : 'hidden'}.`);
+    updateProjectTree();
+  }
+
   function rebuildEntityMaps(): void {
     const nextNodeToEntity = new Map<string, number>();
     const nextEntityToNode = new Map<number, string>();
@@ -257,21 +437,34 @@
 
   function applyDocumentJson(docJson: unknown): void {
     if (!docJson) return;
+    rebuildObjectMaps(docJson);
     const newTree = convertDocumentToTree(docJson);
     if (newTree.length > 0) {
       projectTree = newTree;
       rebuildEntityMaps();
     }
+    rebuildInspectorFields();
   }
 
   function handleNodeClick(nodeId: string): void {
+    const selectedObject = nodeIdToObject.get(nodeId);
+    if (selectedObject?.visible === false) {
+      return;
+    }
+
     selectedNodeId = nodeId;
     const entityId = nodeIdToEntity.get(nodeId) ?? INVALID_ENTITY_ID;
     selectedEntityId = entityId;
     viewportRef?.selectEntity?.(entityId);
+    rebuildInspectorFields();
   }
 
   function handleNodeHover(nodeId: string): void {
+    const hoveredObject = nodeIdToObject.get(nodeId);
+    if (hoveredObject?.visible === false) {
+      return;
+    }
+
     hoveredNodeId = nodeId;
     const entityId = nodeIdToEntity.get(nodeId) ?? INVALID_ENTITY_ID;
     hoveredEntityId = entityId;
@@ -289,23 +482,50 @@
     selectedEntityId = entityId;
     if (entityId === INVALID_ENTITY_ID) {
       selectedNodeId = '';
+      rebuildInspectorFields();
       return;
     }
-    selectedNodeId = entityToNodeId.get(entityId) ?? selectedNodeId;
+    const nextNodeId = entityToNodeId.get(entityId) ?? selectedNodeId;
+    const selectedObject = nextNodeId ? nodeIdToObject.get(nextNodeId) : null;
+    if (selectedObject?.visible === false) {
+      selectedEntityId = INVALID_ENTITY_ID;
+      selectedNodeId = '';
+      rebuildInspectorFields();
+      return;
+    }
+    selectedNodeId = nextNodeId;
+    rebuildInspectorFields();
   }
 
   function handleEntityHovered(event: CustomEvent): void {
     const entityId = normalizeEntityId(event.detail?.entityId);
     hoveredEntityId = entityId;
-    hoveredNodeId = entityId === INVALID_ENTITY_ID ? null : (entityToNodeId.get(entityId) ?? null);
+    if (entityId === INVALID_ENTITY_ID) {
+      hoveredNodeId = null;
+      return;
+    }
+
+    const nextNodeId = entityToNodeId.get(entityId) ?? null;
+    const hoveredObject = nextNodeId ? nodeIdToObject.get(nextNodeId) : null;
+    hoveredNodeId = hoveredObject?.visible === false ? null : nextNodeId;
   }
 
   function handleDocumentUpdated(event: CustomEvent): void {
     applyDocumentJson(event.detail?.docJson);
   }
 
+  function handleSketchEntityCreated(event: CustomEvent): void {
+    if (event.detail?.success) {
+      addConsoleMessage('ok', `Created ${event.detail?.tool ?? 'sketch entity'}.`);
+      updateProjectTree();
+    } else {
+      addConsoleMessage('warn', `Failed to create ${event.detail?.tool ?? 'sketch entity'}.`);
+    }
+  }
+
   onMount(() => {
     rebuildEntityMaps();
+    rebuildInspectorFields();
     clampMobileTrayHeight();
     window.addEventListener('resize', clampMobileTrayHeight);
 
@@ -313,6 +533,7 @@
     window.addEventListener('cad-entity-selected', handleEntitySelected as EventListener);
     window.addEventListener('cad-entity-hovered', handleEntityHovered as EventListener);
     window.addEventListener('cad-document-updated', handleDocumentUpdated as EventListener);
+    window.addEventListener('cad-sketch-entity-created', handleSketchEntityCreated as EventListener);
 
     // Update project tree after a delay to ensure WASM is loaded
     setTimeout(updateProjectTree, 1000);
@@ -336,6 +557,7 @@
       window.removeEventListener('cad-entity-selected', handleEntitySelected as EventListener);
       window.removeEventListener('cad-entity-hovered', handleEntityHovered as EventListener);
       window.removeEventListener('cad-document-updated', handleDocumentUpdated as EventListener);
+      window.removeEventListener('cad-sketch-entity-created', handleSketchEntityCreated as EventListener);
       smallViewportQuery?.removeEventListener('change', handleSmallViewportChange);
       window.removeEventListener('resize', clampMobileTrayHeight);
     };
@@ -368,7 +590,8 @@
           bind:this={viewportRef}
           title="Workspace View"
           subtitle="Sketch + Scene Context"
-          mode="scene"
+          mode={viewportMode}
+          sketchTool={activeSketchTool}
           showHeader={false}
         />
       </div>
@@ -398,10 +621,21 @@
       <aside class="panel-right panel-floating desktop-panel">
         <WorkbenchPane title="Inspector">
           <ul class="inspector-list">
-            {#each inspectorFields as field}
+            {#each inspectorDisplayFields as field}
               <li>
                 <span>{field.label}</span>
-                <button class="value" class:editable={field.editable}>{field.value}</button>
+                {#if field.kind === 'visibility' && field.editable && typeof field.objectId === 'number'}
+                  <label class="value value-toggle">
+                    <input
+                      type="checkbox"
+                      checked={field.checked ?? false}
+                      on:change={(event) => handleVisibilityFieldChange(event, field.objectId!)}
+                    />
+                    <span>{(field.checked ?? false) ? 'Visible' : 'Hidden'}</span>
+                  </label>
+                {:else}
+                  <button class="value" class:editable={field.editable}>{field.value}</button>
+                {/if}
               </li>
             {/each}
           </ul>
@@ -511,10 +745,21 @@
             {:else if activeTrayPanel === 'inspector'}
               <WorkbenchPane title="Inspector">
                 <ul class="inspector-list">
-                  {#each inspectorFields as field}
+                  {#each inspectorDisplayFields as field}
                     <li>
                       <span>{field.label}</span>
-                      <button class="value" class:editable={field.editable}>{field.value}</button>
+                      {#if field.kind === 'visibility' && field.editable && typeof field.objectId === 'number'}
+                        <label class="value value-toggle">
+                          <input
+                            type="checkbox"
+                            checked={field.checked ?? false}
+                            on:change={(event) => handleVisibilityFieldChange(event, field.objectId!)}
+                          />
+                          <span>{(field.checked ?? false) ? 'Visible' : 'Hidden'}</span>
+                        </label>
+                      {:else}
+                        <button class="value" class:editable={field.editable}>{field.value}</button>
+                      {/if}
                     </li>
                   {/each}
                 </ul>

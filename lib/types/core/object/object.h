@@ -50,6 +50,7 @@ typedef struct object_t {
 
     /* Instance data */
     char* name;
+    bool visible;
 
     /* Tree structure - every object can have children */
     object_t** children;
@@ -103,6 +104,8 @@ void object_free(object_t* self);
 /* Property accessors */
 void object_set_name(object_t* self, const char* name);
 const char* object_get_name(const object_t* self);
+void object_set_visible(object_t* self, bool visible);
+bool object_is_visible(const object_t* self);
 
 /***************************************************************
 ** MARK: PUBLIC API - Tree Management

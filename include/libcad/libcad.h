@@ -77,6 +77,15 @@ EXPORT void         cad_set_selected_entity(uint32_t entity_id);
 EXPORT uint32_t     cad_get_selected_entity();
 EXPORT const char*  cad_get_document_json();
 EXPORT bool         cad_create_sketch_on_plane(uint32_t plane_entity_id);
+EXPORT bool         cad_set_object_visibility(uintptr_t object_id, bool visible);
+EXPORT bool         cad_enter_sketch_mode(uint32_t plane_entity_id);
+EXPORT bool         cad_exit_sketch_mode(void);
+EXPORT bool         cad_create_line_in_active_sketch(void);
+EXPORT bool         cad_create_circle_in_active_sketch(void);
+EXPORT bool         cad_create_corner_rectangle_in_active_sketch(void);
+EXPORT bool         cad_create_line_in_active_sketch_screen(int sx0, int sy0, int sx1, int sy1);
+EXPORT bool         cad_create_circle_in_active_sketch_screen(int sx0, int sy0, int sx1, int sy1);
+EXPORT bool         cad_create_corner_rectangle_in_active_sketch_screen(int sx0, int sy0, int sx1, int sy1);
 
 EXPORT void         cad_set_cursor_pos(int x, int y);
 EXPORT void         cad_cursor_lost();

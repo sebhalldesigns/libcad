@@ -69,6 +69,7 @@ static void object_init(object_t* self)
 {
     /* Initialize instance data */
     self->name = NULL;
+    self->visible = true;
 
     /* Initialize tree structure */
     self->children = NULL;
@@ -113,6 +114,17 @@ const char* object_get_name(const object_t* self)
     return self ? self->name : NULL;
 }
 
+void object_set_visible(object_t* self, bool visible)
+{
+    if (!self) return;
+    self->visible = visible;
+}
+
+bool object_is_visible(const object_t* self)
+{
+    return self ? self->visible : false;
+}
+
 /***************************************************************
 ** MARK: PUBLIC API - Tree Management
 ***************************************************************/
@@ -154,7 +166,9 @@ void object_debug_print(object_t* self)
 {
     if (!self) return;
 
-    log_info("object_t: name='%s'", self->name ? self->name : "(null)");
+    log_info("object_t: name='%s', visible=%s",
+             self->name ? self->name : "(null)",
+             self->visible ? "true" : "false");
 }
 
 json_t* object_to_json(object_t* self)
@@ -169,6 +183,8 @@ json_t* object_to_json(object_t* self)
     /* Add properties */
     json_object_set_new(json, "name",
                        self->name ? json_string(self->name) : json_null());
+    json_object_set_new(json, "visible", json_boolean(self->visible));
+    json_object_set_new(json, "object_id", json_integer((json_int_t)(uintptr_t)self));
 
     /* Add children */
     json_t* children_array = json_array();

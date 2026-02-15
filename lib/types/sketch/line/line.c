@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <util/log/log.h>
+#include <render/vector/vector.h>
+#include <types/core/plane/plane.h>
 
 #include "line.h"
 
@@ -26,6 +28,7 @@
 ***************************************************************/
 
 static void line_finalize(line_t* self);
+static void line_sync_render(line_t* self);
 
 /***************************************************************
 ** MARK: TYPE REGISTRATION
@@ -72,6 +75,8 @@ static void line_init(line_t* self)
     glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, self->color);
     self->thickness = 1.0f;
     self->construction = false;
+    self->reference_plane = NULL;
+    self->vector_line_handle = VECTOR_INVALID_INSTANCE;
 }
 
 /***************************************************************
@@ -80,6 +85,11 @@ static void line_init(line_t* self)
 
 static void line_finalize(line_t* self)
 {
+    if (self->vector_line_handle != VECTOR_INVALID_INSTANCE) {
+        vector_destroy_line(self->vector_line_handle);
+        self->vector_line_handle = VECTOR_INVALID_INSTANCE;
+    }
+
     /* No line-specific cleanup needed */
     /* Parent finalization is automatic */
 }
@@ -107,6 +117,7 @@ void line_set_points(line_t* self, vec2 start, vec2 end)
 
     glm_vec2_copy(start, self->start);
     glm_vec2_copy(end, self->end);
+    line_sync_render(self);
 }
 
 void line_get_start(const line_t* self, vec2 out_start)
@@ -143,6 +154,14 @@ void line_set_style(line_t* self, vec4 color, float thickness, bool construction
     glm_vec4_copy(color, self->color);
     self->thickness = thickness;
     self->construction = construction;
+    line_sync_render(self);
+}
+
+void line_set_reference_plane(line_t* self, plane_t* plane)
+{
+    if (!self) return;
+    self->reference_plane = plane;
+    line_sync_render(self);
 }
 
 /***************************************************************
@@ -193,5 +212,44 @@ json_t* line_to_json(line_t* self)
     json_object_set_new(json, "thickness", json_real(self->thickness));
     json_object_set_new(json, "construction", json_boolean(self->construction));
 
+    uint32_t entity_id = VECTOR_INVALID_INSTANCE;
+    if (self->vector_line_handle != VECTOR_INVALID_INSTANCE) {
+        entity_id = 0x00000000u | (self->vector_line_handle & 0x0FFFFFFFu);
+    }
+    json_object_set_new(json, "entity_id", json_integer((json_int_t)entity_id));
+
     return json;
+}
+
+static void line_sync_render(line_t* self)
+{
+    if (!self || !self->reference_plane) {
+        return;
+    }
+
+    vec3 start_world;
+    vec3 end_world;
+    plane_local_to_world(self->reference_plane, self->start, start_world);
+    plane_local_to_world(self->reference_plane, self->end, end_world);
+
+    const bool visible = object_is_visible(LINE_AS_OBJECT(self));
+    const float alpha = visible ? self->color[3] : 0.0f;
+    const float stroke = visible ? self->thickness : 0.0f;
+
+    vector_line_instance_t line_instance = {
+        .start = {start_world[0], start_world[1], start_world[2]},
+        .end = {end_world[0], end_world[1], end_world[2]},
+        .color = {self->color[0], self->color[1], self->color[2], alpha},
+        .stroke_width = stroke,
+        .dash = 0.0f
+    };
+
+    if (self->vector_line_handle == VECTOR_INVALID_INSTANCE) {
+        if (!vector_create_line(&line_instance, &self->vector_line_handle)) {
+            self->vector_line_handle = VECTOR_INVALID_INSTANCE;
+            return;
+        }
+    } else {
+        vector_update_line(self->vector_line_handle, &line_instance);
+    }
 }

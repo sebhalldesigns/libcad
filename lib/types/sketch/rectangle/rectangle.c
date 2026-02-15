@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <util/log/log.h>
+#include <render/vector/vector.h>
+#include <types/core/plane/plane.h>
 
 #include "rectangle.h"
 
@@ -26,6 +28,7 @@
 ***************************************************************/
 
 static void rectangle_finalize(rectangle_t* self);
+static void rectangle_sync_render(rectangle_t* self);
 
 /***************************************************************
 ** MARK: TYPE REGISTRATION
@@ -75,6 +78,8 @@ static void rectangle_init(rectangle_t* self)
     self->thickness = 1.0f;
     self->filled = false;
     self->construction = false;
+    self->reference_plane = NULL;
+    self->vector_shape_handle = VECTOR_INVALID_INSTANCE;
 }
 
 /***************************************************************
@@ -83,6 +88,11 @@ static void rectangle_init(rectangle_t* self)
 
 static void rectangle_finalize(rectangle_t* self)
 {
+    if (self->vector_shape_handle != VECTOR_INVALID_INSTANCE) {
+        vector_destroy_shape(self->vector_shape_handle);
+        self->vector_shape_handle = VECTOR_INVALID_INSTANCE;
+    }
+
     /* No rectangle-specific cleanup needed */
     /* Parent finalization is automatic */
 }
@@ -110,6 +120,7 @@ void rectangle_set_corners(rectangle_t* self, vec2 corner1, vec2 corner2)
 
     glm_vec2_copy(corner1, self->corner1);
     glm_vec2_copy(corner2, self->corner2);
+    rectangle_sync_render(self);
 }
 
 void rectangle_get_corner1(const rectangle_t* self, vec2 out_corner)
@@ -168,6 +179,14 @@ void rectangle_set_style(rectangle_t* self, vec4 color, float thickness, bool fi
     self->thickness = thickness;
     self->filled = filled;
     self->construction = construction;
+    rectangle_sync_render(self);
+}
+
+void rectangle_set_reference_plane(rectangle_t* self, plane_t* plane)
+{
+    if (!self) return;
+    self->reference_plane = plane;
+    rectangle_sync_render(self);
 }
 
 /***************************************************************
@@ -220,5 +239,60 @@ json_t* rectangle_to_json(rectangle_t* self)
     json_object_set_new(json, "filled", json_boolean(self->filled));
     json_object_set_new(json, "construction", json_boolean(self->construction));
 
+    uint32_t entity_id = VECTOR_INVALID_INSTANCE;
+    if (self->vector_shape_handle != VECTOR_INVALID_INSTANCE) {
+        entity_id = 0x20000000u | (self->vector_shape_handle & 0x0FFFFFFFu);
+    }
+    json_object_set_new(json, "entity_id", json_integer((json_int_t)entity_id));
+
     return json;
+}
+
+static void rectangle_sync_render(rectangle_t* self)
+{
+    if (!self || !self->reference_plane) {
+        return;
+    }
+
+    vec2 center_local = {
+        (self->corner1[0] + self->corner2[0]) * 0.5f,
+        (self->corner1[1] + self->corner2[1]) * 0.5f
+    };
+
+    vec3 center_world;
+    plane_local_to_world(self->reference_plane, center_local, center_world);
+
+    const float width = fabsf(self->corner2[0] - self->corner1[0]);
+    const float height = fabsf(self->corner2[1] - self->corner1[1]);
+    const bool visible = object_is_visible(RECTANGLE_AS_OBJECT(self));
+    const float alpha = visible ? self->color[3] : 0.0f;
+    const float stroke = visible ? self->thickness : 0.0f;
+
+    vector_shape_instance_t shape_instance = {
+        .center = {center_world[0], center_world[1], center_world[2]},
+        .normal = {
+            self->reference_plane->normal[0],
+            self->reference_plane->normal[1],
+            self->reference_plane->normal[2]
+        },
+        .size = {width, height},
+        .color = {self->color[0], self->color[1], self->color[2], alpha},
+        .rotation = 0.0f,
+        .sides = 4.0f,
+        .start_angle = 0.0f,
+        .end_angle = 0.0f,
+        .fill = self->filled ? 1.0f : 0.0f,
+        .stroke_width = stroke,
+        .corner_radius = 0.0f,
+        .dash = 0.0f
+    };
+
+    if (self->vector_shape_handle == VECTOR_INVALID_INSTANCE) {
+        if (!vector_create_shape(&shape_instance, &self->vector_shape_handle)) {
+            self->vector_shape_handle = VECTOR_INVALID_INSTANCE;
+            return;
+        }
+    } else {
+        vector_update_shape(self->vector_shape_handle, &shape_instance);
+    }
 }

@@ -31,6 +31,7 @@
 static void axis_finalize(axis_t* self);
 void axis_get_end_point(const axis_t* self, vec3 out_end);
 static void axis_get_start_point(const axis_t* self, vec3 out_start);
+static void axis_build_render_instance(const axis_t* self, const vec3 start_point, const vec3 end_point, vector_line_instance_t* out_line);
 
 /***************************************************************
 ** MARK: TYPE REGISTRATION
@@ -85,13 +86,8 @@ static void axis_init(axis_t* self)
     axis_get_start_point(self, start_point);
     axis_get_end_point(self, end_point);
 
-    vector_line_instance_t line = {
-        .start = {start_point[0], start_point[1], start_point[2]},
-        .end = {end_point[0], end_point[1], end_point[2]},
-        .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
-        .stroke_width = self->thickness,
-        .dash = 0.0f
-    };
+    vector_line_instance_t line;
+    axis_build_render_instance(self, start_point, end_point, &line);
 
     if (!vector_create_axis_line(&line, &self->vector_line_handle)) {
         log_error("Failed to create vector line for axis");
@@ -112,6 +108,27 @@ static void axis_finalize(axis_t* self)
     }
 
     /* Parent finalization (including children) is automatic */
+}
+
+static void axis_build_render_instance(
+    const axis_t* self,
+    const vec3 start_point,
+    const vec3 end_point,
+    vector_line_instance_t* out_line
+)
+{
+    if (!self || !out_line) return;
+
+    const float effective_alpha = self->visible ? self->color[3] : 0.0f;
+    const float effective_thickness = self->visible ? self->thickness : 0.0f;
+
+    *out_line = (vector_line_instance_t){
+        .start = {start_point[0], start_point[1], start_point[2]},
+        .end = {end_point[0], end_point[1], end_point[2]},
+        .color = {self->color[0], self->color[1], self->color[2], effective_alpha},
+        .stroke_width = effective_thickness,
+        .dash = 0.0f
+    };
 }
 
 /***************************************************************
@@ -138,13 +155,8 @@ void axis_set_geometry(axis_t* self, vec3 origin, vec3 direction, float length)
         axis_get_start_point(self, start_point);
         axis_get_end_point(self, end_point);
 
-        vector_line_instance_t line = {
-            .start = {start_point[0], start_point[1], start_point[2]},
-            .end = {end_point[0], end_point[1], end_point[2]},
-            .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
-            .stroke_width = self->thickness,
-            .dash = 0.0f
-        };
+        vector_line_instance_t line;
+        axis_build_render_instance(self, start_point, end_point, &line);
 
         vector_update_axis_line(self->vector_line_handle, &line);
     }
@@ -190,6 +202,7 @@ void axis_set_display(axis_t* self, vec4 color, bool visible, float thickness, b
 
     glm_vec4_copy(color, self->color);
     self->visible = visible;
+    object_set_visible(AXIS_AS_OBJECT(self), visible);
     self->thickness = thickness;
     self->show_arrow = show_arrow;
 
@@ -200,13 +213,8 @@ void axis_set_display(axis_t* self, vec4 color, bool visible, float thickness, b
         axis_get_start_point(self, start_point);
         axis_get_end_point(self, end_point);
 
-        vector_line_instance_t line = {
-            .start = {start_point[0], start_point[1], start_point[2]},
-            .end = {end_point[0], end_point[1], end_point[2]},
-            .color = {self->color[0], self->color[1], self->color[2], self->color[3]},
-            .stroke_width = self->thickness,
-            .dash = 0.0f
-        };
+        vector_line_instance_t line;
+        axis_build_render_instance(self, start_point, end_point, &line);
 
         vector_update_axis_line(self->vector_line_handle, &line);
     }
