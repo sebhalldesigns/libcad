@@ -9,3 +9,11 @@ documentation = "https://libcad.org/docs"
 repository = "https://github.com/sebhalldesigns/libcad"
 
 [dependencies]
+env_logger = "0.11.9"
+pollster = "0.4.0"
+raw-window-handle = "0.6.2"
+wgpu = "28.0.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+ 
