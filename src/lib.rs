@@ -65,3 +65,21 @@ pub fn render_viewport(context: Handle, viewport: Handle) {
 
     gpu::render_viewport(&mut context.gpu, viewport);
 }
+
+#[unsafe(no_mangle)]
+pub fn zoom_viewport(viewport: Handle, wheel_delta: f32) {
+    let viewport = unsafe { &mut *(viewport as *mut gpu::Viewport) };
+    gpu::zoom_viewport(viewport, wheel_delta);
+}
+
+#[unsafe(no_mangle)]
+pub fn pan_viewport(viewport: Handle, delta_x: f32, delta_y: f32) {
+    let viewport = unsafe { &mut *(viewport as *mut gpu::Viewport) };
+    gpu::pan_viewport(viewport, delta_x, delta_y);
+}
+
+#[unsafe(no_mangle)]
+pub fn orbit_viewport(viewport: Handle, delta_x: f32, delta_y: f32, constrained: bool) {
+    let viewport = unsafe { &mut *(viewport as *mut gpu::Viewport) };
+    gpu::orbit_viewport(viewport, delta_x, delta_y, constrained);
+}
