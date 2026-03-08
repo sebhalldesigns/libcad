@@ -10,3 +10,7 @@ gen/
 # LLM stuff
 .claude/
 GEMINI.md
+
+# Added by cargo
+
+/target

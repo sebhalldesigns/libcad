@@ -1,0 +1,11 @@
+[package]
+name = "cad"
+version = "0.0.1"
+edition = "2024"
+description = "CAD-as-a-library"
+license = "MIT"
+homepage = "https://libcad.org"
+documentation = "https://libcad.org/docs"
+repository = "https://github.com/sebhalldesigns/libcad"
+
+[dependencies]
