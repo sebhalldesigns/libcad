@@ -1,6 +1,0 @@
-[submodule "extern/cglm"]
-	path = extern/cglm
-	url = https://github.com/recp/cglm
-[submodule "extern/jansson"]
-	path = extern/jansson
-	url = https://github.com/akheron/jansson
